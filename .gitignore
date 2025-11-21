@@ -1,6 +1,6 @@
 # Rust
 /target/
-Cargo.lock
+# Cargo.lock - Keep it for binary projects to ensure reproducible builds
 
 # Database
 *.db
