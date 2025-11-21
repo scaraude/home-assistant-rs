@@ -1,0 +1,19 @@
+# Rust
+/target/
+Cargo.lock
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
