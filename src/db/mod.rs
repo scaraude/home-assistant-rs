@@ -60,37 +60,6 @@ impl Database {
         Ok(())
     }
 
-    /// Get recent readings for a specific sensor
-    pub fn get_recent_readings(
-        &self,
-        sensor_id: &str,
-        limit: usize,
-    ) -> Result<Vec<TemperatureReading>> {
-        let conn = self.conn.lock().unwrap();
-        let mut stmt = conn.prepare(
-            "SELECT sensor_id, temperature, humidity, battery, timestamp
-             FROM temperature_readings
-             WHERE sensor_id = ?1
-             ORDER BY timestamp DESC
-             LIMIT ?2",
-        )?;
-
-        let readings = stmt
-            .query_map(params![sensor_id, limit], |row| {
-                Ok(TemperatureReading {
-                    sensor_id: row.get(0)?,
-                    temperature: row.get(1)?,
-                    humidity: row.get(2)?,
-                    battery: row.get(3)?,
-                    timestamp: chrono::DateTime::from_timestamp(row.get(4)?, 0)
-                        .ok_or_else(|| rusqlite::Error::InvalidQuery)?,
-                })
-            })?
-            .collect::<Result<Vec<_>>>()?;
-
-        Ok(readings)
-    }
-
     /// Get all sensors with their latest reading
     pub fn get_all_sensors(&self) -> Result<Vec<String>> {
         let conn = self.conn.lock().unwrap();
