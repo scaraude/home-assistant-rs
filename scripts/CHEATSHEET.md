@@ -30,7 +30,7 @@ mosquitto_sub -h localhost -p 1883 -t "zigbee2mqtt/#" -v
 curl http://localhost:8082/api/temperature/latest | jq
 
 # Restart app
-docker-compose restart app
+docker compose restart app
 ```
 
 ## Manual MQTT Publishing
@@ -165,13 +165,13 @@ environment:
 
 ## Common Issues
 
-| Problem | Solution |
-|---------|----------|
-| No messages received | Check MQTT_BROKER env var |
-| Can't connect to API | Check port mapping (8082:8080) |
-| Messages not stored | Check logs for JSON parse errors |
-| High CPU usage | Check for MQTT connection loop |
-| Database locked | Stop app, check file permissions |
+| Problem              | Solution                         |
+| -------------------- | -------------------------------- |
+| No messages received | Check MQTT_BROKER env var        |
+| Can't connect to API | Check port mapping (8082:8080)   |
+| Messages not stored  | Check logs for JSON parse errors |
+| High CPU usage       | Check for MQTT connection loop   |
+| Database locked      | Stop app, check file permissions |
 
 ## Testing Workflow
 
