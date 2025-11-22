@@ -1,0 +1,35 @@
+#!/bin/bash
+set -e
+
+BINARY_PATH="target/aarch64-unknown-linux-musl/release/home-assistant-rs"
+
+# Check if any Rust source files are being committed
+if git diff --cached --name-only | grep -qE '\.(rs|toml)$'; then
+    echo "🦀 Rust files changed, rebuilding ARM64 binary..."
+
+    # Build for ARM64
+    if ! cargo build --release --target aarch64-unknown-linux-musl; then
+        echo "❌ Build failed! Commit aborted."
+        exit 1
+    fi
+
+    if [ ! -f "$BINARY_PATH" ]; then
+        echo "❌ Binary not found at $BINARY_PATH! Commit aborted."
+        exit 1
+    fi
+
+    # Check if binary changed
+    if git diff --quiet "$BINARY_PATH" 2>/dev/null || ! git ls-files --error-unmatch "$BINARY_PATH" >/dev/null 2>&1; then
+        # Binary changed or is untracked, stage it
+        echo "📦 Staging updated ARM64 binary..."
+        git add "$BINARY_PATH"
+        echo "✅ ARM64 binary built and staged!"
+        echo "📊 Binary size: $(du -h $BINARY_PATH | cut -f1)"
+    else
+        echo "✅ ARM64 binary unchanged"
+    fi
+else
+    echo "ℹ️  No Rust files changed, skipping binary rebuild"
+fi
+
+echo ""

@@ -5,10 +5,16 @@ set -e
 
 echo "Installing Git hooks..."
 
+# Copy pre-commit hook
+cp hooks/pre-commit .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
+
 # Copy pre-push hook
 cp hooks/pre-push .git/hooks/pre-push
 chmod +x .git/hooks/pre-push
 
 echo "✅ Git hooks installed successfully!"
 echo ""
-echo "The pre-push hook will automatically build the ARM64 binary before each push."
+echo "📋 Installed hooks:"
+echo "  • pre-commit: Automatically builds and commits ARM64 binary when Rust files change"
+echo "  • pre-push: Validates ARM64 binary is built before pushing"
