@@ -33,12 +33,16 @@ A lightweight home automation service written in Rust, optimized for Raspberry P
 
 ## Prerequisites
 
-- Rust 1.89+ (edition 2024)
+- Rust 1.83+ (edition 2021)
 - Running mosquitto MQTT broker
 - Running zigbee2mqtt instance
+- For cross-compilation (Mac to Raspberry Pi):
+  - `brew install FiloSottile/musl-cross/musl-cross`
+  - `rustup target add aarch64-unknown-linux-musl`
 
 ## Building
 
+### Native Build
 ```bash
 # Development build
 cargo build
@@ -47,14 +51,33 @@ cargo build
 cargo build --release
 ```
 
+### Cross-compilation for Raspberry Pi (on Mac)
+```bash
+# Build ARM64 binary for Raspberry Pi
+cargo build --release --target aarch64-unknown-linux-musl
+
+# Binary will be at: target/aarch64-unknown-linux-musl/release/home-assistant-rs
+```
+
 The release build uses aggressive optimization:
 - `opt-level = "z"` - Optimize for binary size
 - `lto = true` - Link-time optimization
 - `strip = true` - Strip debug symbols
 - `panic = "abort"` - Reduce panic handling overhead
 
+### Git Hooks
+
+Install the pre-push hook to automatically build the ARM64 binary before pushing:
+
+```bash
+./install-hooks.sh
+```
+
+This ensures the binary in `target/aarch64-unknown-linux-musl/release/` is always up-to-date for deployment.
+
 ## Running
 
+### Native
 ```bash
 # Development
 cargo run
@@ -62,6 +85,20 @@ cargo run
 # Production
 ./target/release/home-assistant-rs
 ```
+
+### Docker (Raspberry Pi)
+
+1. **On your Mac**: Build the ARM64 binary
+   ```bash
+   cargo build --release --target aarch64-unknown-linux-musl
+   ```
+
+2. **Deploy to Raspberry Pi**: Copy the project or use git, then:
+   ```bash
+   docker compose up -d
+   ```
+
+The Docker image uses the pre-built binary from your Mac (fast) instead of compiling on the Pi (slow).
 
 The service will:
 1. Connect to MQTT broker at `localhost:1883`
