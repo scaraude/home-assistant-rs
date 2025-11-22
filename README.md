@@ -34,11 +34,10 @@ A lightweight home automation service written in Rust, optimized for Raspberry P
 ## Prerequisites
 
 - Rust 1.83+ (edition 2021)
-- Running mosquitto MQTT broker
-- Running zigbee2mqtt instance
 - For cross-compilation (Mac to Raspberry Pi):
   - `brew install FiloSottile/musl-cross/musl-cross`
   - `rustup target add aarch64-unknown-linux-musl`
+- For production deployment: Docker and Docker Compose
 
 ## Building
 
@@ -86,7 +85,9 @@ cargo run
 ./target/release/home-assistant-rs
 ```
 
-### Docker (Raspberry Pi)
+### Docker (Raspberry Pi) - Recommended
+
+The entire stack (mosquitto, zigbee2mqtt, and home-assistant-rs) can be launched with a single command:
 
 1. **On your Mac**: Build the ARM64 binary
    ```bash
@@ -98,13 +99,39 @@ cargo run
    docker compose up -d
    ```
 
-The Docker image uses the pre-built binary from your Mac (fast) instead of compiling on the Pi (slow).
+This will start all three services:
+- **mosquitto** (MQTT broker) on port 1883
+- **zigbee2mqtt** (Zigbee coordinator) with web UI on port 8080
+- **home-assistant-rs** (this app) with dashboard on port 8082
 
-The service will:
-1. Connect to MQTT broker at `localhost:1883`
+The services communicate via a Docker network, so no hardcoded IPs are needed.
+
+#### What's Included
+
+All service configurations and data are organized under `services/`:
+```
+services/
+├── mosquitto/
+│   ├── config/          # MQTT broker configuration
+│   ├── data/            # Runtime data (gitignored)
+│   └── log/             # Logs (gitignored)
+├── zigbee2mqtt/
+│   └── data/            # Device database and config (gitignored)
+└── home-assistant-rs/
+    └── data/            # SQLite database (gitignored)
+```
+
+#### First-Time Setup
+
+Before running on the Raspberry Pi:
+1. Verify `/dev/ttyUSB0` is your Zigbee adapter path (if different, update both `docker-compose.yml` and `services/zigbee2mqtt/data/configuration.yaml`)
+2. The zigbee2mqtt configuration should already be set up to connect to mosquitto via Docker network
+
+The home-assistant-rs service will:
+1. Connect to mosquitto via Docker network hostname
 2. Subscribe to `zigbee2mqtt/#` topics
-3. Store temperature readings in `home_assistant.db`
-4. Start HTTP server on `http://0.0.0.0:8080`
+3. Store temperature readings in `services/home-assistant-rs/data/home_assistant.db`
+4. Serve HTTP dashboard on `http://0.0.0.0:8082`
 
 ## Configuration
 

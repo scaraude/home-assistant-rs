@@ -27,7 +27,10 @@ Thumbs.db
 # Docker & Deployment
 *.tar.gz
 home-assistant-rs
-data/
 deploy/
+
+# Service runtime data (config files are tracked, runtime data is not)
+services/*/data/
+services/*/log/
 
 .env

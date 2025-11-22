@@ -1,16 +1,58 @@
+version: '3.8'
+
 services:
-  app:
+  mosquitto:
+    container_name: mosquitto
+    image: eclipse-mosquitto:latest
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./services/mosquitto/config:/mosquitto/config
+      - ./services/mosquitto/data:/mosquitto/data
+      - ./services/mosquitto/log:/mosquitto/log
+    networks:
+      - home-assistant-network
+
+  zigbee2mqtt:
+    container_name: zigbee2mqtt
+    image: koenkk/zigbee2mqtt:latest
+    restart: unless-stopped
+    depends_on:
+      - mosquitto
+    volumes:
+      - ./services/zigbee2mqtt/data:/app/data
+      - /run/udev:/run/udev:ro
+    ports:
+      - "8080:8080"
+    environment:
+      - TZ=Europe/Paris
+    devices:
+      - /dev/ttyUSB0:/dev/ttyUSB0
+    privileged: true
+    networks:
+      - home-assistant-network
+
+  home-assistant-rs:
     build:
       context: .
       platforms:
         - linux/arm64
     container_name: home-assistant-rs
     restart: unless-stopped
+    depends_on:
+      - mosquitto
     ports:
       - "8082:8080"
     volumes:
-      - ./data:/app/data
+      - ./services/home-assistant-rs/data:/app/data
     environment:
-      - MQTT_BROKER=172.17.0.1
+      - MQTT_BROKER=mosquitto
       - MQTT_PORT=1883
-    network_mode: bridge
+    networks:
+      - home-assistant-network
+
+networks:
+  home-assistant-network:
+    driver: bridge

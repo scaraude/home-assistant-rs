@@ -2,62 +2,192 @@
 
 ## Quick Start
 
-On your Raspberry Pi (you already have mosquitto and zigbee2mqtt running):
+This repository contains everything needed to run a complete home automation stack on your Raspberry Pi.
+
+### 1. Build on your Mac
 
 ```bash
-# Copy the project to your Pi
-scp -r . ludovic@raspberrypi:~/home-assistant-rs/
+# Build the ARM64 binary (much faster than building on Pi)
+cargo build --release --target aarch64-unknown-linux-musl
+```
 
-# SSH to the Pi
-ssh ludovic@raspberrypi
+### 2. Deploy to Raspberry Pi
 
-# Go to the project directory
+```bash
+# Option A: Using git (recommended)
+# On your Pi:
+git clone <your-repo> ~/home-assistant-rs
 cd ~/home-assistant-rs
 
-# Start the app
+# Option B: Using scp
+# On your Mac:
+scp -r . ludovic@raspberrypi:~/home-assistant-rs/
+ssh ludovic@raspberrypi
+cd ~/home-assistant-rs
+```
+
+### 3. Start Everything
+
+```bash
+# Start all services with one command
 docker compose up -d
 ```
 
+This launches:
+- **mosquitto** - MQTT broker
+- **zigbee2mqtt** - Zigbee coordinator
+- **home-assistant-rs** - This Rust application
+
 ## What's Running
 
-The app will connect to your existing mosquitto container on port 1883.
+All services are accessible on your Raspberry Pi:
 
-- **Dashboard**: `http://raspberrypi.local:8082`
-- **Zigbee2MQTT UI**: `http://raspberrypi.local:8080` (already running)
+- **Home Assistant RS Dashboard**: `http://raspberrypi.local:8082`
+- **Zigbee2MQTT Web UI**: `http://raspberrypi.local:8080`
+- **MQTT Broker (mosquitto)**: `raspberrypi.local:1883`
 
-> Note: Using port 8082 for the dashboard since zigbee2mqtt is already on 8080
+## Service Management
 
-## View Logs
-
+### View all logs
 ```bash
 docker compose logs -f
 ```
 
-## Rebuild After Code Changes
-
+### View specific service logs
 ```bash
-docker compose up -d --build
+docker compose logs -f home-assistant-rs
+docker compose logs -f zigbee2mqtt
+docker compose logs -f mosquitto
 ```
 
-## Stop
+### Restart a service
+```bash
+docker compose restart home-assistant-rs
+```
 
+### Stop everything
 ```bash
 docker compose down
 ```
 
-## Configuration
+### Rebuild after code changes
+```bash
+# Build new binary on Mac
+cargo build --release --target aarch64-unknown-linux-musl
 
-The app connects to mosquitto at `172.17.0.1:1883` (Docker bridge network).
-
-If your mosquitto is on a different network, edit `docker-compose.yml`:
-
-```yaml
-environment:
-  - MQTT_BROKER=<mosquitto-container-ip>
-  - MQTT_PORT=1883
+# Deploy and rebuild on Pi
+docker compose up -d --build
 ```
 
-To find mosquitto's IP:
+## Architecture
+
+All services run in the same Docker network (`home-assistant-network`) and communicate using container names as DNS:
+
+```
+┌──────────────────────────────────────────────────┐
+│          home-assistant-network (bridge)         │
+│                                                  │
+│  ┌──────────┐    ┌──────────────┐   ┌─────────┐│
+│  │mosquitto │◄───┤ zigbee2mqtt  │   │  home-  ││
+│  │  :1883   │    │   :8080      │   │assistant││
+│  └────▲─────┘    └──────────────┘   │   -rs   ││
+│       │                               │  :8082  ││
+│       └───────────────────────────────┴─────────┘│
+└──────────────────────────────────────────────────┘
+         │            │                    │
+         ▼            ▼                    ▼
+      1883:1883    8080:8080          8082:8080
+     (MQTT)     (Zigbee Web UI)      (Dashboard)
+```
+
+## Configuration
+
+### Zigbee USB Adapter
+
+The default configuration expects the Zigbee adapter at `/dev/ttyUSB0`. If yours is different:
+
+1. Find your adapter:
+   ```bash
+   ls /dev/tty*
+   ```
+
+2. Edit `docker-compose.yml`:
+   ```yaml
+   zigbee2mqtt:
+     devices:
+       - /dev/ttyACM0:/dev/ttyACM0  # Change here
+   ```
+
+### Mosquitto MQTT Broker
+
+Configuration is in `services/mosquitto/config/mosquitto.conf`. The default allows anonymous connections on port 1883.
+
+### Zigbee2MQTT
+
+Configuration is in `services/zigbee2mqtt/data/configuration.yaml`. On first run, zigbee2mqtt will create this file with defaults. The current configuration should already have:
+- MQTT server pointing to `mqtt://mosquitto:1883` (using Docker network)
+- Serial port set to `/dev/ttyUSB0`
+- Frontend enabled on port 8080
+
+You may need to adjust the serial port if your Zigbee adapter uses a different device path.
+
+## Directory Structure
+
+```
+home-assistant-rs/
+├── docker-compose.yml          # Orchestrates all services
+├── services/
+│   ├── mosquitto/
+│   │   ├── config/             # MQTT broker config (tracked in git)
+│   │   ├── data/               # Runtime data (gitignored)
+│   │   └── log/                # Logs (gitignored)
+│   ├── zigbee2mqtt/
+│   │   └── data/               # Device DB & config (gitignored)
+│   └── home-assistant-rs/
+│       └── data/               # SQLite database (gitignored)
+├── src/                        # Rust source code
+└── Dockerfile                  # Uses pre-built ARM64 binary
+```
+
+## Troubleshooting
+
+### Service won't start
 ```bash
-docker inspect mosquitto | grep IPAddress
+# Check logs for the specific service
+docker compose logs mosquitto
+docker compose logs zigbee2mqtt
+docker compose logs home-assistant-rs
+```
+
+### MQTT connection issues
+```bash
+# Test MQTT broker is running
+docker compose ps
+
+# Check mosquitto logs
+docker compose logs mosquitto
+
+# Test connection from host
+mosquitto_sub -h localhost -p 1883 -t '#' -v
+```
+
+### Zigbee adapter not found
+```bash
+# Verify device exists
+ls -l /dev/ttyUSB0
+
+# Check permissions (may need to add user to dialout group)
+sudo usermod -a -G dialout $USER
+```
+
+### Reset everything
+```bash
+# Stop and remove all containers
+docker compose down
+
+# Optional: Remove all data (WARNING: deletes databases!)
+rm -rf services/*/data/* services/mosquitto/log/*
+
+# Start fresh
+docker compose up -d
 ```
