@@ -1,0 +1,26 @@
+# Ignore build artifacts
+target/
+*.db
+*.db-shm
+*.db-wal
+
+# Ignore Git
+.git/
+.gitignore
+
+# Ignore IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Ignore documentation
+README.md
+*.md
+
+# Ignore deployment files
+deploy.sh
+docker-compose.yml
+
+# Ignore data directory
+data/

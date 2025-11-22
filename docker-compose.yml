@@ -1,0 +1,16 @@
+services:
+  app:
+    build:
+      context: .
+      platforms:
+        - linux/arm64
+    container_name: home-assistant-rs
+    restart: unless-stopped
+    ports:
+      - "8082:8080"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - MQTT_BROKER=172.17.0.1
+      - MQTT_PORT=1883
+    network_mode: bridge
