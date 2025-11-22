@@ -10,11 +10,16 @@ use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Configuration - TODO: Move to config file or environment variables
-    let mqtt_broker = "localhost";
-    let mqtt_port = 1883;
-    let http_addr = "0.0.0.0:8080".parse()?;
-    let db_path = "home_assistant.db";
+    // Configuration from environment variables with defaults
+    let mqtt_broker = std::env::var("MQTT_BROKER").unwrap_or_else(|_| "localhost".to_string());
+    let mqtt_port = std::env::var("MQTT_PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(1883);
+    let http_addr = std::env::var("HTTP_ADDR")
+        .unwrap_or_else(|_| "0.0.0.0:8080".to_string())
+        .parse()?;
+    let db_path = std::env::var("DB_PATH").unwrap_or_else(|_| "home_assistant.db".to_string());
 
     println!("🏠 Home Assistant RS - Starting...");
 
@@ -28,7 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         mqtt_broker, mqtt_port
     );
     let (mqtt_listener, mut readings_rx) =
-        MqttListener::new(mqtt_broker, mqtt_port, "home-assistant-rs");
+        MqttListener::new(&mqtt_broker, mqtt_port, "home-assistant-rs");
 
     mqtt_listener.subscribe().await?;
     println!("✅ Subscribed to zigbee2mqtt topics");

@@ -17,3 +17,11 @@
 # OS
 .DS_Store
 Thumbs.db
+
+# Docker & Deployment
+*.tar.gz
+home-assistant-rs
+data/
+deploy/
+
+.env
