@@ -1,5 +1,5 @@
 use crate::models::TemperatureReading;
-use rusqlite::{Connection, Result, params};
+use rusqlite::{params, Connection, Result};
 use std::path::Path;
 use std::sync::Mutex;
 
