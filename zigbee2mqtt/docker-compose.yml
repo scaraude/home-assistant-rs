@@ -1,0 +1,30 @@
+  version: '3.8'
+  services:
+    mosquitto:
+      container_name: mosquitto
+      image: eclipse-mosquitto:latest
+      restart: unless-stopped
+      ports:
+        - 1883:1883
+        - 9001:9001
+      volumes:
+        - ./mosquitto/config:/mosquitto/config
+        - ./mosquitto/data:/mosquitto/data
+        - ./mosquitto/log:/mosquitto/log
+
+    zigbee2mqtt:
+      container_name: zigbee2mqtt
+      image: koenkk/zigbee2mqtt:latest
+      restart: unless-stopped
+      depends_on:
+        - mosquitto
+      volumes:
+        - ./data:/app/data
+        - /run/udev:/run/udev:ro
+      ports:
+        - 8080:8080
+      environment:
+        - TZ=Europe/Paris
+      devices:
+        - /dev/ttyUSB0:/dev/ttyUSB0
+      privileged: true
