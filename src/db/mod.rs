@@ -20,7 +20,8 @@ impl Database {
 
     /// Initialize the database schema
     fn init_schema(&self) -> Result<()> {
-        self.conn.lock().unwrap().execute(
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
             "CREATE TABLE IF NOT EXISTS temperature_readings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 sensor_id TEXT NOT NULL,
@@ -33,7 +34,7 @@ impl Database {
         )?;
 
         // Index for efficient queries by sensor and time
-        self.conn.lock().unwrap().execute(
+        conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_sensor_time
              ON temperature_readings(sensor_id, timestamp DESC)",
             [],
@@ -81,7 +82,8 @@ impl Database {
                     temperature: row.get(1)?,
                     humidity: row.get(2)?,
                     battery: row.get(3)?,
-                    timestamp: chrono::DateTime::from_timestamp(row.get(4)?, 0).unwrap_or_default(),
+                    timestamp: chrono::DateTime::from_timestamp(row.get(4)?, 0)
+                        .ok_or_else(|| rusqlite::Error::InvalidQuery)?,
                 })
             })?
             .collect::<Result<Vec<_>>>()?;
@@ -117,6 +119,35 @@ impl Database {
 
         let readings = stmt
             .query_map(params![since_timestamp], |row| {
+                Ok(TemperatureReading {
+                    sensor_id: row.get(0)?,
+                    temperature: row.get(1)?,
+                    humidity: row.get(2)?,
+                    battery: row.get(3)?,
+                    timestamp: chrono::DateTime::from_timestamp(row.get(4)?, 0).unwrap_or_default(),
+                })
+            })?
+            .collect::<Result<Vec<_>>>()?;
+
+        Ok(readings)
+    }
+
+    /// Get readings for a specific sensor within a time range (SQL-filtered)
+    pub fn get_readings_for_sensor_since(
+        &self,
+        sensor_id: &str,
+        since_timestamp: i64,
+    ) -> Result<Vec<TemperatureReading>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT sensor_id, temperature, humidity, battery, timestamp
+             FROM temperature_readings
+             WHERE sensor_id = ?1 AND timestamp > ?2
+             ORDER BY timestamp DESC",
+        )?;
+
+        let readings = stmt
+            .query_map(params![sensor_id, since_timestamp], |row| {
                 Ok(TemperatureReading {
                     sensor_id: row.get(0)?,
                     temperature: row.get(1)?,

@@ -29,8 +29,9 @@ impl HttpServer {
             let db = self.db.clone();
 
             tokio::spawn(async move {
+                // Clone once per connection, reused across all requests via the service closure
                 if let Err(err) = http1::Builder::new()
-                    .serve_connection(io, service_fn(move |req| handle_request(req, db.clone())))
+                    .serve_connection(io, service_fn(|req| handle_request(req, db.clone())))
                     .await
                 {
                     eprintln!("Error serving connection: {:?}", err);
@@ -103,12 +104,10 @@ fn serve_readings(db: &Database, query: Option<&str>) -> Response<Full<Bytes>> {
     // Calculate timestamp for the time range
     let since = chrono::Utc::now().timestamp() - (hours * 3600);
 
+    // Use SQL-filtered queries - no more Rust-side filtering!
     let result = if let Some(sid) = sensor_id {
-        // Get readings for specific sensor
-        db.get_recent_readings(sid, 1000).map(|mut readings| {
-            readings.retain(|r| r.timestamp.timestamp() > since);
-            readings
-        })
+        // Get readings for specific sensor with time filter in SQL
+        db.get_readings_for_sensor_since(sid, since)
     } else {
         // Get all readings since timestamp
         db.get_readings_since(since)
