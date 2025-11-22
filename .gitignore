@@ -1,5 +1,11 @@
 # Rust
 /target/
+# Exception: Track the ARM64 binary for Raspberry Pi deployment
+!/target/aarch64-unknown-linux-musl/
+/target/aarch64-unknown-linux-musl/*
+!/target/aarch64-unknown-linux-musl/release/
+/target/aarch64-unknown-linux-musl/release/*
+!/target/aarch64-unknown-linux-musl/release/home-assistant-rs
 # Cargo.lock - Keep it for binary projects to ensure reproducible builds
 
 # Database
