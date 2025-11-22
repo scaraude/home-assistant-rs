@@ -1,5 +1,11 @@
 # Ignore build artifacts
 target/
+# Exception: Include the ARM64 binary for deployment
+!target/aarch64-unknown-linux-musl/
+target/aarch64-unknown-linux-musl/*
+!target/aarch64-unknown-linux-musl/release/
+target/aarch64-unknown-linux-musl/release/*
+!target/aarch64-unknown-linux-musl/release/home-assistant-rs
 *.db
 *.db-shm
 *.db-wal
