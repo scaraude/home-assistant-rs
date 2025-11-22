@@ -5,29 +5,35 @@
 set -e
 
 # Configuration
-BROKER="${MQTT_BROKER:-localhost}"
-PORT="${MQTT_PORT:-1883}"
+CONTAINER_NAME="${MOSQUITTO_CONTAINER:-mosquitto}"
 BASE_TOPIC="zigbee2mqtt"
+
+# Check if mosquitto container is running
+if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+    echo "❌ Mosquitto container '${CONTAINER_NAME}' is not running!"
+    echo ""
+    echo "Start it with: docker-compose up -d mosquitto"
+    echo ""
+    exit 1
+fi
+
+# Define mosquitto_pub wrapper to use docker exec
+mqtt_pub() {
+    docker exec "$CONTAINER_NAME" mosquitto_pub -h localhost "$@"
+}
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  Home Assistant RS - MQTT Test Suite"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Broker: $BROKER:$PORT"
+echo "Container: $CONTAINER_NAME"
 echo
 
-# Check if mosquitto_pub is available
-if ! command -v mosquitto_pub &> /dev/null; then
-    echo "ERROR: mosquitto_pub not found"
-    echo "Install with: sudo apt-get install mosquitto-clients"
-    exit 1
-fi
-
-echo "✓ mosquitto_pub found"
+echo "✓ Mosquitto container running"
 echo
 
 # Test 1: Basic temperature reading
 echo "Test 1: Basic temperature + humidity + battery"
-mosquitto_pub -h "$BROKER" -p "$PORT" -t "$BASE_TOPIC/test_sensor_1" -m '{
+mqtt_pub -t "$BASE_TOPIC/test_sensor_1" -m '{
   "temperature": 22.5,
   "humidity": 65.0,
   "battery": 100,
@@ -39,7 +45,7 @@ sleep 1
 # Test 2: Temperature only (minimal)
 echo
 echo "Test 2: Temperature only (no humidity/battery)"
-mosquitto_pub -h "$BROKER" -p "$PORT" -t "$BASE_TOPIC/minimal_sensor" -m '{
+mqtt_pub -t "$BASE_TOPIC/minimal_sensor" -m '{
   "temperature": 21.0
 }'
 echo "  → Published to $BASE_TOPIC/minimal_sensor"
@@ -57,7 +63,7 @@ for i in "${!SENSORS[@]}"; do
     HUMIDITY=$(awk -v min=50 -v max=70 'BEGIN{srand(); print min+rand()*(max-min)}')
     BATTERY=$((RANDOM % 30 + 70))  # Random between 70-100
 
-    mosquitto_pub -h "$BROKER" -p "$PORT" -t "$BASE_TOPIC/$SENSOR" -m "{
+    mqtt_pub -t "$BASE_TOPIC/$SENSOR" -m "{
   \"temperature\": $TEMP,
   \"humidity\": $HUMIDITY,
   \"battery\": $BATTERY
@@ -69,7 +75,7 @@ done
 # Test 4: Extreme values
 echo
 echo "Test 4: Extreme values"
-mosquitto_pub -h "$BROKER" -p "$PORT" -t "$BASE_TOPIC/hot_sensor" -m '{
+mqtt_pub -t "$BASE_TOPIC/hot_sensor" -m '{
   "temperature": 45.0,
   "humidity": 20.0,
   "battery": 50
@@ -77,7 +83,7 @@ mosquitto_pub -h "$BROKER" -p "$PORT" -t "$BASE_TOPIC/hot_sensor" -m '{
 echo "  → Hot sensor: 45.0°C"
 sleep 0.5
 
-mosquitto_pub -h "$BROKER" -p "$PORT" -t "$BASE_TOPIC/cold_sensor" -m '{
+mqtt_pub -t "$BASE_TOPIC/cold_sensor" -m '{
   "temperature": -5.0,
   "humidity": 90.0,
   "battery": 15
@@ -88,7 +94,7 @@ sleep 0.5
 # Test 5: Low battery scenario
 echo
 echo "Test 5: Low battery warning"
-mosquitto_pub -h "$BROKER" -p "$PORT" -t "$BASE_TOPIC/dying_sensor" -m '{
+mqtt_pub -t "$BASE_TOPIC/dying_sensor" -m '{
   "temperature": 20.5,
   "humidity": 55.0,
   "battery": 5
@@ -99,13 +105,13 @@ sleep 1
 # Test 6: Invalid messages (should be ignored)
 echo
 echo "Test 6: Invalid messages (should be ignored by app)"
-mosquitto_pub -h "$BROKER" -p "$PORT" -t "$BASE_TOPIC/bridge/info" -m '{
+mqtt_pub -t "$BASE_TOPIC/bridge/info" -m '{
   "version": "1.0.0"
 }'
 echo "  → Bridge message (should be filtered out)"
 sleep 0.5
 
-mosquitto_pub -h "$BROKER" -p "$PORT" -t "$BASE_TOPIC/no_temp_sensor" -m '{
+mqtt_pub -t "$BASE_TOPIC/no_temp_sensor" -m '{
   "humidity": 60.0,
   "battery": 80
 }'
@@ -120,5 +126,5 @@ echo
 echo "Next steps:"
 echo "  1. Check logs: docker logs home-assistant-rs"
 echo "  2. Query API: curl http://localhost:8082/api/temperature/latest"
-echo "  3. Monitor MQTT: mosquitto_sub -h $BROKER -p $PORT -t 'zigbee2mqtt/#' -v"
+echo "  3. Monitor MQTT: docker exec $CONTAINER_NAME mosquitto_sub -h localhost -t 'zigbee2mqtt/#' -v"
 echo

@@ -2,20 +2,26 @@
 # Monitor MQTT traffic and your home-assistant-rs system
 # This script helps you see what's happening in real-time
 
-BROKER="${MQTT_BROKER:-localhost}"
-PORT="${MQTT_PORT:-1883}"
+CONTAINER_NAME="${MOSQUITTO_CONTAINER:-mosquitto}"
+
+# Check if mosquitto container is running
+if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+    echo "❌ Mosquitto container '${CONTAINER_NAME}' is not running!"
+    echo ""
+    echo "Start it with: docker-compose up -d mosquitto"
+    echo ""
+    exit 1
+fi
+
+# Define mosquitto_sub wrapper to use docker exec
+mqtt_sub() {
+    docker exec "$CONTAINER_NAME" mosquitto_sub -h localhost "$@"
+}
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  Home Assistant RS - System Monitor"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo
-
-# Check if mosquitto_sub is available
-if ! command -v mosquitto_sub &> /dev/null; then
-    echo "ERROR: mosquitto_sub not found"
-    echo "Install with: sudo apt-get install mosquitto-clients"
-    exit 1
-fi
 
 echo "What would you like to monitor?"
 echo
@@ -33,14 +39,14 @@ case $choice in
         echo "Monitoring all zigbee2mqtt topics..."
         echo "Press Ctrl+C to stop"
         echo
-        mosquitto_sub -h "$BROKER" -p "$PORT" -t "zigbee2mqtt/#" -v
+        mqtt_sub -t "zigbee2mqtt/#" -v
         ;;
     2)
         echo
         echo "Monitoring sensor messages (filtering out bridge topics)..."
         echo "Press Ctrl+C to stop"
         echo
-        mosquitto_sub -h "$BROKER" -p "$PORT" -t "zigbee2mqtt/#" -v | grep -v "zigbee2mqtt/bridge"
+        mqtt_sub -t "zigbee2mqtt/#" -v | grep -v "zigbee2mqtt/bridge"
         ;;
     3)
         read -p "Enter sensor ID: " sensor_id
@@ -48,7 +54,7 @@ case $choice in
         echo "Monitoring zigbee2mqtt/$sensor_id..."
         echo "Press Ctrl+C to stop"
         echo
-        mosquitto_sub -h "$BROKER" -p "$PORT" -t "zigbee2mqtt/$sensor_id" -v
+        mqtt_sub -t "zigbee2mqtt/$sensor_id" -v
         ;;
     4)
         echo
@@ -66,7 +72,7 @@ case $choice in
             echo
             echo "Falling back to sequential display..."
             echo "Starting MQTT monitor in background..."
-            mosquitto_sub -h "$BROKER" -p "$PORT" -t "zigbee2mqtt/#" -v &
+            mqtt_sub -t "zigbee2mqtt/#" -v &
             MQTT_PID=$!
             echo "Showing app logs (Ctrl+C to stop)..."
             docker logs -f home-assistant-rs
@@ -75,7 +81,7 @@ case $choice in
             # Create a tmux session with split panes
             tmux new-session -d -s ha_monitor
             tmux split-window -h -t ha_monitor
-            tmux send-keys -t ha_monitor:0.0 "mosquitto_sub -h $BROKER -p $PORT -t 'zigbee2mqtt/#' -v" C-m
+            tmux send-keys -t ha_monitor:0.0 "docker exec $CONTAINER_NAME mosquitto_sub -h localhost -t 'zigbee2mqtt/#' -v" C-m
             tmux send-keys -t ha_monitor:0.1 "docker logs -f home-assistant-rs" C-m
             tmux attach-session -t ha_monitor
         fi
