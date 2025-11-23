@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use tracing::{debug, warn};
 
 /// Temperature reading from a sensor
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,13 +43,43 @@ pub struct Zigbee2MqttMessage {
 impl TemperatureReading {
     /// Create a new temperature reading from a zigbee2mqtt message
     pub fn from_mqtt(sensor_id: String, msg: Zigbee2MqttMessage) -> Option<Self> {
+        debug!(
+            sensor_id = %sensor_id,
+            temperature = ?msg.temperature,
+            humidity = ?msg.humidity,
+            battery = ?msg.battery,
+            linkquality = ?msg.linkquality,
+            "Attempting to create TemperatureReading from MQTT message"
+        );
+
         // Only create a reading if we have temperature data
-        msg.temperature.map(|temperature| Self {
-            sensor_id,
-            temperature,
-            humidity: msg.humidity,
-            battery: msg.battery,
-            timestamp: Utc::now(),
-        })
+        match msg.temperature {
+            Some(temperature) => {
+                debug!(
+                    sensor_id = %sensor_id,
+                    temperature = %temperature,
+                    humidity = ?msg.humidity,
+                    battery = ?msg.battery,
+                    "Successfully created TemperatureReading"
+                );
+                Some(Self {
+                    sensor_id,
+                    temperature,
+                    humidity: msg.humidity,
+                    battery: msg.battery,
+                    timestamp: Utc::now(),
+                })
+            }
+            None => {
+                warn!(
+                    sensor_id = %sensor_id,
+                    humidity = ?msg.humidity,
+                    battery = ?msg.battery,
+                    linkquality = ?msg.linkquality,
+                    "MQTT message does not contain temperature data - skipping reading creation"
+                );
+                None
+            }
+        }
     }
 }
