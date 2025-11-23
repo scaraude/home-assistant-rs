@@ -4,8 +4,19 @@
 
   export let sensorData: SensorData;
 
+  type Metric = 'temperature' | 'humidity' | 'battery' | null;
+  let selectedMetric: Metric = null;
+
   $: latest = sensorData.latestReading;
   $: displayName = sensorData.id.slice(0, 16) + (sensorData.id.length > 16 ? '...' : '');
+
+  function toggleMetric(metric: Metric) {
+    if (selectedMetric === metric) {
+      selectedMetric = null; // Toggle off if clicking the same metric
+    } else {
+      selectedMetric = metric;
+    }
+  }
 </script>
 
 <div class="sensor-card">
@@ -28,7 +39,12 @@
 
   {#if latest}
     <div class="readings">
-      <div class="reading-item">
+      <button
+        class="reading-item"
+        class:active={selectedMetric === 'temperature'}
+        on:click={() => toggleMetric('temperature')}
+        type="button"
+      >
         <div class="reading-icon">
           <!-- Temperature Icon -->
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
@@ -39,10 +55,15 @@
           <span class="value">{latest.temperature.toFixed(1)}</span>
           <span class="unit">°C</span>
         </div>
-      </div>
+      </button>
 
       {#if latest.humidity !== null}
-        <div class="reading-item">
+        <button
+          class="reading-item"
+          class:active={selectedMetric === 'humidity'}
+          on:click={() => toggleMetric('humidity')}
+          type="button"
+        >
           <div class="reading-icon">
             <!-- Humidity Icon -->
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
@@ -53,11 +74,16 @@
             <span class="value">{latest.humidity.toFixed(1)}</span>
             <span class="unit">%</span>
           </div>
-        </div>
+        </button>
       {/if}
 
       {#if latest.battery !== null}
-        <div class="reading-item">
+        <button
+          class="reading-item"
+          class:active={selectedMetric === 'battery'}
+          on:click={() => toggleMetric('battery')}
+          type="button"
+        >
           <div class="reading-icon">
             <!-- Battery Icon -->
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
@@ -68,12 +94,12 @@
             <span class="value">{latest.battery}</span>
             <span class="unit">%</span>
           </div>
-        </div>
+        </button>
       {/if}
     </div>
 
     <div class="graph-section">
-      <TemperatureGraph readings={sensorData.history} />
+      <TemperatureGraph readings={sensorData.history} selectedMetric={selectedMetric} />
     </div>
   {:else}
     <div class="no-data">
@@ -154,6 +180,30 @@
     padding: 0.5rem;
     background: #f9fafb;
     border-radius: 6px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    width: 100%;
+    text-align: left;
+  }
+
+  .reading-item:hover {
+    background: #f3f4f6;
+    border-color: #e5e7eb;
+    transform: translateY(-1px);
+  }
+
+  .reading-item.active {
+    background: #6aabff;
+    border-color: #3b82f6;
+  }
+
+  .reading-item.active .reading-icon {
+    color: #3b82f6;
+  }
+
+  .reading-item:active {
+    transform: translateY(0);
   }
 
   .reading-icon {

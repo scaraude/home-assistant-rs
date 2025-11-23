@@ -29,9 +29,57 @@
   );
 
   export let readings: SensorReading[] = [];
+  export let selectedMetric: 'temperature' | 'humidity' | 'battery' | null = null;
 
   let canvas: HTMLCanvasElement;
   let chart: Chart | null = null;
+
+  function getDatasets() {
+    const timestamps = readings.map((r) => r.timestamp * 1000);
+    const temperatures = readings.map((r) => r.temperature);
+    const humidities = readings.map((r) => r.humidity);
+    const batteries = readings.map((r) => r.battery ?? 0);
+
+    const POINT_RADUIS = 0.3;
+    const POINT_RADIUS_HOVER = 1;
+    const allDatasets = [
+      {
+        label: 'Temperature (°C)',
+        data: temperatures,
+        borderColor: 'rgb(59, 130, 246)',
+        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+        yAxisID: 'y',
+        tension: 0.4,
+        pointRadius: POINT_RADUIS,
+        pointHoverRadius: POINT_RADIUS_HOVER,
+        hidden: selectedMetric !== null && selectedMetric !== 'temperature',
+      },
+      {
+        label: 'Humidity (%)',
+        data: humidities,
+        borderColor: 'rgb(34, 197, 94)',
+        backgroundColor: 'rgba(34, 197, 94, 0.1)',
+        yAxisID: selectedMetric === 'humidity' ? 'y' : 'y1',
+        tension: 0.4,
+        pointRadius: POINT_RADUIS,
+        pointHoverRadius: POINT_RADIUS_HOVER,
+        hidden: selectedMetric !== null && selectedMetric !== 'humidity',
+      },
+      {
+        label: 'Battery (%)',
+        data: batteries,
+        borderColor: 'rgb(234, 179, 8)',
+        backgroundColor: 'rgba(234, 179, 8, 0.1)',
+        yAxisID: selectedMetric === 'battery' ? 'y' : 'y1',
+        tension: 0.4,
+        pointRadius: POINT_RADUIS,
+        pointHoverRadius: POINT_RADIUS_HOVER,
+        hidden: selectedMetric !== null && selectedMetric !== 'battery',
+      },
+    ];
+
+    return { timestamps, datasets: allDatasets };
+  }
 
   function createChart() {
     if (!canvas || readings.length === 0) return;
@@ -39,37 +87,13 @@
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Prepare data
-    const timestamps = readings.map((r) => r.timestamp * 1000); // Convert to milliseconds
-    const temperatures = readings.map((r) => r.temperature);
-    const humidities = readings.map((r) => r.humidity);
+    const { timestamps, datasets } = getDatasets();
 
     chart = new Chart(ctx, {
       type: 'line',
       data: {
         labels: timestamps,
-        datasets: [
-          {
-            label: 'Temperature (°C)',
-            data: temperatures,
-            borderColor: 'rgb(59, 130, 246)',
-            backgroundColor: 'rgba(59, 130, 246, 0.1)',
-            yAxisID: 'y',
-            tension: 0.4,
-            pointRadius: 2,
-            pointHoverRadius: 4,
-          },
-          {
-            label: 'Humidity (%)',
-            data: humidities,
-            borderColor: 'rgb(34, 197, 94)',
-            backgroundColor: 'rgba(34, 197, 94, 0.1)',
-            yAxisID: 'y1',
-            tension: 0.4,
-            pointRadius: 2,
-            pointHoverRadius: 4,
-          },
-        ],
+        datasets,
       },
       options: {
         responsive: true,
@@ -94,7 +118,7 @@
             enabled: true,
             callbacks: {
               title: (items) => {
-                if (items.length > 0) {
+                if (items.length > 0 && items[0].parsed.x !== null) {
                   const date = new Date(items[0].parsed.x);
                   return date.toLocaleString();
                 }
@@ -129,7 +153,7 @@
             position: 'left',
             title: {
               display: true,
-              text: '°C',
+              text: selectedMetric === 'humidity' ? '%' : selectedMetric === 'battery' ? '%' : '°C',
               font: {
                 size: 10,
               },
@@ -145,7 +169,7 @@
           },
           y1: {
             type: 'linear',
-            display: true,
+            display: selectedMetric === null,
             position: 'right',
             title: {
               display: true,
@@ -171,13 +195,25 @@
   function updateChart() {
     if (!chart || readings.length === 0) return;
 
-    const timestamps = readings.map((r) => r.timestamp * 1000);
-    const temperatures = readings.map((r) => r.temperature);
-    const humidities = readings.map((r) => r.humidity);
+    const { timestamps, datasets } = getDatasets();
 
     chart.data.labels = timestamps;
-    chart.data.datasets[0].data = temperatures;
-    chart.data.datasets[1].data = humidities;
+    chart.data.datasets = datasets;
+
+    // Update Y-axis label based on selected metric
+    const yAxis = chart.options.scales?.y as any;
+    if (yAxis?.title) {
+      yAxis.title.text =
+        selectedMetric === 'humidity' ? '%' :
+        selectedMetric === 'battery' ? '%' : '°C';
+    }
+
+    // Show/hide secondary Y-axis
+    const y1Axis = chart.options.scales?.y1 as any;
+    if (y1Axis) {
+      y1Axis.display = selectedMetric === null;
+    }
+
     chart.update('none'); // Update without animation for performance
   }
 
@@ -192,7 +228,7 @@
     }
   });
 
-  $: if (chart && readings.length > 0) {
+  $: if (chart && (readings || selectedMetric !== undefined)) {
     updateChart();
   }
 </script>
