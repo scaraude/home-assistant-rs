@@ -39,6 +39,7 @@ services:
         - linux/arm64
     container_name: home-assistant-rs
     restart: unless-stopped
+    init: true  # Proper signal handling
     depends_on:
       - mosquitto
     ports:
@@ -53,6 +54,12 @@ services:
     networks:
       - home-assistant-network
     user: "1000:1000"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
 networks:
   home-assistant-network:

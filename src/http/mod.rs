@@ -99,6 +99,10 @@ async fn handle_request(
             debug!("Serving index page");
             serve_index()
         }
+        "/health" => {
+            debug!("Health check request");
+            health_check()
+        }
         "/api/sensors" => {
             debug!("Serving sensors list");
             serve_sensors(&db)
@@ -125,6 +129,14 @@ async fn handle_request(
     );
 
     Ok(response)
+}
+
+fn health_check() -> Response<Full<Bytes>> {
+    Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", "application/json")
+        .body(Full::new(Bytes::from(r#"{"status":"ok"}"#)))
+        .unwrap()
 }
 
 fn serve_index() -> Response<Full<Bytes>> {

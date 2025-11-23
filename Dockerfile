@@ -4,6 +4,9 @@ FROM alpine:3.19
 
 WORKDIR /app
 
+# Install wget for health checks
+RUN apk add --no-cache wget
+
 # Copy pre-built binary and static files
 COPY target/aarch64-unknown-linux-musl/release/home-assistant-rs /app/
 COPY static ./static
