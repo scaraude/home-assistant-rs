@@ -53,6 +53,7 @@ services:
       - DB_PATH=/app/data/home_assistant.db
     networks:
       - home-assistant-network
+    user: "1000:1000"
 
 networks:
   home-assistant-network:
