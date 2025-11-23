@@ -1,5 +1,6 @@
 use crate::models::TemperatureReading;
 use rusqlite::{params, Connection, Result};
+use std::fs;
 use std::path::Path;
 use std::sync::Mutex;
 
@@ -10,6 +11,12 @@ pub struct Database {
 impl Database {
     /// Create or open the database
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self> {
+        // Ensure the parent directory exists
+        if let Some(parent) = path.as_ref().parent() {
+            fs::create_dir_all(parent)
+                .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+        }
+
         let conn = Connection::open(path)?;
         let db = Self {
             conn: Mutex::new(conn),
