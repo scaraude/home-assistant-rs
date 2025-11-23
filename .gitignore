@@ -29,6 +29,9 @@ Thumbs.db
 home-assistant-rs
 deploy/
 
+# Frontend build output
+/static/
+
 # Service runtime data (config files are tracked, runtime data is not)
 services/*/data/
 services/*/log/

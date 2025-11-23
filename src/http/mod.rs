@@ -97,7 +97,7 @@ async fn handle_request(
     let response = match path {
         "/" => {
             debug!("Serving index page");
-            serve_index()
+            serve_static_file("static/index.html", "text/html; charset=utf-8")
         }
         "/health" => {
             debug!("Health check request");
@@ -110,6 +110,10 @@ async fn handle_request(
         "/api/readings" => {
             debug!(query = ?query, "Serving readings");
             serve_readings(&db, query)
+        }
+        _ if path.starts_with("/assets/") || path.ends_with(".svg") => {
+            debug!(path = %path, "Serving static asset");
+            serve_static_asset(path)
         }
         _ => {
             warn!(path = %path, "Request to unknown path");
@@ -139,13 +143,47 @@ fn health_check() -> Response<Full<Bytes>> {
         .unwrap()
 }
 
-fn serve_index() -> Response<Full<Bytes>> {
-    let html = include_str!("../../static/index.html");
-    Response::builder()
-        .status(StatusCode::OK)
-        .header("Content-Type", "text/html; charset=utf-8")
-        .body(Full::new(Bytes::from(html)))
-        .unwrap()
+fn serve_static_file(file_path: &str, content_type: &str) -> Response<Full<Bytes>> {
+    match std::fs::read(file_path) {
+        Ok(contents) => {
+            debug!(file_path = %file_path, size = contents.len(), "Serving static file");
+            Response::builder()
+                .status(StatusCode::OK)
+                .header("Content-Type", content_type)
+                .header("Cache-Control", "public, max-age=3600")
+                .body(Full::new(Bytes::from(contents)))
+                .unwrap()
+        }
+        Err(e) => {
+            error!(error = %e, file_path = %file_path, "Failed to read static file");
+            Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .body(Full::new(Bytes::from("File not found")))
+                .unwrap()
+        }
+    }
+}
+
+fn serve_static_asset(path: &str) -> Response<Full<Bytes>> {
+    // Remove leading slash and construct file path
+    let file_path = format!("static{}", path);
+
+    // Determine content type based on extension
+    let content_type = if path.ends_with(".js") {
+        "application/javascript; charset=utf-8"
+    } else if path.ends_with(".css") {
+        "text/css; charset=utf-8"
+    } else if path.ends_with(".svg") {
+        "image/svg+xml"
+    } else if path.ends_with(".png") {
+        "image/png"
+    } else if path.ends_with(".jpg") || path.ends_with(".jpeg") {
+        "image/jpeg"
+    } else {
+        "application/octet-stream"
+    };
+
+    serve_static_file(&file_path, content_type)
 }
 
 fn serve_sensors(db: &Database) -> Response<Full<Bytes>> {
