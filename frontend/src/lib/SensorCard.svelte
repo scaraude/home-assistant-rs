@@ -1,11 +1,13 @@
 <script lang="ts">
   import TemperatureGraph from './TemperatureGraph.svelte';
+  import GraphModal from './GraphModal.svelte';
   import type { SensorData } from './api';
 
   export let sensorData: SensorData;
 
   type Metric = 'temperature' | 'humidity' | 'battery' | null;
   let selectedMetric: Metric = null;
+  let isModalOpen = false;
 
   $: latest = sensorData.latestReading;
   $: displayName = sensorData.id.slice(0, 16) + (sensorData.id.length > 16 ? '...' : '');
@@ -16,6 +18,10 @@
     } else {
       selectedMetric = metric;
     }
+  }
+
+  function openModal() {
+    isModalOpen = true;
   }
 </script>
 
@@ -98,8 +104,15 @@
       {/if}
     </div>
 
-    <div class="graph-section">
+    <div class="graph-section" on:click={openModal} role="button" tabindex="0" on:keydown={(e) => e.key === 'Enter' && openModal()}>
       <TemperatureGraph readings={sensorData.history} selectedMetric={selectedMetric} />
+      <div class="zoom-hint">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+          <path d="M12 10h-2v2H9v-2H7V9h2V7h1v2h2v1z"/>
+        </svg>
+        Click to zoom
+      </div>
     </div>
   {:else}
     <div class="no-data">
@@ -107,6 +120,13 @@
     </div>
   {/if}
 </div>
+
+<GraphModal
+  bind:isOpen={isModalOpen}
+  readings={sensorData.history}
+  {selectedMetric}
+  sensorName={sensorData.id}
+/>
 
 <style>
   .sensor-card {
@@ -236,6 +256,49 @@
 
   .graph-section {
     margin-top: 1rem;
+    position: relative;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    padding: 0.5rem;
+    margin: 0.5rem -0.5rem 0;
+  }
+
+  .graph-section:hover {
+    background: #f9fafb;
+    transform: scale(1.01);
+  }
+
+  .graph-section:active {
+    transform: scale(0.99);
+  }
+
+  .zoom-hint {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(4px);
+    padding: 0.375rem 0.625rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    color: #6b7280;
+    border: 1px solid #e5e7eb;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+  }
+
+  .graph-section:hover .zoom-hint {
+    opacity: 1;
+  }
+
+  .zoom-hint svg {
+    width: 14px;
+    height: 14px;
   }
 
   .no-data {
