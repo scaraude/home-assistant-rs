@@ -166,6 +166,8 @@
                 size: 10,
               },
             },
+            min: selectedMetric === null ? 0 : undefined,
+            max: selectedMetric === null ? 40 : undefined,
           },
           y1: {
             type: 'linear',
@@ -186,6 +188,8 @@
                 size: 10,
               },
             },
+            min: 0,
+            max: 100,
           },
         },
       },
@@ -200,15 +204,19 @@
     chart.data.labels = timestamps;
     chart.data.datasets = datasets;
 
-    // Update Y-axis label based on selected metric
+    // Update Y-axis label and scale based on selected metric
     const yAxis = chart.options.scales?.y as any;
     if (yAxis?.title) {
       yAxis.title.text =
         selectedMetric === 'humidity' ? '%' :
         selectedMetric === 'battery' ? '%' : '°C';
     }
+    if (yAxis) {
+      yAxis.min = selectedMetric === null ? 0 : undefined;
+      yAxis.max = selectedMetric === null ? 40 : undefined;
+    }
 
-    // Show/hide secondary Y-axis
+    // Show/hide secondary Y-axis and set fixed scale
     const y1Axis = chart.options.scales?.y1 as any;
     if (y1Axis) {
       y1Axis.display = selectedMetric === null;
