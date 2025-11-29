@@ -29,6 +29,12 @@ Thumbs.db
 home-assistant-rs
 deploy/
 
+# Deployment artifacts
+.env.deploy
+/configs/
+/systemd/
+/backups/
+
 # Frontend build output
 /static/
 
