@@ -54,6 +54,7 @@ make deploy-full
 ```
 
 This single command will:
+
 - ✓ Check SSH connection
 - ✓ Generate configuration files
 - ✓ Install system dependencies (Mosquitto, Node.js)
@@ -95,6 +96,7 @@ make install-deps
 ```
 
 This installs:
+
 - Mosquitto MQTT broker
 - Node.js 18.x (for Zigbee2MQTT)
 - Build essentials
@@ -213,11 +215,13 @@ make test-connection
 The deployment sets up three systemd services:
 
 1. **mosquitto.service** - MQTT broker
+
    - Runs as `mosquitto` user
    - Listens on port 1883
    - Data: `/var/lib/home-assistant-rs/mosquitto/`
 
 2. **zigbee2mqtt.service** - Zigbee bridge
+
    - Runs as `pi` user (needs USB access)
    - Web UI on port 8081
    - Config: `/var/lib/home-assistant-rs/zigbee2mqtt/`
@@ -338,6 +342,7 @@ make restore BACKUP_FILE=backups/backup-20250129-143022.tar.gz
 ```
 
 This will:
+
 1. Stop all services
 2. Restore database and configurations
 3. Restart services
@@ -377,7 +382,7 @@ Application environment variables:
 ```bash
 MQTT_BROKER=localhost
 MQTT_PORT=1883
-HTTP_ADDR=0.0.0.0:8080
+HTTP_ADDR=0.0.0.0:8082
 DB_PATH=/var/lib/home-assistant-rs/database/home_assistant.db
 ```
 
@@ -407,16 +412,19 @@ This produces a small, efficient binary suitable for Raspberry Pi.
 ### Production Recommendations
 
 1. **Enable Mosquitto authentication**:
+
    ```bash
    mosquitto_passwd -c /etc/mosquitto/passwd username
    ```
 
 2. **Use TLS for MQTT**:
+
    - Generate certificates
    - Update Mosquitto config
    - Update client configs
 
 3. **Firewall configuration**:
+
    ```bash
    sudo ufw allow 8080/tcp  # Home Assistant RS
    sudo ufw allow 8081/tcp  # Zigbee2MQTT (optional)

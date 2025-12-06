@@ -58,7 +58,7 @@ setup-cross-compile: ## Install Rust cross-compilation tools
 
 build: ## Build the Rust binary for Raspberry Pi
 	@echo "$(COLOR_BLUE)Building $(BINARY_NAME) for $(RUST_TARGET)...$(COLOR_RESET)"
-	cargo build --release --target=$(RUST_TARGET)
+	cross build --release --target=$(RUST_TARGET)
 	@ls -lh target/$(RUST_TARGET)/release/$(BINARY_NAME)
 	@echo "$(COLOR_GREEN)✓ Build complete$(COLOR_RESET)"
 
@@ -172,7 +172,7 @@ Wants=mosquitto.service\n\
 Type=simple\n\
 User=$(PI_USER)\n\
 WorkingDirectory=$(DATA_DIR)/zigbee2mqtt\n\
-ExecStart=/usr/bin/npm start\n\
+ExecStart=/usr/bin/zigbee2mqtt\n\
 Restart=always\n\
 RestartSec=10\n\
 StandardOutput=append:$(LOG_DIR)/zigbee2mqtt.log\n\
@@ -209,7 +209,7 @@ data_path: $(DATA_DIR)/zigbee2mqtt" > configs/zigbee2mqtt-config.yaml
 	# Environment file for Raspberry Pi
 	@echo "MQTT_BROKER=localhost\n\
 MQTT_PORT=1883\n\
-HTTP_ADDR=0.0.0.0:8080\n\
+HTTP_ADDR=0.0.0.0:8082\n\
 DB_PATH=$(DATA_DIR)/database/home_assistant.db" > configs/pi.env
 	@echo "$(COLOR_GREEN)✓ Configuration files generated in configs/$(COLOR_RESET)"
 
