@@ -71,6 +71,7 @@ setup-directories: check-ssh ## Create necessary directories on Raspberry Pi
 	@echo "$(COLOR_BLUE)Creating directories on Raspberry Pi...$(COLOR_RESET)"
 	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "\
 		sudo mkdir -p $(DEPLOY_DIR)/bin && \
+		sudo mkdir -p $(DEPLOY_DIR)/static && \
 		sudo mkdir -p $(DATA_DIR)/database && \
 		sudo mkdir -p $(DATA_DIR)/mosquitto/data && \
 		sudo mkdir -p $(DATA_DIR)/mosquitto/log && \
@@ -105,7 +106,7 @@ transfer-frontend: check-ssh ## Build and transfer frontend to Raspberry Pi
 	@if [ -d "frontend" ]; then \
 		cd frontend && npm install && npm run build && cd ..; \
 		ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "mkdir -p $(DEPLOY_DIR)/static"; \
-		scp -i $(SSH_KEY) -r frontend/dist/* $(PI_USER)@$(PI_IP):$(DEPLOY_DIR)/static/; \
+		scp -i $(SSH_KEY) -r static/* $(PI_USER)@$(PI_IP):$(DEPLOY_DIR)/static/; \
 		echo "$(COLOR_GREEN)✓ Frontend transferred$(COLOR_RESET)"; \
 	else \
 		echo "$(COLOR_YELLOW)⚠ No frontend directory found, skipping$(COLOR_RESET)"; \

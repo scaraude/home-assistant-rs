@@ -23,8 +23,13 @@ impl MqttListener {
 
         let mut mqtt_options = MqttOptions::new(client_id, broker_host, broker_port);
         mqtt_options.set_keep_alive(std::time::Duration::from_secs(60));
+        mqtt_options.set_max_packet_size(1024 * 1024, 1024 * 1024); // 1MB max packet size
 
-        debug!(keep_alive_secs = 60, "MQTT keep-alive configured");
+        debug!(
+            keep_alive_secs = 60,
+            max_packet_size = "1MB",
+            "MQTT options configured"
+        );
 
         let (client, mut eventloop) = AsyncClient::new(mqtt_options, 10);
         let (tx, rx) = mpsc::channel(100);
