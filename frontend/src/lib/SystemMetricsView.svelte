@@ -11,6 +11,7 @@
     Tooltip,
     Legend,
   } from 'chart.js';
+  import zoomPlugin from 'chartjs-plugin-zoom';
   import 'chartjs-adapter-date-fns';
   import type { SystemMonitorEntry } from './api';
 
@@ -22,33 +23,31 @@
     TimeScale,
     Title,
     Tooltip,
-    Legend
+    Legend,
+    zoomPlugin
   );
 
   export let entries: SystemMonitorEntry[] = [];
 
-  let cpuCanvas: HTMLCanvasElement;
-  let ramCanvas: HTMLCanvasElement;
-  let tempCanvas: HTMLCanvasElement;
-
-  let cpuChart: Chart | null = null;
-  let ramChart: Chart | null = null;
-  let tempChart: Chart | null = null;
+  let combinedCanvas: HTMLCanvasElement;
+  let combinedChart: Chart | null = null;
 
   function parseTimestamps() {
     return entries.map((e) => new Date(e.timestamp).getTime());
   }
 
-  function createCpuChart() {
-    if (!cpuCanvas || entries.length === 0) return;
+  function createCombinedChart() {
+    if (!combinedCanvas || entries.length === 0) return;
 
-    const ctx = cpuCanvas.getContext('2d');
+    const ctx = combinedCanvas.getContext('2d');
     if (!ctx) return;
 
     const timestamps = parseTimestamps();
     const cpuData = entries.map((e) => e.cpu_usage);
+    const ramData = entries.map((e) => e.ram_usage);
+    const tempData = entries.map((e) => e.cpu_temp);
 
-    cpuChart = new Chart(ctx, {
+    combinedChart = new Chart(ctx, {
       type: 'line',
       data: {
         labels: timestamps,
@@ -58,146 +57,53 @@
             data: cpuData,
             borderColor: 'rgb(59, 130, 246)',
             backgroundColor: 'rgba(59, 130, 246, 0.1)',
+            yAxisID: 'y',
             tension: 0.4,
             pointRadius: 0.3,
             pointHoverRadius: 4,
-            fill: true,
+            fill: false,
           },
-        ],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            enabled: true,
-            callbacks: {
-              title: (items) => {
-                if (items.length > 0 && items[0].parsed.x !== null) {
-                  return new Date(items[0].parsed.x).toLocaleString();
-                }
-                return '';
-              },
-            },
-          },
-        },
-        scales: {
-          x: {
-            type: 'time',
-            time: {
-              tooltipFormat: 'MMM d, HH:mm',
-              displayFormats: { hour: 'HH:mm', day: 'MMM d' },
-            },
-            grid: { display: false },
-            ticks: { maxRotation: 0, font: { size: 10 } },
-          },
-          y: {
-            min: 0,
-            max: 100,
-            ticks: { font: { size: 10 } },
-            grid: { color: 'rgba(0, 0, 0, 0.05)' },
-          },
-        },
-      },
-    });
-  }
-
-  function createRamChart() {
-    if (!ramCanvas || entries.length === 0) return;
-
-    const ctx = ramCanvas.getContext('2d');
-    if (!ctx) return;
-
-    const timestamps = parseTimestamps();
-    const ramData = entries.map((e) => e.ram_usage);
-
-    ramChart = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: timestamps,
-        datasets: [
           {
             label: 'RAM Usage (%)',
             data: ramData,
             borderColor: 'rgb(34, 197, 94)',
             backgroundColor: 'rgba(34, 197, 94, 0.1)',
+            yAxisID: 'y',
             tension: 0.4,
             pointRadius: 0.3,
             pointHoverRadius: 4,
-            fill: true,
+            fill: false,
           },
-        ],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            enabled: true,
-            callbacks: {
-              title: (items) => {
-                if (items.length > 0 && items[0].parsed.x !== null) {
-                  return new Date(items[0].parsed.x).toLocaleString();
-                }
-                return '';
-              },
-            },
-          },
-        },
-        scales: {
-          x: {
-            type: 'time',
-            time: {
-              tooltipFormat: 'MMM d, HH:mm',
-              displayFormats: { hour: 'HH:mm', day: 'MMM d' },
-            },
-            grid: { display: false },
-            ticks: { maxRotation: 0, font: { size: 10 } },
-          },
-          y: {
-            min: 0,
-            max: 100,
-            ticks: { font: { size: 10 } },
-            grid: { color: 'rgba(0, 0, 0, 0.05)' },
-          },
-        },
-      },
-    });
-  }
-
-  function createTempChart() {
-    if (!tempCanvas || entries.length === 0) return;
-
-    const ctx = tempCanvas.getContext('2d');
-    if (!ctx) return;
-
-    const timestamps = parseTimestamps();
-    const tempData = entries.map((e) => e.cpu_temp);
-
-    tempChart = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: timestamps,
-        datasets: [
           {
-            label: 'CPU Temperature (°C)',
+            label: 'CPU Temp (°C)',
             data: tempData,
             borderColor: 'rgb(239, 68, 68)',
             backgroundColor: 'rgba(239, 68, 68, 0.1)',
+            yAxisID: 'y1',
             tension: 0.4,
             pointRadius: 0.3,
             pointHoverRadius: 4,
-            fill: true,
+            fill: false,
           },
         ],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        interaction: {
+          mode: 'index',
+          intersect: false,
+        },
         plugins: {
-          legend: { display: false },
+          legend: {
+            display: true,
+            position: 'top',
+            labels: {
+              usePointStyle: true,
+              padding: 15,
+              font: { size: 12 },
+            },
+          },
           tooltip: {
             enabled: true,
             callbacks: {
@@ -207,6 +113,24 @@
                 }
                 return '';
               },
+            },
+          },
+          zoom: {
+            zoom: {
+              wheel: {
+                enabled: true,
+              },
+              pinch: {
+                enabled: true,
+              },
+              mode: 'x',
+            },
+            pan: {
+              enabled: true,
+              mode: 'x',
+            },
+            limits: {
+              x: { min: 'original', max: 'original' },
             },
           },
         },
@@ -221,52 +145,64 @@
             ticks: { maxRotation: 0, font: { size: 10 } },
           },
           y: {
+            type: 'linear',
+            display: true,
+            position: 'left',
+            min: 0,
+            max: 100,
+            title: {
+              display: true,
+              text: 'Usage (%)',
+              font: { size: 11 },
+            },
             ticks: { font: { size: 10 } },
             grid: { color: 'rgba(0, 0, 0, 0.05)' },
+          },
+          y1: {
+            type: 'linear',
+            display: true,
+            position: 'right',
+            title: {
+              display: true,
+              text: 'Temperature (°C)',
+              font: { size: 11 },
+            },
+            ticks: { font: { size: 10 } },
+            grid: { drawOnChartArea: false },
           },
         },
       },
     });
   }
 
-  function updateCharts() {
-    if (entries.length === 0) return;
+  function updateChart() {
+    if (!combinedChart || entries.length === 0) return;
 
     const timestamps = parseTimestamps();
 
-    if (cpuChart) {
-      cpuChart.data.labels = timestamps;
-      cpuChart.data.datasets[0].data = entries.map((e) => e.cpu_usage);
-      cpuChart.update('none');
-    }
+    combinedChart.data.labels = timestamps;
+    combinedChart.data.datasets[0].data = entries.map((e) => e.cpu_usage);
+    combinedChart.data.datasets[1].data = entries.map((e) => e.ram_usage);
+    combinedChart.data.datasets[2].data = entries.map((e) => e.cpu_temp);
+    combinedChart.update('none');
+  }
 
-    if (ramChart) {
-      ramChart.data.labels = timestamps;
-      ramChart.data.datasets[0].data = entries.map((e) => e.ram_usage);
-      ramChart.update('none');
-    }
-
-    if (tempChart) {
-      tempChart.data.labels = timestamps;
-      tempChart.data.datasets[0].data = entries.map((e) => e.cpu_temp);
-      tempChart.update('none');
+  function handleCanvasDoubleClick() {
+    if (combinedChart) {
+      combinedChart.resetZoom();
     }
   }
 
   onMount(() => {
-    createCpuChart();
-    createRamChart();
-    createTempChart();
+    createCombinedChart();
   });
 
   onDestroy(() => {
-    if (cpuChart) cpuChart.destroy();
-    if (ramChart) ramChart.destroy();
-    if (tempChart) tempChart.destroy();
+    if (combinedChart) combinedChart.destroy();
   });
 
   $: if (entries) {
-    updateCharts();
+    updateChart();
   }
 
   $: latestEntry = entries.length > 0 ? entries[entries.length - 1] : null;
@@ -293,26 +229,11 @@
     </div>
   {/if}
 
-  <div class="chart-grid">
-    <div class="chart-card">
-      <h3>CPU Usage (%)</h3>
-      <div class="graph-container">
-        <canvas bind:this={cpuCanvas}></canvas>
-      </div>
-    </div>
-
-    <div class="chart-card">
-      <h3>RAM Usage (%)</h3>
-      <div class="graph-container">
-        <canvas bind:this={ramCanvas}></canvas>
-      </div>
-    </div>
-
-    <div class="chart-card">
-      <h3>CPU Temperature (°C)</h3>
-      <div class="graph-container">
-        <canvas bind:this={tempCanvas}></canvas>
-      </div>
+  <div class="chart-card">
+    <h3>System Metrics</h3>
+    <div class="zoom-hint">Scroll to zoom • Drag to pan • Double-click to reset</div>
+    <div class="graph-container-large">
+      <canvas bind:this={combinedCanvas} on:dblclick={handleCanvasDoubleClick}></canvas>
     </div>
   </div>
 </div>
@@ -355,12 +276,6 @@
     margin-top: 0.25rem;
   }
 
-  .chart-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 1.5rem;
-  }
-
   .chart-card {
     background: white;
     border: 1px solid #e5e7eb;
@@ -369,15 +284,22 @@
   }
 
   .chart-card h3 {
-    margin: 0 0 1rem 0;
+    margin: 0 0 0.5rem 0;
     font-size: 1rem;
     font-weight: 600;
     color: #111827;
   }
 
-  .graph-container {
+  .zoom-hint {
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin-bottom: 1rem;
+    font-style: italic;
+  }
+
+  .graph-container-large {
     width: 100%;
-    height: 200px;
+    height: 400px;
     position: relative;
   }
 

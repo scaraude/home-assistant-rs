@@ -2,6 +2,7 @@
   import TemperatureGraph from './TemperatureGraph.svelte';
   import GraphModal from './GraphModal.svelte';
   import type { SensorData } from './api';
+  import { formatDistanceToNow } from 'date-fns';
 
   export let sensorData: SensorData;
 
@@ -11,6 +12,7 @@
 
   $: latest = sensorData.latestReading;
   $: displayName = sensorData.id.slice(0, 16) + (sensorData.id.length > 16 ? '...' : '');
+  $: timeAgo = latest ? formatDistanceToNow(new Date(latest.timestamp * 1000), { addSuffix: true }) : '';
 
   function toggleMetric(metric: Metric) {
     if (selectedMetric === metric) {
@@ -36,12 +38,12 @@
     <div class="sensor-info">
       <h3 class="sensor-name" title={sensorData.id}>{displayName}</h3>
       {#if latest}
-        <div class="last-update">
-          {new Date(latest.timestamp * 1000).toLocaleString()}
+        <div class="last-update" title={new Date(latest.timestamp * 1000).toLocaleString()}>
+          {timeAgo}
         </div>
       {/if}
     </div>
-    {#if latest && latest.link_quality !== null}
+    {#if latest && latest.link_quality != null}
       <div class="link-quality-badge" class:good={latest.link_quality >= 100} class:medium={latest.link_quality >= 50 && latest.link_quality < 100} class:poor={latest.link_quality < 50}>
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
           <path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/>
