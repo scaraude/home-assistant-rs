@@ -5,10 +5,21 @@
   import { fetchAllSensorData, type SensorData } from './lib/api';
 
   type View = 'sensors' | 'logs';
+  type TimeRange = '1h' | '6h' | '24h' | 'all';
 
   const STORAGE_KEY = 'homeAssistant:currentView';
+  const TIME_RANGE_KEY = 'homeAssistant:sensorTimeRange';
+
+  // Map time ranges to hours
+  const timeRangeToHours: Record<TimeRange, number> = {
+    '1h': 1,
+    '6h': 6,
+    '24h': 24,
+    'all': 168, // 7 days
+  };
 
   let currentView: View = 'sensors';
+  let selectedTimeRange: TimeRange = '24h';
   let sensorData: SensorData[] = [];
   let loading = true;
   let error: string | null = null;
@@ -17,12 +28,19 @@
   async function loadData() {
     try {
       error = null;
-      sensorData = await fetchAllSensorData(24);
+      const hours = timeRangeToHours[selectedTimeRange];
+      sensorData = await fetchAllSensorData(hours);
       loading = false;
     } catch (err) {
       error = err instanceof Error ? err.message : 'Failed to load sensor data';
       loading = false;
     }
+  }
+
+  function setTimeRange(range: TimeRange) {
+    selectedTimeRange = range;
+    localStorage.setItem(TIME_RANGE_KEY, range);
+    loadData();
   }
 
   function startPolling() {
@@ -49,6 +67,12 @@
       currentView = savedView;
     }
 
+    // Restore saved time range from localStorage
+    const savedTimeRange = localStorage.getItem(TIME_RANGE_KEY);
+    if (savedTimeRange === '1h' || savedTimeRange === '6h' || savedTimeRange === '24h' || savedTimeRange === 'all') {
+      selectedTimeRange = savedTimeRange;
+    }
+
     startPolling();
   });
 
@@ -71,6 +95,7 @@
         </svg>
       </div>
       <h1>Home Assistant</h1>
+
       <nav class="nav-buttons">
         <button
           class="nav-button"
@@ -92,6 +117,41 @@
 
   <div class="container">
     {#if currentView === 'sensors'}
+      <div class="sensor-header">
+        <h2>Sensors</h2>
+        <div class="time-range-selector">
+          <span class="time-range-label">Time range:</span>
+          <button
+            class="time-range-btn"
+            class:active={selectedTimeRange === '1h'}
+            on:click={() => setTimeRange('1h')}
+          >
+            1h
+          </button>
+          <button
+            class="time-range-btn"
+            class:active={selectedTimeRange === '6h'}
+            on:click={() => setTimeRange('6h')}
+          >
+            6h
+          </button>
+          <button
+            class="time-range-btn"
+            class:active={selectedTimeRange === '24h'}
+            on:click={() => setTimeRange('24h')}
+          >
+            24h
+          </button>
+          <button
+            class="time-range-btn"
+            class:active={selectedTimeRange === 'all'}
+            on:click={() => setTimeRange('all')}
+          >
+            All
+          </button>
+        </div>
+      </div>
+
       {#if loading}
         <div class="loading">
           <div class="spinner"></div>
@@ -141,8 +201,46 @@
     gap: 0.75rem;
   }
 
+  .time-range-selector {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background-color: #f9fafb;
+    padding: 0.25rem;
+    border-radius: 6px;
+    border: 1px solid #e5e7eb;
+  }
+
+  .time-range-label {
+    font-size: 0.8125rem;
+    color: #6b7280;
+    font-weight: 500;
+    padding: 0 0.5rem;
+  }
+
+  .time-range-btn {
+    padding: 0.375rem 0.75rem;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: #6b7280;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .time-range-btn:hover {
+    background: #e5e7eb;
+    color: #111827;
+  }
+
+  .time-range-btn.active {
+    background: #3b82f6;
+    color: white;
+  }
+
   .nav-buttons {
-    margin-left: auto;
     display: flex;
     gap: 0.5rem;
   }
@@ -198,6 +296,22 @@
     max-width: 1400px;
     margin: 0 auto;
     padding: 2rem 1rem;
+  }
+
+  .sensor-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .sensor-header h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #111827;
   }
 
   .loading {
@@ -270,6 +384,28 @@
 
     h1 {
       font-size: 1.25rem;
+    }
+
+    .header-content {
+      flex-wrap: wrap;
+    }
+
+    .sensor-header {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .sensor-header h2 {
+      font-size: 1.25rem;
+    }
+
+    .time-range-selector {
+      width: 100%;
+      justify-content: space-between;
+    }
+
+    .time-range-btn {
+      flex: 1;
     }
 
     .nav-buttons {
