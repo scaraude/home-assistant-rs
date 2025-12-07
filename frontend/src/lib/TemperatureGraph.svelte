@@ -74,7 +74,7 @@
         tension: 0.4,
         pointRadius: POINT_RADUIS,
         pointHoverRadius: POINT_RADIUS_HOVER,
-        hidden: selectedMetric !== null && selectedMetric !== 'battery',
+        hidden: selectedMetric !== 'battery',
       },
     ];
 
