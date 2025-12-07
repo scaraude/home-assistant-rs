@@ -43,3 +43,6 @@ services/*/data/
 services/*/log/
 
 .env
+
+# Claude context
+CLAUDE.md
