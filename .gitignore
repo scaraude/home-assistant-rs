@@ -46,3 +46,5 @@ services/*/log/
 
 # Claude context
 CLAUDE.md
+
+system_monitor_back*
