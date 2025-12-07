@@ -18,7 +18,7 @@ RUST_TARGET ?= aarch64-unknown-linux-gnu
 
 # Binary and service names
 BINARY_NAME = home-assistant-rs
-SERVICE_FILES = home-assistant-rs.service mosquitto.service zigbee2mqtt.service
+SERVICE_FILES = home-assistant-rs.service mosquitto.service zigbee2mqtt.service system-monitor.service
 
 # Colors for output
 COLOR_RESET = \033[0m
@@ -112,6 +112,12 @@ transfer-frontend: check-ssh ## Build and transfer frontend to Raspberry Pi
 		echo "$(COLOR_YELLOW)⚠ No frontend directory found, skipping$(COLOR_RESET)"; \
 	fi
 
+transfer-monitor: check-ssh ## Transfer monitor.sh script to Raspberry Pi
+	@echo "$(COLOR_BLUE)Transferring monitor.sh script...$(COLOR_RESET)"
+	scp -i $(SSH_KEY) monitor.sh $(PI_USER)@$(PI_IP):$(DEPLOY_DIR)/
+	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "chmod +x $(DEPLOY_DIR)/monitor.sh"
+	@echo "$(COLOR_GREEN)✓ Monitor script transferred$(COLOR_RESET)"
+
 setup-services: check-ssh ## Install and enable systemd services
 	@echo "$(COLOR_BLUE)Setting up systemd services...$(COLOR_RESET)"
 	# Generate service files from templates
@@ -124,7 +130,8 @@ setup-services: check-ssh ## Install and enable systemd services
 		sudo systemctl daemon-reload && \
 		sudo systemctl enable mosquitto.service && \
 		sudo systemctl enable zigbee2mqtt.service && \
-		sudo systemctl enable home-assistant-rs.service"
+		sudo systemctl enable home-assistant-rs.service && \
+		sudo systemctl enable system-monitor.service"
 	@echo "$(COLOR_GREEN)✓ Services configured$(COLOR_RESET)"
 
 generate-service-files: ## Generate systemd service files
@@ -182,6 +189,22 @@ Environment=\"NODE_ENV=production\"\n\
 \n\
 [Install]\n\
 WantedBy=multi-user.target" > systemd/zigbee2mqtt.service
+	# System Monitor service
+	@echo "[Unit]\n\
+Description=System Monitor - CPU, RAM and Temperature Logger\n\
+After=network.target\n\
+\n\
+[Service]\n\
+Type=simple\n\
+User=$(PI_USER)\n\
+ExecStart=$(DEPLOY_DIR)/monitor.sh\n\
+Restart=always\n\
+RestartSec=10\n\
+StandardOutput=append:$(LOG_DIR)/monitor.log\n\
+StandardError=append:$(LOG_DIR)/monitor-error.log\n\
+\n\
+[Install]\n\
+WantedBy=multi-user.target" > systemd/system-monitor.service
 	@echo "$(COLOR_GREEN)✓ Service files generated in systemd/$(COLOR_RESET)"
 
 generate-configs: ## Generate configuration files for deployment
@@ -232,6 +255,7 @@ deploy-full: ## Full deployment (build, transfer, configure, and start services)
 	$(MAKE) transfer-binary
 	$(MAKE) transfer-configs
 	$(MAKE) transfer-frontend
+	$(MAKE) transfer-monitor
 	$(MAKE) install-zigbee2mqtt
 	$(MAKE) setup-services
 	$(MAKE) start
@@ -248,7 +272,8 @@ start: check-ssh ## Start all services on Raspberry Pi
 	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "\
 		sudo systemctl start mosquitto.service && \
 		sudo systemctl start zigbee2mqtt.service && \
-		sudo systemctl start home-assistant-rs.service"
+		sudo systemctl start home-assistant-rs.service && \
+		sudo systemctl start system-monitor.service"
 	@echo "$(COLOR_GREEN)✓ Services started$(COLOR_RESET)"
 	@sleep 2
 	$(MAKE) status
@@ -258,7 +283,8 @@ stop: check-ssh ## Stop all services on Raspberry Pi
 	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "\
 		sudo systemctl stop home-assistant-rs.service; \
 		sudo systemctl stop zigbee2mqtt.service; \
-		sudo systemctl stop mosquitto.service"
+		sudo systemctl stop mosquitto.service; \
+		sudo systemctl stop system-monitor.service"
 	@echo "$(COLOR_GREEN)✓ Services stopped$(COLOR_RESET)"
 
 restart: check-ssh ## Restart all services on Raspberry Pi
@@ -266,7 +292,8 @@ restart: check-ssh ## Restart all services on Raspberry Pi
 	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "\
 		sudo systemctl restart mosquitto.service && \
 		sudo systemctl restart zigbee2mqtt.service && \
-		sudo systemctl restart home-assistant-rs.service"
+		sudo systemctl restart home-assistant-rs.service && \
+		sudo systemctl restart system-monitor.service"
 	@echo "$(COLOR_GREEN)✓ Services restarted$(COLOR_RESET)"
 	@sleep 2
 	$(MAKE) status
@@ -281,12 +308,15 @@ status: check-ssh ## Check status of all services
 		sudo systemctl status zigbee2mqtt.service --no-pager -l | head -n 10 && \
 		echo '' && \
 		echo '$(COLOR_BOLD)Home Assistant RS:$(COLOR_RESET)' && \
-		sudo systemctl status home-assistant-rs.service --no-pager -l | head -n 10"
+		sudo systemctl status home-assistant-rs.service --no-pager -l | head -n 10 && \
+		echo '' && \
+		echo '$(COLOR_BOLD)System Monitor:$(COLOR_RESET)' && \
+		sudo systemctl status system-monitor.service --no-pager -l | head -n 10"
 
 logs: check-ssh ## Tail all service logs
 	@echo "$(COLOR_BLUE)Tailing logs (Ctrl+C to exit)...$(COLOR_RESET)"
 	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "\
-		sudo journalctl -f -u mosquitto.service -u zigbee2mqtt.service -u home-assistant-rs.service"
+		sudo journalctl -f -u mosquitto.service -u zigbee2mqtt.service -u home-assistant-rs.service -u system-monitor.service"
 
 logs-home-assistant: check-ssh ## Tail Home Assistant RS logs only
 	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "sudo journalctl -f -u home-assistant-rs.service"
@@ -296,6 +326,9 @@ logs-mosquitto: check-ssh ## Tail Mosquitto logs only
 
 logs-zigbee2mqtt: check-ssh ## Tail Zigbee2MQTT logs only
 	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "sudo journalctl -f -u zigbee2mqtt.service"
+
+logs-monitor: check-ssh ## Tail System Monitor logs only
+	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "sudo journalctl -f -u system-monitor.service"
 
 backup: check-ssh ## Backup database and configurations from Raspberry Pi
 	@echo "$(COLOR_BLUE)Creating backup...$(COLOR_RESET)"
