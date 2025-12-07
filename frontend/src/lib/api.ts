@@ -5,6 +5,7 @@ export interface SensorReading {
   temperature: number;
   humidity: number | null;
   battery: number | null;
+  link_quality: number | null;
   timestamp: number;
 }
 

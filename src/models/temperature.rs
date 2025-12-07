@@ -17,6 +17,9 @@ pub struct TemperatureReading {
     /// Optional battery level percentage
     pub battery: Option<u8>,
 
+    /// Optional battery level percentage
+    pub link_quality: Option<u8>,
+
     /// Timestamp when the reading was received
     #[serde(with = "chrono::serde::ts_seconds")]
     pub timestamp: DateTime<Utc>,
@@ -59,6 +62,7 @@ impl TemperatureReading {
                     sensor_id = %sensor_id,
                     temperature = %temperature,
                     humidity = ?msg.humidity,
+                    link_quality = ?msg.linkquality,
                     battery = ?msg.battery,
                     "Successfully created TemperatureReading"
                 );
@@ -67,6 +71,7 @@ impl TemperatureReading {
                     temperature,
                     humidity: msg.humidity,
                     battery: msg.battery,
+                    link_quality: msg.linkquality,
                     timestamp: Utc::now(),
                 })
             }

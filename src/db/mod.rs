@@ -65,6 +65,7 @@ impl Database {
                 temperature REAL NOT NULL,
                 humidity REAL,
                 battery INTEGER,
+                link_quality INTEGER,
                 timestamp INTEGER NOT NULL
             )",
             [],
@@ -90,6 +91,35 @@ impl Database {
             }
         }
 
+        // Migration: Add link_quality column if it doesn't exist
+        debug!("Checking if link_quality column exists");
+        let column_exists: Result<i32, _> = conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('temperature_readings') WHERE name='link_quality'",
+            [],
+            |row| row.get(0),
+        );
+
+        match column_exists {
+            Ok(0) => {
+                info!("link_quality column does not exist, adding it");
+                match conn.execute(
+                    "ALTER TABLE temperature_readings ADD COLUMN link_quality INTEGER",
+                    [],
+                ) {
+                    Ok(_) => info!("Successfully added link_quality column"),
+                    Err(e) => {
+                        error!(error = %e, "Failed to add link_quality column");
+                        return Err(e);
+                    }
+                }
+            }
+            Ok(_) => debug!("link_quality column already exists"),
+            Err(e) => {
+                error!(error = %e, "Failed to check if link_quality column exists");
+                return Err(e);
+            }
+        }
+
         info!("Database schema initialization complete");
         Ok(())
     }
@@ -101,6 +131,7 @@ impl Database {
             temperature = %reading.temperature,
             humidity = ?reading.humidity,
             battery = ?reading.battery,
+            link_quality = ?reading.link_quality,
             timestamp = %reading.timestamp,
             "Inserting temperature reading"
         );
@@ -108,13 +139,14 @@ impl Database {
         let start = std::time::Instant::now();
         let result = self.conn.lock().unwrap().execute(
             "INSERT INTO temperature_readings
-             (sensor_id, temperature, humidity, battery, timestamp)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
+             (sensor_id, temperature, humidity, battery, link_quality, timestamp)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
                 reading.sensor_id,
                 reading.temperature,
                 reading.humidity,
                 reading.battery,
+                reading.link_quality,
                 reading.timestamp.timestamp()
             ],
         );
@@ -178,7 +210,7 @@ impl Database {
 
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT sensor_id, temperature, humidity, battery, timestamp
+            "SELECT sensor_id, temperature, humidity, battery, link_quality, timestamp
              FROM temperature_readings
              WHERE timestamp > ?1
              ORDER BY sensor_id, timestamp DESC",
@@ -191,7 +223,8 @@ impl Database {
                     temperature: row.get(1)?,
                     humidity: row.get(2)?,
                     battery: row.get(3)?,
-                    timestamp: chrono::DateTime::from_timestamp(row.get(4)?, 0).unwrap_or_default(),
+                    link_quality: row.get(4)?,
+                    timestamp: chrono::DateTime::from_timestamp(row.get(5)?, 0).unwrap_or_default(),
                 })
             })?
             .collect::<Result<Vec<_>>>()?;
@@ -229,7 +262,7 @@ impl Database {
 
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT sensor_id, temperature, humidity, battery, timestamp
+            "SELECT sensor_id, temperature, humidity, battery, link_quality, timestamp
              FROM temperature_readings
              WHERE sensor_id = ?1 AND timestamp > ?2
              ORDER BY timestamp DESC",
@@ -242,7 +275,8 @@ impl Database {
                     temperature: row.get(1)?,
                     humidity: row.get(2)?,
                     battery: row.get(3)?,
-                    timestamp: chrono::DateTime::from_timestamp(row.get(4)?, 0).unwrap_or_default(),
+                    link_quality: row.get(4)?,
+                    timestamp: chrono::DateTime::from_timestamp(row.get(5)?, 0).unwrap_or_default(),
                 })
             })?
             .collect::<Result<Vec<_>>>()?;
