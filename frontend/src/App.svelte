@@ -75,6 +75,7 @@
   .nav-buttons {
     display: flex;
     gap: 0.5rem;
+    margin-left: auto;
   }
 
   .nav-button {
