@@ -11,8 +11,10 @@
   import TopConsumersView from './TopConsumersView.svelte';
 
   type Tab = 'system' | 'processes' | 'top-cpu' | 'top-ram';
+  type TimeRange = '1h' | '6h' | '24h' | 'all';
 
   let activeTab: Tab = 'system';
+  let selectedTimeRange: TimeRange = '24h';
   let systemEntries: SystemMonitorEntry[] = [];
   let processEntries: ProcessMonitorEntry[] = [];
   let topCpuEntries: TopConsumerEntry[] = [];
@@ -22,9 +24,19 @@
   let pollInterval: number | null = null;
   let isFirstLoad = true;
 
+  // Map time ranges to approximate number of log lines
+  // monitor.sh writes every 60 seconds, so 60 lines = 1 hour
+  const timeRangeToLines: Record<TimeRange, number> = {
+    '1h': 60,      // 1 hour
+    '6h': 360,     // 6 hours
+    '24h': 1440,   // 24 hours
+    'all': 10000,  // All available data
+  };
+
   async function loadSystemMetrics() {
     try {
-      const entries = (await fetchLogView('system_monitor.log', 1000)) as any[];
+      const maxLines = timeRangeToLines[selectedTimeRange];
+      const entries = (await fetchLogView('system_monitor.log', maxLines)) as any[];
       systemEntries = entries.filter((e) => 'cpu_usage' in e) as SystemMonitorEntry[];
     } catch (e) {
       console.error('Failed to load system metrics:', e);
@@ -34,7 +46,8 @@
 
   async function loadProcessMetrics() {
     try {
-      const entries = (await fetchLogView('process_monitor.log', 1000)) as any[];
+      const maxLines = timeRangeToLines[selectedTimeRange];
+      const entries = (await fetchLogView('process_monitor.log', maxLines)) as any[];
       processEntries = entries.filter((e) => 'process' in e && 'status' in e) as ProcessMonitorEntry[];
     } catch (e) {
       console.error('Failed to load process metrics:', e);
@@ -44,7 +57,8 @@
 
   async function loadTopCpuConsumers() {
     try {
-      const entries = (await fetchLogView('top_cpu_consumers.log', 1000)) as any[];
+      const maxLines = timeRangeToLines[selectedTimeRange];
+      const entries = (await fetchLogView('top_cpu_consumers.log', maxLines)) as any[];
       topCpuEntries = entries.filter((e) => 'rank' in e) as TopConsumerEntry[];
     } catch (e) {
       console.error('Failed to load top CPU consumers:', e);
@@ -54,7 +68,8 @@
 
   async function loadTopRamConsumers() {
     try {
-      const entries = (await fetchLogView('top_ram_consumers.log', 1000)) as any[];
+      const maxLines = timeRangeToLines[selectedTimeRange];
+      const entries = (await fetchLogView('top_ram_consumers.log', maxLines)) as any[];
       topRamEntries = entries.filter((e) => 'rank' in e) as TopConsumerEntry[];
     } catch (e) {
       console.error('Failed to load top RAM consumers:', e);
@@ -86,6 +101,11 @@
     activeTab = tab;
   }
 
+  function setTimeRange(range: TimeRange) {
+    selectedTimeRange = range;
+    loadAllData();
+  }
+
   onMount(() => {
     loadAllData();
 
@@ -103,9 +123,42 @@
 <div class="logs-page">
   <div class="header">
     <h2>System Logs</h2>
-    {#if !loading && !error}
-      <div class="refresh-indicator">Auto-refresh: 15s</div>
-    {/if}
+    <div class="header-controls">
+      <div class="time-range-selector">
+        <span class="time-range-label">Time range:</span>
+        <button
+          class="time-range-btn"
+          class:active={selectedTimeRange === '1h'}
+          on:click={() => setTimeRange('1h')}
+        >
+          1h
+        </button>
+        <button
+          class="time-range-btn"
+          class:active={selectedTimeRange === '6h'}
+          on:click={() => setTimeRange('6h')}
+        >
+          6h
+        </button>
+        <button
+          class="time-range-btn"
+          class:active={selectedTimeRange === '24h'}
+          on:click={() => setTimeRange('24h')}
+        >
+          24h
+        </button>
+        <button
+          class="time-range-btn"
+          class:active={selectedTimeRange === 'all'}
+          on:click={() => setTimeRange('all')}
+        >
+          All
+        </button>
+      </div>
+      {#if !loading && !error}
+        <div class="refresh-indicator">Auto-refresh: 15s</div>
+      {/if}
+    </div>
   </div>
 
   <div class="tabs">
@@ -183,6 +236,51 @@
     font-size: 1.5rem;
     font-weight: 600;
     color: #111827;
+  }
+
+  .header-controls {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+  }
+
+  .time-range-selector {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background-color: #f9fafb;
+    padding: 0.25rem;
+    border-radius: 6px;
+    border: 1px solid #e5e7eb;
+  }
+
+  .time-range-label {
+    font-size: 0.8125rem;
+    color: #6b7280;
+    font-weight: 500;
+    padding: 0 0.5rem;
+  }
+
+  .time-range-btn {
+    padding: 0.375rem 0.75rem;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: #6b7280;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .time-range-btn:hover {
+    background: #e5e7eb;
+    color: #111827;
+  }
+
+  .time-range-btn.active {
+    background: #3b82f6;
+    color: white;
   }
 
   .refresh-indicator {
@@ -282,7 +380,23 @@
     .header {
       flex-direction: column;
       align-items: flex-start;
-      gap: 0.5rem;
+      gap: 1rem;
+    }
+
+    .header-controls {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.75rem;
+      width: 100%;
+    }
+
+    .time-range-selector {
+      width: 100%;
+      justify-content: space-between;
+    }
+
+    .time-range-btn {
+      flex: 1;
     }
 
     .tabs {

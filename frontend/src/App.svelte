@@ -6,6 +6,8 @@
 
   type View = 'sensors' | 'logs';
 
+  const STORAGE_KEY = 'homeAssistant:currentView';
+
   let currentView: View = 'sensors';
   let sensorData: SensorData[] = [];
   let loading = true;
@@ -41,12 +43,23 @@
   }
 
   onMount(() => {
+    // Restore saved view from localStorage
+    const savedView = localStorage.getItem(STORAGE_KEY);
+    if (savedView === 'sensors' || savedView === 'logs') {
+      currentView = savedView;
+    }
+
     startPolling();
   });
 
   onDestroy(() => {
     stopPolling();
   });
+
+  // Save current view to localStorage whenever it changes
+  $: if (typeof window !== 'undefined') {
+    localStorage.setItem(STORAGE_KEY, currentView);
+  }
 </script>
 
 <main>

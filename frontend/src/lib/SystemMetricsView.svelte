@@ -31,6 +31,7 @@
 
   let combinedCanvas: HTMLCanvasElement;
   let combinedChart: Chart | null = null;
+  let previousEntriesLength = 0;
 
   function parseTimestamps() {
     return entries.map((e) => new Date(e.timestamp).getTime());
@@ -129,6 +130,13 @@
               enabled: true,
               mode: 'x',
             },
+            limits: {
+              x: {
+                min: timestamps[0],
+                max: timestamps[timestamps.length - 1],
+                minRange: 60 * 1000, // Minimum 1 minute zoom range
+              },
+            },
           },
         },
         scales: {
@@ -181,6 +189,13 @@
     combinedChart.data.datasets[0].data = entries.map((e) => e.cpu_usage);
     combinedChart.data.datasets[1].data = entries.map((e) => e.ram_usage);
     combinedChart.data.datasets[2].data = entries.map((e) => e.cpu_temp);
+
+    // Update zoom limits to match new data range
+    if (combinedChart.options.plugins?.zoom?.limits?.x) {
+      combinedChart.options.plugins.zoom.limits.x.min = timestamps[0];
+      combinedChart.options.plugins.zoom.limits.x.max = timestamps[timestamps.length - 1];
+    }
+
     combinedChart.update('none');
   }
 
@@ -191,15 +206,33 @@
   }
 
   onMount(() => {
-    createCombinedChart();
+    if (entries.length > 0) {
+      createCombinedChart();
+    }
   });
 
   onDestroy(() => {
     if (combinedChart) combinedChart.destroy();
   });
 
-  $: if (entries) {
-    updateChart();
+  $: if (entries && entries.length > 0) {
+    // If data length changed significantly (>20%), recreate chart to reset zoom
+    const lengthChangeRatio = Math.abs(entries.length - previousEntriesLength) / Math.max(previousEntriesLength, 1);
+    const significantChange = lengthChangeRatio > 0.2;
+
+    if (!combinedChart) {
+      createCombinedChart();
+      previousEntriesLength = entries.length;
+    } else if (significantChange) {
+      // Destroy and recreate chart on significant data changes (time range change)
+      combinedChart.destroy();
+      combinedChart = null;
+      createCombinedChart();
+      previousEntriesLength = entries.length;
+    } else {
+      updateChart();
+      previousEntriesLength = entries.length;
+    }
   }
 
   $: latestEntry = entries.length > 0 ? entries[entries.length - 1] : null;

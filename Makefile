@@ -267,6 +267,9 @@ deploy: deploy-full ## Alias for deploy-full
 quick-deploy: build transfer-binary restart ## Quick deploy: build, transfer binary, and restart service
 	@echo "$(COLOR_GREEN)✓ Quick deployment complete$(COLOR_RESET)"
 
+quick-deploy-frontend: transfer-frontend restart ## Quick deploy frontend only
+	@echo "$(COLOR_GREEN)✓ Frontend quick deployment complete$(COLOR_RESET)"
+	
 start: check-ssh ## Start all services on Raspberry Pi
 	@echo "$(COLOR_BLUE)Starting services...$(COLOR_RESET)"
 	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "\

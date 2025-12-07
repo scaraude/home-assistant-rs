@@ -1,7 +1,10 @@
 <script lang="ts">
   import type { ProcessMonitorEntry } from './api';
+  import ProcessHistoryGraph from './ProcessHistoryGraph.svelte';
 
   export let entries: ProcessMonitorEntry[] = [];
+
+  let expandedProcess: string | null = null;
 
   // Group entries by process and get the latest entry for each
   $: latestProcesses = getLatestProcesses(entries);
@@ -26,6 +29,14 @@
   function getStatusBadgeClass(status: string): string {
     return status.toLowerCase().includes('running') ? 'status-running' : 'status-stopped';
   }
+
+  function toggleExpand(processKey: string) {
+    expandedProcess = expandedProcess === processKey ? null : processKey;
+  }
+
+  function getProcessKey(entry: ProcessMonitorEntry): string {
+    return `${entry.process}-${entry.pid}`;
+  }
 </script>
 
 <div class="process-table-container">
@@ -48,8 +59,17 @@
         </thead>
         <tbody>
           {#each latestProcesses as entry (entry.process + entry.pid)}
-            <tr>
-              <td class="process-name">{entry.process}</td>
+            {@const processKey = getProcessKey(entry)}
+            {@const isExpanded = expandedProcess === processKey}
+            <tr
+              class="clickable-row"
+              class:expanded={isExpanded}
+              on:click={() => toggleExpand(processKey)}
+            >
+              <td class="process-name">
+                <span class="expand-icon">{isExpanded ? '▼' : '▶'}</span>
+                {entry.process}
+              </td>
               <td>{entry.pid}</td>
               <td>{entry.cpu.toFixed(1)}%</td>
               <td>{entry.ram.toFixed(1)} MB</td>
@@ -60,6 +80,17 @@
               </td>
               <td class="timestamp">{new Date(entry.timestamp).toLocaleString()}</td>
             </tr>
+            {#if isExpanded}
+              <tr class="expanded-row">
+                <td colspan="6" class="expanded-cell">
+                  <ProcessHistoryGraph
+                    {entries}
+                    processName={entry.process}
+                    pid={entry.pid}
+                  />
+                </td>
+              </tr>
+            {/if}
           {/each}
         </tbody>
       </table>
@@ -105,13 +136,22 @@
     white-space: nowrap;
   }
 
-  tbody tr {
+  tbody tr.clickable-row {
     border-bottom: 1px solid #e5e7eb;
     transition: background-color 0.15s;
+    cursor: pointer;
   }
 
-  tbody tr:hover {
+  tbody tr.clickable-row:hover {
     background-color: #f9fafb;
+  }
+
+  tbody tr.clickable-row.expanded {
+    background-color: #eff6ff;
+  }
+
+  tbody tr.expanded-row {
+    border-bottom: 1px solid #e5e7eb;
   }
 
   tbody tr:last-child {
@@ -123,9 +163,23 @@
     color: #111827;
   }
 
+  .expanded-cell {
+    padding: 0 !important;
+  }
+
   .process-name {
     font-family: 'Courier New', monospace;
     font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .expand-icon {
+    display: inline-block;
+    font-size: 0.625rem;
+    color: #6b7280;
+    transition: transform 0.2s;
   }
 
   .timestamp {
