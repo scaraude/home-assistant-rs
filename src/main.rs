@@ -1,5 +1,6 @@
 mod db;
 mod http;
+mod logs;
 mod models;
 mod mqtt;
 

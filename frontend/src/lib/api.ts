@@ -70,3 +70,70 @@ export async function fetchAllSensorData(hours: number = 24): Promise<SensorData
     };
   });
 }
+
+// Log API Types
+
+export interface LogFileInfo {
+  name: string;
+  display_name: string;
+}
+
+export interface SystemMonitorEntry {
+  timestamp: string;
+  cpu_usage: number;
+  ram_used: number;
+  ram_total: number;
+  ram_usage: number;
+  cpu_temp: number;
+}
+
+export interface ProcessMonitorEntry {
+  timestamp: string;
+  process: string;
+  pid: string;
+  cpu: number;
+  ram: number;
+  status: string;
+}
+
+export interface TopConsumerEntry {
+  timestamp: string;
+  rank: number;
+  process: string;
+  pid: string;
+  cpu: number;
+  ram: number;
+}
+
+export type LogEntry = SystemMonitorEntry | ProcessMonitorEntry | TopConsumerEntry;
+
+/**
+ * Fetch list of available log files
+ */
+export async function fetchLogFiles(): Promise<LogFileInfo[]> {
+  const response = await fetch('/api/logs/list');
+  if (!response.ok) {
+    throw new Error(`Failed to fetch log files: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+/**
+ * Fetch log file content
+ * @param filename - Log file name (e.g., "system_monitor.log")
+ * @param maxLines - Maximum number of lines to fetch (default: 1000)
+ */
+export async function fetchLogView(
+  filename: string,
+  maxLines: number = 1000
+): Promise<LogEntry[]> {
+  const params = new URLSearchParams();
+  params.append('file', filename);
+  params.append('lines', maxLines.toString());
+
+  const response = await fetch(`/api/logs/view?${params.toString()}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch log view: ${response.statusText}`);
+  }
+  return response.json();
+}

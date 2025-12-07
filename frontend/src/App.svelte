@@ -1,8 +1,12 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import SensorCard from './lib/SensorCard.svelte';
+  import LogsPage from './lib/LogsPage.svelte';
   import { fetchAllSensorData, type SensorData } from './lib/api';
 
+  type View = 'sensors' | 'logs';
+
+  let currentView: View = 'sensors';
   let sensorData: SensorData[] = [];
   let loading = true;
   let error: string | null = null;
@@ -54,30 +58,50 @@
         </svg>
       </div>
       <h1>Home Assistant</h1>
+      <nav class="nav-buttons">
+        <button
+          class="nav-button"
+          class:active={currentView === 'sensors'}
+          on:click={() => currentView = 'sensors'}
+        >
+          Sensors
+        </button>
+        <button
+          class="nav-button"
+          class:active={currentView === 'logs'}
+          on:click={() => currentView = 'logs'}
+        >
+          System Logs
+        </button>
+      </nav>
     </div>
   </header>
 
   <div class="container">
-    {#if loading}
-      <div class="loading">
-        <div class="spinner"></div>
-        <p>Loading sensors...</p>
-      </div>
-    {:else if error}
-      <div class="error">
-        <p>Error: {error}</p>
-        <button on:click={loadData}>Retry</button>
-      </div>
-    {:else if sensorData.length === 0}
-      <div class="no-sensors">
-        <p>No sensors found</p>
-      </div>
-    {:else}
-      <div class="sensor-grid">
-        {#each sensorData as sensor (sensor.id)}
-          <SensorCard sensorData={sensor} />
-        {/each}
-      </div>
+    {#if currentView === 'sensors'}
+      {#if loading}
+        <div class="loading">
+          <div class="spinner"></div>
+          <p>Loading sensors...</p>
+        </div>
+      {:else if error}
+        <div class="error">
+          <p>Error: {error}</p>
+          <button on:click={loadData}>Retry</button>
+        </div>
+      {:else if sensorData.length === 0}
+        <div class="no-sensors">
+          <p>No sensors found</p>
+        </div>
+      {:else}
+        <div class="sensor-grid">
+          {#each sensorData as sensor (sensor.id)}
+            <SensorCard sensorData={sensor} />
+          {/each}
+        </div>
+      {/if}
+    {:else if currentView === 'logs'}
+      <LogsPage />
     {/if}
   </div>
 </main>
@@ -96,12 +120,42 @@
   }
 
   .header-content {
-    max-width: 1200px;
+    max-width: 1400px;
     margin: 0 auto;
     padding: 0 1rem;
     display: flex;
     align-items: center;
     gap: 0.75rem;
+  }
+
+  .nav-buttons {
+    margin-left: auto;
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .nav-button {
+    padding: 0.5rem 1rem;
+    background: transparent;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #6b7280;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .nav-button:hover {
+    background: #f9fafb;
+    color: #111827;
+    border-color: #d1d5db;
+  }
+
+  .nav-button.active {
+    background: #3b82f6;
+    color: white;
+    border-color: #3b82f6;
   }
 
   .logo {
@@ -128,7 +182,7 @@
   }
 
   .container {
-    max-width: 1200px;
+    max-width: 1400px;
     margin: 0 auto;
     padding: 2rem 1rem;
   }
@@ -203,6 +257,29 @@
 
     h1 {
       font-size: 1.25rem;
+    }
+
+    .nav-buttons {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: white;
+      border-top: 1px solid #e5e7eb;
+      padding: 0.75rem;
+      margin-left: 0;
+      gap: 0.75rem;
+      box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+      z-index: 100;
+    }
+
+    .nav-button {
+      flex: 1;
+      padding: 0.75rem;
+    }
+
+    .container {
+      padding-bottom: 5rem;
     }
   }
 </style>

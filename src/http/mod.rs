@@ -1,4 +1,5 @@
 use crate::db::Database;
+use crate::logs;
 use http_body_util::Full;
 use hyper::body::Bytes;
 use hyper::server::conn::http1;
@@ -110,6 +111,14 @@ async fn handle_request(
         "/api/readings" => {
             debug!(query = ?query, "Serving readings");
             serve_readings(&db, query)
+        }
+        "/api/logs/list" => {
+            debug!("Serving logs list");
+            serve_logs_list()
+        }
+        "/api/logs/view" => {
+            debug!(query = ?query, "Serving log file view");
+            serve_log_view(query)
         }
         _ if path.starts_with("/assets/") || path.ends_with(".svg") => {
             debug!(path = %path, "Serving static asset");
@@ -319,6 +328,127 @@ fn serve_readings(db: &Database, query: Option<&str>) -> Response<Full<Bytes>> {
             Response::builder()
                 .status(StatusCode::INTERNAL_SERVER_ERROR)
                 .body(Full::new(Bytes::from("Database error")))
+                .unwrap()
+        }
+    }
+}
+
+fn serve_logs_list() -> Response<Full<Bytes>> {
+    debug!("Getting list of available log files");
+
+    let log_files = logs::list_log_files();
+
+    match serde_json::to_string(&log_files) {
+        Ok(json) => {
+            info!(
+                log_file_count = log_files.len(),
+                response_size = json.len(),
+                "Successfully serialized log files list to JSON"
+            );
+            Response::builder()
+                .status(StatusCode::OK)
+                .header("Content-Type", "application/json")
+                .body(Full::new(Bytes::from(json)))
+                .unwrap()
+        }
+        Err(e) => {
+            error!(error = %e, "Failed to serialize log files to JSON");
+            Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Full::new(Bytes::from("[]")))
+                .unwrap()
+        }
+    }
+}
+
+fn serve_log_view(query: Option<&str>) -> Response<Full<Bytes>> {
+    debug!(query = ?query, "Parsing query parameters for log view");
+
+    // Parse query parameters for file and lines
+    let mut filename: Option<&str> = None;
+    let mut max_lines: usize = 1000; // Default to last 1000 lines
+
+    if let Some(q) = query {
+        for param in q.split('&') {
+            if let Some((key, value)) = param.split_once('=') {
+                match key {
+                    "file" => {
+                        filename = Some(value);
+                        debug!(filename = %value, "Parsed file parameter");
+                    }
+                    "lines" => {
+                        max_lines = value.parse().unwrap_or_else(|e| {
+                            warn!(
+                                value = %value,
+                                error = %e,
+                                "Failed to parse lines parameter, using default (1000)"
+                            );
+                            1000
+                        });
+                        debug!(max_lines = max_lines, "Parsed lines parameter");
+                    }
+                    _ => {
+                        debug!(key = %key, value = %value, "Ignoring unknown query parameter");
+                    }
+                }
+            }
+        }
+    }
+
+    // Require filename parameter
+    let Some(file) = filename else {
+        warn!("Missing required 'file' parameter");
+        return Response::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .body(Full::new(Bytes::from(
+                r#"{"error":"Missing 'file' parameter"}"#,
+            )))
+            .unwrap();
+    };
+
+    info!(
+        filename = %file,
+        max_lines = max_lines,
+        "Reading log file"
+    );
+
+    // Read and parse log file
+    match logs::read_log_file(file, max_lines) {
+        Ok(entries) => {
+            debug!(
+                entry_count = entries.len(),
+                filename = %file,
+                "Retrieved log entries"
+            );
+
+            match serde_json::to_string(&entries) {
+                Ok(json) => {
+                    info!(
+                        entry_count = entries.len(),
+                        response_size = json.len(),
+                        filename = %file,
+                        "Successfully serialized log entries to JSON"
+                    );
+                    Response::builder()
+                        .status(StatusCode::OK)
+                        .header("Content-Type", "application/json")
+                        .body(Full::new(Bytes::from(json)))
+                        .unwrap()
+                }
+                Err(e) => {
+                    error!(error = %e, filename = %file, "Failed to serialize log entries to JSON");
+                    Response::builder()
+                        .status(StatusCode::INTERNAL_SERVER_ERROR)
+                        .body(Full::new(Bytes::from("[]")))
+                        .unwrap()
+                }
+            }
+        }
+        Err(e) => {
+            error!(error = %e, filename = %file, "Failed to read log file");
+            Response::builder()
+                .status(StatusCode::BAD_REQUEST)
+                .body(Full::new(Bytes::from(format!(r#"{{"error":"{}"}}"#, e))))
                 .unwrap()
         }
     }
