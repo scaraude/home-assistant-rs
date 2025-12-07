@@ -20,6 +20,7 @@
   let loading = true;
   let error: string | null = null;
   let pollInterval: number | null = null;
+  let isFirstLoad = true;
 
   async function loadSystemMetrics() {
     try {
@@ -62,7 +63,10 @@
   }
 
   async function loadAllData() {
-    loading = true;
+    // Only show loading spinner on first load
+    if (isFirstLoad) {
+      loading = true;
+    }
     error = null;
 
     await Promise.all([
@@ -72,7 +76,10 @@
       loadTopRamConsumers(),
     ]);
 
-    loading = false;
+    if (isFirstLoad) {
+      loading = false;
+      isFirstLoad = false;
+    }
   }
 
   function setActiveTab(tab: Tab) {
