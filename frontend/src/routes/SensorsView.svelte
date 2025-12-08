@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import SensorCard from '../lib/SensorCard.svelte';
-  import { fetchAllSensorData, type SensorData } from '../lib/api';
+  import { fetchSensors, fetchReadings, fetchReadingsSince, type SensorData, type SensorReading } from '../lib/api';
+  import { cache } from '../lib/stores/cache';
 
   type TimeRange = '1h' | '6h' | '24h' | 'all';
 
@@ -20,12 +21,39 @@
   let loading = true;
   let error: string | null = null;
   let intervalId: number | null = null;
+  let isFirstLoad = true;
 
-  async function loadData() {
+  // Build sensor data from readings
+  function buildSensorData(sensorIds: string[], readings: SensorReading[]): SensorData[] {
+    return sensorIds.map((id) => {
+      const sensorReadings = readings
+        .filter((r) => r.sensor_id === id)
+        .sort((a, b) => a.timestamp - b.timestamp);
+
+      return {
+        id,
+        latestReading: sensorReadings[sensorReadings.length - 1] || null,
+        history: sensorReadings,
+      };
+    });
+  }
+
+  async function loadDataFull() {
     try {
       error = null;
       const hours = timeRangeToHours[selectedTimeRange];
-      sensorData = await fetchAllSensorData(hours);
+
+      const [sensorIds, readingsResult] = await Promise.all([
+        fetchSensors(),
+        fetchReadings(undefined, hours),
+      ]);
+
+      // Store in cache
+      if (readingsResult.latestTimestamp !== null) {
+        cache.setSensorReadings(readingsResult.readings, readingsResult.latestTimestamp);
+      }
+
+      sensorData = buildSensorData(sensorIds, readingsResult.readings);
       loading = false;
     } catch (err) {
       error = err instanceof Error ? err.message : 'Failed to load sensor data';
@@ -33,9 +61,54 @@
     }
   }
 
+  async function loadDataDelta() {
+    try {
+      error = null;
+      const latestTimestamp = cache.getSensorTimestamp();
+
+      if (latestTimestamp === 0) {
+        // No cached data, do full load
+        return loadDataFull();
+      }
+
+      const [sensorIds, deltaResult] = await Promise.all([
+        fetchSensors(),
+        fetchReadingsSince(latestTimestamp),
+      ]);
+
+      // If we got new readings, merge them
+      if (deltaResult.readings.length > 0 && deltaResult.latestTimestamp !== null) {
+        cache.mergeSensorReadings(deltaResult.readings, deltaResult.latestTimestamp);
+      }
+
+      // Rebuild sensor data from cache
+      let allReadings: SensorReading[] = [];
+      cache.subscribe((state) => {
+        allReadings = state.sensors.readings;
+      })();
+
+      sensorData = buildSensorData(sensorIds, allReadings);
+    } catch (err) {
+      console.error('Delta update failed, falling back to full load:', err);
+      loadDataFull();
+    }
+  }
+
+  async function loadData() {
+    if (isFirstLoad) {
+      await loadDataFull();
+      isFirstLoad = false;
+    } else {
+      await loadDataDelta();
+    }
+  }
+
   function setTimeRange(range: TimeRange) {
     selectedTimeRange = range;
     localStorage.setItem(TIME_RANGE_KEY, range);
+    // Clear cache and reload full data when time range changes
+    cache.clearSensors();
+    isFirstLoad = true;
     loadData();
   }
 
@@ -43,7 +116,7 @@
     // Initial load
     loadData();
 
-    // Poll every 15 seconds
+    // Poll every 15 seconds (using delta updates)
     intervalId = window.setInterval(() => {
       loadData();
     }, 15000);

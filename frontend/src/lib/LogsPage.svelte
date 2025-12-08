@@ -2,13 +2,16 @@
   import { onMount, onDestroy } from 'svelte';
   import {
     fetchLogView,
+    fetchLogViewSince,
     type SystemMonitorEntry,
     type ProcessMonitorEntry,
     type TopConsumerEntry,
+    type LogEntry,
   } from './api';
   import SystemMetricsView from './SystemMetricsView.svelte';
   import ProcessTableView from './ProcessTableView.svelte';
   import TopConsumersView from './TopConsumersView.svelte';
+  import { cache } from './stores/cache';
 
   type Tab = 'system' | 'processes' | 'top-cpu' | 'top-ram';
   type TimeRange = '1h' | '6h' | '24h' | 'all';
@@ -33,11 +36,41 @@
     'all': 10000,  // All available data
   };
 
+  async function loadLogFile(
+    filename: string,
+    filterFn: (e: any) => boolean
+  ): Promise<LogEntry[]> {
+    const totalLines = cache.getLogTotalLines(filename);
+
+    if (isFirstLoad || totalLines === 0) {
+      // Full load
+      const maxLines = timeRangeToLines[selectedTimeRange];
+      const result = await fetchLogView(filename, maxLines);
+      cache.setLogEntries(filename, result.entries, result.totalLines);
+      return result.entries.filter(filterFn);
+    } else {
+      // Delta load
+      const result = await fetchLogViewSince(filename, totalLines);
+      if (result.entries.length > 0) {
+        cache.mergeLogEntries(filename, result.entries, result.totalLines);
+      }
+
+      // Get all entries from cache
+      let allEntries: LogEntry[] = [];
+      cache.subscribe((state) => {
+        allEntries = state.logs[filename]?.entries || [];
+      })();
+
+      return allEntries.filter(filterFn);
+    }
+  }
+
   async function loadSystemMetrics() {
     try {
-      const maxLines = timeRangeToLines[selectedTimeRange];
-      const result = await fetchLogView('system_monitor.log', maxLines);
-      systemEntries = result.entries.filter((e: any) => 'cpu_usage' in e) as SystemMonitorEntry[];
+      systemEntries = (await loadLogFile(
+        'system_monitor.log',
+        (e: any) => 'cpu_usage' in e
+      )) as SystemMonitorEntry[];
     } catch (e) {
       console.error('Failed to load system metrics:', e);
       error = 'Failed to load system metrics';
@@ -46,9 +79,10 @@
 
   async function loadProcessMetrics() {
     try {
-      const maxLines = timeRangeToLines[selectedTimeRange];
-      const result = await fetchLogView('process_monitor.log', maxLines);
-      processEntries = result.entries.filter((e: any) => 'process' in e && 'status' in e) as ProcessMonitorEntry[];
+      processEntries = (await loadLogFile(
+        'process_monitor.log',
+        (e: any) => 'process' in e && 'status' in e
+      )) as ProcessMonitorEntry[];
     } catch (e) {
       console.error('Failed to load process metrics:', e);
       error = 'Failed to load process metrics';
@@ -57,9 +91,10 @@
 
   async function loadTopCpuConsumers() {
     try {
-      const maxLines = timeRangeToLines[selectedTimeRange];
-      const result = await fetchLogView('top_cpu_consumers.log', maxLines);
-      topCpuEntries = result.entries.filter((e: any) => 'rank' in e) as TopConsumerEntry[];
+      topCpuEntries = (await loadLogFile(
+        'top_cpu_consumers.log',
+        (e: any) => 'rank' in e
+      )) as TopConsumerEntry[];
     } catch (e) {
       console.error('Failed to load top CPU consumers:', e);
       error = 'Failed to load top CPU consumers';
@@ -68,9 +103,10 @@
 
   async function loadTopRamConsumers() {
     try {
-      const maxLines = timeRangeToLines[selectedTimeRange];
-      const result = await fetchLogView('top_ram_consumers.log', maxLines);
-      topRamEntries = result.entries.filter((e: any) => 'rank' in e) as TopConsumerEntry[];
+      topRamEntries = (await loadLogFile(
+        'top_ram_consumers.log',
+        (e: any) => 'rank' in e
+      )) as TopConsumerEntry[];
     } catch (e) {
       console.error('Failed to load top RAM consumers:', e);
       error = 'Failed to load top RAM consumers';
@@ -103,13 +139,19 @@
 
   function setTimeRange(range: TimeRange) {
     selectedTimeRange = range;
+    // Clear cache and reload when time range changes
+    cache.clearLog('system_monitor.log');
+    cache.clearLog('process_monitor.log');
+    cache.clearLog('top_cpu_consumers.log');
+    cache.clearLog('top_ram_consumers.log');
+    isFirstLoad = true;
     loadAllData();
   }
 
   onMount(() => {
     loadAllData();
 
-    // Poll every 15 seconds
+    // Poll every 15 seconds (using delta updates)
     pollInterval = window.setInterval(loadAllData, 15000);
   });
 
