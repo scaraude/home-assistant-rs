@@ -1,3 +1,4 @@
+use crate::cache::ResponseCache;
 use crate::db::Database;
 use crate::logs;
 use http_body_util::Full;
@@ -13,12 +14,13 @@ use tracing::{debug, error, info, warn};
 
 pub struct HttpServer {
     db: Arc<Database>,
+    cache: Arc<ResponseCache>,
     addr: SocketAddr,
 }
 
 impl HttpServer {
-    pub fn new(db: Arc<Database>, addr: SocketAddr) -> Self {
-        Self { db, addr }
+    pub fn new(db: Arc<Database>, cache: Arc<ResponseCache>, addr: SocketAddr) -> Self {
+        Self { db, cache, addr }
     }
 
     pub async fn run(self) -> Result<(), Box<dyn std::error::Error>> {
@@ -49,6 +51,7 @@ impl HttpServer {
 
                     let io = TokioIo::new(stream);
                     let db = self.db.clone();
+                    let cache = self.cache.clone();
                     let conn_id = connection_count;
 
                     tokio::spawn(async move {
@@ -56,7 +59,10 @@ impl HttpServer {
 
                         // Clone once per connection, reused across all requests via the service closure
                         if let Err(err) = http1::Builder::new()
-                            .serve_connection(io, service_fn(|req| handle_request(req, db.clone())))
+                            .serve_connection(
+                                io,
+                                service_fn(|req| handle_request(req, db.clone(), cache.clone())),
+                            )
                             .await
                         {
                             error!(
@@ -81,6 +87,7 @@ impl HttpServer {
 async fn handle_request(
     req: Request<hyper::body::Incoming>,
     db: Arc<Database>,
+    cache: Arc<ResponseCache>,
 ) -> Result<Response<Full<Bytes>>, hyper::Error> {
     let path = req.uri().path();
     let method = req.method();
@@ -95,6 +102,39 @@ async fn handle_request(
         "Incoming HTTP request"
     );
 
+    // Check if client sent If-None-Match header (conditional request)
+    let client_etag = req
+        .headers()
+        .get("if-none-match")
+        .and_then(|v| v.to_str().ok());
+
+    // Try to get cached response for GET requests on cacheable endpoints
+    if method == hyper::Method::GET && is_cacheable_path(path) {
+        if let Some(cached) = cache.get(path, query) {
+            // Check if client's ETag matches cached ETag
+            if let Some(etag) = client_etag {
+                if etag == cached.etag {
+                    debug!(path = %path, etag = %etag, "Cache hit - returning 304 Not Modified");
+                    return Ok(Response::builder()
+                        .status(StatusCode::NOT_MODIFIED)
+                        .header("ETag", cached.etag)
+                        .body(Full::new(Bytes::new()))
+                        .unwrap());
+                }
+            }
+
+            // Cache hit, return cached response with ETag
+            debug!(path = %path, etag = %cached.etag, "Cache hit - returning cached response");
+            return Ok(Response::builder()
+                .status(StatusCode::OK)
+                .header("Content-Type", "application/json")
+                .header("ETag", cached.etag)
+                .header("Cache-Control", "private, must-revalidate")
+                .body(Full::new(cached.body))
+                .unwrap());
+        }
+    }
+
     let response = match path {
         "/" => {
             debug!("Serving index page");
@@ -106,11 +146,11 @@ async fn handle_request(
         }
         "/api/sensors" => {
             debug!("Serving sensors list");
-            serve_sensors(&db)
+            serve_sensors(&db, &cache, path, query)
         }
         "/api/readings" => {
             debug!(query = ?query, "Serving readings");
-            serve_readings(&db, query)
+            serve_readings(&db, &cache, path, query)
         }
         "/api/logs/list" => {
             debug!("Serving logs list");
@@ -118,7 +158,7 @@ async fn handle_request(
         }
         "/api/logs/view" => {
             debug!(query = ?query, "Serving log file view");
-            serve_log_view(query)
+            serve_log_view(&cache, path, query)
         }
         _ if path.starts_with("/assets/") || path.ends_with(".svg") => {
             debug!(path = %path, "Serving static asset");
@@ -142,6 +182,32 @@ async fn handle_request(
     );
 
     Ok(response)
+}
+
+/// Determine if a path should be cached
+fn is_cacheable_path(path: &str) -> bool {
+    matches!(path, "/api/readings" | "/api/logs/view" | "/api/sensors")
+}
+
+/// Create a cached JSON response
+fn json_response_with_cache(
+    json: String,
+    cache: &ResponseCache,
+    path: &str,
+    query: Option<&str>,
+) -> Response<Full<Bytes>> {
+    let bytes = Bytes::from(json);
+    let etag = cache.put(path, query, bytes.clone());
+
+    debug!(path = %path, etag = %etag, "Created cached response");
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", "application/json")
+        .header("ETag", etag)
+        .header("Cache-Control", "private, must-revalidate")
+        .body(Full::new(bytes))
+        .unwrap()
 }
 
 fn health_check() -> Response<Full<Bytes>> {
@@ -195,7 +261,12 @@ fn serve_static_asset(path: &str) -> Response<Full<Bytes>> {
     serve_static_file(&file_path, content_type)
 }
 
-fn serve_sensors(db: &Database) -> Response<Full<Bytes>> {
+fn serve_sensors(
+    db: &Database,
+    cache: &ResponseCache,
+    path: &str,
+    query: Option<&str>,
+) -> Response<Full<Bytes>> {
     debug!("Querying database for all sensors");
 
     match db.get_all_sensors() {
@@ -212,11 +283,7 @@ fn serve_sensors(db: &Database) -> Response<Full<Bytes>> {
                         response_size = json.len(),
                         "Successfully serialized sensors to JSON"
                     );
-                    Response::builder()
-                        .status(StatusCode::OK)
-                        .header("Content-Type", "application/json")
-                        .body(Full::new(Bytes::from(json)))
-                        .unwrap()
+                    json_response_with_cache(json, cache, path, query)
                 }
                 Err(e) => {
                     error!(error = %e, "Failed to serialize sensors to JSON");
@@ -237,12 +304,18 @@ fn serve_sensors(db: &Database) -> Response<Full<Bytes>> {
     }
 }
 
-fn serve_readings(db: &Database, query: Option<&str>) -> Response<Full<Bytes>> {
+fn serve_readings(
+    db: &Database,
+    cache: &ResponseCache,
+    path: &str,
+    query: Option<&str>,
+) -> Response<Full<Bytes>> {
     debug!(query = ?query, "Parsing query parameters");
 
-    // Parse query parameters for sensor_id and hours
+    // Parse query parameters for sensor_id, hours, and since
     let mut sensor_id: Option<&str> = None;
-    let mut hours: i64 = 24; // Default to last 24 hours
+    let mut hours: Option<i64> = None;
+    let mut since_param: Option<i64> = None;
 
     if let Some(q) = query {
         for param in q.split('&') {
@@ -253,15 +326,23 @@ fn serve_readings(db: &Database, query: Option<&str>) -> Response<Full<Bytes>> {
                         debug!(sensor_id = %value, "Parsed sensor_id parameter");
                     }
                     "hours" => {
-                        hours = value.parse().unwrap_or_else(|e| {
+                        hours = Some(value.parse().unwrap_or_else(|e| {
                             warn!(
                                 value = %value,
                                 error = %e,
                                 "Failed to parse hours parameter, using default (24)"
                             );
                             24
-                        });
-                        debug!(hours = hours, "Parsed hours parameter");
+                        }));
+                        debug!(hours = ?hours, "Parsed hours parameter");
+                    }
+                    "since" => {
+                        since_param = value.parse().ok();
+                        if since_param.is_none() {
+                            warn!(value = %value, "Failed to parse since parameter (must be Unix timestamp)");
+                        } else {
+                            debug!(since = ?since_param, "Parsed since parameter");
+                        }
                     }
                     _ => {
                         debug!(key = %key, value = %value, "Ignoring unknown query parameter");
@@ -271,14 +352,18 @@ fn serve_readings(db: &Database, query: Option<&str>) -> Response<Full<Bytes>> {
         }
     }
 
-    // Calculate timestamp for the time range
-    let since = chrono::Utc::now().timestamp() - (hours * 3600);
+    // Determine timestamp: use 'since' if provided, otherwise calculate from 'hours'
+    let since = if let Some(ts) = since_param {
+        ts
+    } else {
+        let h = hours.unwrap_or(24);
+        chrono::Utc::now().timestamp() - (h * 3600)
+    };
 
     info!(
         sensor_id = ?sensor_id,
-        hours = hours,
         since_timestamp = since,
-        "Querying readings"
+        "Querying readings (delta support enabled)"
     );
 
     // Use SQL-filtered queries - no more Rust-side filtering!
@@ -299,19 +384,34 @@ fn serve_readings(db: &Database, query: Option<&str>) -> Response<Full<Bytes>> {
                 "Retrieved readings from database"
             );
 
+            // Find latest timestamp for delta tracking
+            let latest_timestamp = readings
+                .iter()
+                .map(|r| r.timestamp.timestamp())
+                .max()
+                .unwrap_or(since);
+
             match serde_json::to_string(&readings) {
                 Ok(json) => {
                     info!(
                         reading_count = readings.len(),
                         response_size = json.len(),
                         sensor_id = ?sensor_id,
-                        hours = hours,
+                        latest_ts = latest_timestamp,
                         "Successfully serialized readings to JSON"
                     );
+
+                    // Create cached response with custom header for delta tracking
+                    let bytes = Bytes::from(json);
+                    let etag = cache.put(path, query, bytes.clone());
+
                     Response::builder()
                         .status(StatusCode::OK)
                         .header("Content-Type", "application/json")
-                        .body(Full::new(Bytes::from(json)))
+                        .header("ETag", etag)
+                        .header("Cache-Control", "private, must-revalidate")
+                        .header("X-Latest-Timestamp", latest_timestamp.to_string())
+                        .body(Full::new(bytes))
                         .unwrap()
                 }
                 Err(e) => {
@@ -361,12 +461,13 @@ fn serve_logs_list() -> Response<Full<Bytes>> {
     }
 }
 
-fn serve_log_view(query: Option<&str>) -> Response<Full<Bytes>> {
+fn serve_log_view(cache: &ResponseCache, path: &str, query: Option<&str>) -> Response<Full<Bytes>> {
     debug!(query = ?query, "Parsing query parameters for log view");
 
-    // Parse query parameters for file and lines
+    // Parse query parameters for file, lines, and since_line
     let mut filename: Option<&str> = None;
     let mut max_lines: usize = 1000; // Default to last 1000 lines
+    let mut since_line: Option<usize> = None;
 
     if let Some(q) = query {
         for param in q.split('&') {
@@ -386,6 +487,14 @@ fn serve_log_view(query: Option<&str>) -> Response<Full<Bytes>> {
                             1000
                         });
                         debug!(max_lines = max_lines, "Parsed lines parameter");
+                    }
+                    "since_line" => {
+                        since_line = value.parse().ok();
+                        if since_line.is_none() {
+                            warn!(value = %value, "Failed to parse since_line parameter (must be integer)");
+                        } else {
+                            debug!(since_line = ?since_line, "Parsed since_line parameter (delta mode)");
+                        }
                     }
                     _ => {
                         debug!(key = %key, value = %value, "Ignoring unknown query parameter");
@@ -409,14 +518,16 @@ fn serve_log_view(query: Option<&str>) -> Response<Full<Bytes>> {
     info!(
         filename = %file,
         max_lines = max_lines,
-        "Reading log file"
+        since_line = ?since_line,
+        "Reading log file (delta support enabled)"
     );
 
-    // Read and parse log file
-    match logs::read_log_file(file, max_lines) {
-        Ok(entries) => {
+    // Read and parse log file with delta support
+    match logs::read_log_file_with_offset(file, since_line, max_lines) {
+        Ok((entries, total_lines)) => {
             debug!(
                 entry_count = entries.len(),
+                total_lines = total_lines,
                 filename = %file,
                 "Retrieved log entries"
             );
@@ -425,14 +536,23 @@ fn serve_log_view(query: Option<&str>) -> Response<Full<Bytes>> {
                 Ok(json) => {
                     info!(
                         entry_count = entries.len(),
+                        total_lines = total_lines,
                         response_size = json.len(),
                         filename = %file,
                         "Successfully serialized log entries to JSON"
                     );
+
+                    // Create cached response with custom header for delta tracking
+                    let bytes = Bytes::from(json);
+                    let etag = cache.put(path, query, bytes.clone());
+
                     Response::builder()
                         .status(StatusCode::OK)
                         .header("Content-Type", "application/json")
-                        .body(Full::new(Bytes::from(json)))
+                        .header("ETag", etag)
+                        .header("Cache-Control", "private, must-revalidate")
+                        .header("X-Total-Lines", total_lines.to_string())
+                        .body(Full::new(bytes))
                         .unwrap()
                 }
                 Err(e) => {

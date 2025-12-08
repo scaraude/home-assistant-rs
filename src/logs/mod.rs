@@ -19,7 +19,7 @@ pub struct LogFileInfo {
 }
 
 /// System monitor log entry
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SystemMonitorEntry {
     pub timestamp: String,
     pub cpu_usage: f32,
@@ -30,7 +30,7 @@ pub struct SystemMonitorEntry {
 }
 
 /// Process monitor log entry
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProcessMonitorEntry {
     pub timestamp: String,
     pub process: String,
@@ -41,7 +41,7 @@ pub struct ProcessMonitorEntry {
 }
 
 /// Top consumer log entry (CPU or RAM)
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TopConsumerEntry {
     pub timestamp: String,
     pub rank: i32,
@@ -52,7 +52,7 @@ pub struct TopConsumerEntry {
 }
 
 /// Generic log entry for JSON response
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum LogEntry {
     SystemMonitor(SystemMonitorEntry),
@@ -116,6 +116,17 @@ fn get_log_dir() -> PathBuf {
 
 /// Read log file and return last N lines as parsed entries
 pub fn read_log_file(filename: &str, max_lines: usize) -> Result<Vec<LogEntry>, String> {
+    let (entries, _total_lines) = read_log_file_with_offset(filename, None, max_lines)?;
+    Ok(entries)
+}
+
+/// Read log file with offset support for delta updates
+/// Returns (entries, total_line_count)
+pub fn read_log_file_with_offset(
+    filename: &str,
+    since_line: Option<usize>,
+    max_lines: usize,
+) -> Result<(Vec<LogEntry>, usize), String> {
     // Validate filename
     if !is_valid_log_file(filename) {
         return Err(format!("Invalid log file name: {}", filename));
@@ -135,19 +146,32 @@ pub fn read_log_file(filename: &str, max_lines: usize) -> Result<Vec<LogEntry>, 
     let reader = BufReader::new(file);
 
     // Collect all lines (skip header if present)
-    let mut lines: Vec<String> = reader
+    let all_lines: Vec<String> = reader
         .lines()
         .filter_map(|line| line.ok())
         .filter(|line| !line.starts_with("Timestamp") && !line.trim().is_empty())
         .collect();
 
-    // Take last N lines
-    let start_index = if lines.len() > max_lines {
-        lines.len() - max_lines
+    let total_lines = all_lines.len();
+
+    // Apply offset and limit
+    let lines = if let Some(offset) = since_line {
+        // Delta mode: return lines after offset
+        if offset < all_lines.len() {
+            all_lines[offset..].to_vec()
+        } else {
+            // Offset beyond file size, return empty
+            Vec::new()
+        }
     } else {
-        0
+        // Full mode: take last N lines
+        let start_index = if all_lines.len() > max_lines {
+            all_lines.len() - max_lines
+        } else {
+            0
+        };
+        all_lines[start_index..].to_vec()
     };
-    lines = lines[start_index..].to_vec();
 
     // Parse based on file type
     let entries = match filename {
@@ -157,7 +181,7 @@ pub fn read_log_file(filename: &str, max_lines: usize) -> Result<Vec<LogEntry>, 
         _ => return Err(format!("Unknown log file type: {}", filename)),
     };
 
-    Ok(entries)
+    Ok((entries, total_lines))
 }
 
 /// Parse system monitor log lines

@@ -1,9 +1,11 @@
+mod cache;
 mod db;
 mod http;
 mod logs;
 mod models;
 mod mqtt;
 
+use cache::ResponseCache;
 use db::Database;
 use http::HttpServer;
 use mqtt::MqttListener;
@@ -94,9 +96,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         warn!("Database writer task channel closed - no more readings will be processed");
     });
 
+    // Initialize response cache (60 second TTL matches monitor.sh interval)
+    let cache = Arc::new(ResponseCache::new(60));
+    info!("Response cache initialized with 60s TTL");
+
     // Start HTTP server
     info!(addr = %http_addr, "Starting HTTP server");
-    let server = HttpServer::new(db, http_addr);
+    let server = HttpServer::new(db, cache, http_addr);
     server.run().await?;
 
     Ok(())
