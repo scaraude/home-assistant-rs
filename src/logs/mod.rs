@@ -114,12 +114,6 @@ fn get_log_dir() -> PathBuf {
     PathBuf::from(".")
 }
 
-/// Read log file and return last N lines as parsed entries
-pub fn read_log_file(filename: &str, max_lines: usize) -> Result<Vec<LogEntry>, String> {
-    let (entries, _total_lines) = read_log_file_with_offset(filename, None, max_lines)?;
-    Ok(entries)
-}
-
 /// Read log file with offset support for delta updates
 /// Returns (entries, total_line_count)
 pub fn read_log_file_with_offset(
