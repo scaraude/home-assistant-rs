@@ -100,6 +100,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cache = Arc::new(ResponseCache::new(60));
     info!("Response cache initialized with 60s TTL");
 
+    // Spawn cache cleanup task (runs every 5 minutes to prevent memory accumulation)
+    let cache_clone = cache.clone();
+    tokio::spawn(async move {
+        info!("Cache cleanup task started (runs every 5 minutes)");
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(300)); // 5 minutes
+
+        loop {
+            interval.tick().await;
+            let removed = cache_clone.cleanup_expired();
+            if removed > 0 {
+                info!(
+                    removed_entries = removed,
+                    "Cache cleanup: removed expired entries"
+                );
+            } else {
+                debug!("Cache cleanup: no expired entries to remove");
+            }
+        }
+    });
+
     // Start HTTP server
     info!(addr = %http_addr, "Starting HTTP server");
     let server = HttpServer::new(db, cache, http_addr);

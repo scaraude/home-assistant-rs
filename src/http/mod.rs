@@ -107,24 +107,23 @@ async fn handle_request(
         .headers()
         .get("if-none-match")
         .and_then(|v| v.to_str().ok())
-        .map(normalize_etag);
+        .map(|s| s.trim_matches('"').to_string());
 
     // Try to get cached response for GET requests on cacheable endpoints
-    if method == hyper::Method::GET && is_cacheable_path(path) {
+    if method == hyper::Method::GET && is_cacheable_path(path, query) {
         if let Some(cached) = cache.get(path, query) {
             // Check if client's ETag matches cached ETag
-            if let Some(ref client_etag_normalized) = client_etag {
-                let cached_etag_normalized = normalize_etag(&cached.etag);
-                if client_etag_normalized == &cached_etag_normalized {
+            if let Some(ref client_etag_value) = client_etag {
+                if client_etag_value == &cached.etag {
                     debug!(
                         path = %path,
-                        client_etag = %client_etag_normalized,
-                        cached_etag = %cached_etag_normalized,
+                        client_etag = %client_etag_value,
+                        cached_etag = %cached.etag,
                         "Cache hit - returning 304 Not Modified"
                     );
                     return Ok(Response::builder()
                         .status(StatusCode::NOT_MODIFIED)
-                        .header("ETag", cached.etag)
+                        .header("ETag", &cached.etag)
                         .body(Full::new(Bytes::new()))
                         .unwrap());
                 }
@@ -191,14 +190,22 @@ async fn handle_request(
     Ok(response)
 }
 
-/// Normalize ETag for comparison (strip surrounding quotes)
-fn normalize_etag(etag: &str) -> String {
-    etag.trim_matches('"').to_string()
-}
-
 /// Determine if a path should be cached
-fn is_cacheable_path(path: &str) -> bool {
-    matches!(path, "/api/readings" | "/api/logs/view" | "/api/sensors")
+/// Delta requests (with since/since_line params) are not cached to avoid pollution
+fn is_cacheable_path(path: &str, query: Option<&str>) -> bool {
+    // Check if path is a cacheable endpoint
+    if !matches!(path, "/api/readings" | "/api/logs/view" | "/api/sensors") {
+        return false;
+    }
+
+    // Don't cache delta requests - they change constantly and pollute the cache
+    if let Some(q) = query {
+        if q.contains("since=") || q.contains("since_line=") {
+            return false;
+        }
+    }
+
+    true
 }
 
 /// Create a cached JSON response

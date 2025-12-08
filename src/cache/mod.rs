@@ -5,6 +5,9 @@ use std::hash::{Hash, Hasher};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
+/// Maximum number of entries in cache (prevents memory leak on Pi Zero)
+const MAX_CACHE_ENTRIES: usize = 100;
+
 /// Cache key based on request path and query string
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct CacheKey {
@@ -27,6 +30,7 @@ pub struct CachedResponse {
     pub body: Bytes,
     pub etag: String,
     timestamp: SystemTime,
+    last_accessed: SystemTime,
 }
 
 /// Generic HTTP response cache with TTL-based invalidation
@@ -47,11 +51,13 @@ impl ResponseCache {
     /// Get cached response if valid
     pub fn get(&self, path: &str, query: Option<&str>) -> Option<CachedResponse> {
         let key = CacheKey::new(path, query);
-        let cache = self.cache.lock().unwrap();
+        let mut cache = self.cache.lock().unwrap();
 
-        if let Some(entry) = cache.get(&key) {
+        if let Some(entry) = cache.get_mut(&key) {
             // Check if entry is still valid (not expired)
             if entry.timestamp.elapsed().unwrap_or(self.ttl) < self.ttl {
+                // Update last_accessed for LRU tracking
+                entry.last_accessed = SystemTime::now();
                 return Some(entry.clone());
             }
         }
@@ -64,14 +70,27 @@ impl ResponseCache {
         let key = CacheKey::new(path, query);
         let etag = Self::generate_etag(&body);
 
+        let now = SystemTime::now();
         let entry = CachedResponse {
             body,
             etag: etag.clone(),
-            timestamp: SystemTime::now(),
+            timestamp: now,
+            last_accessed: now,
         };
 
         let mut cache = self.cache.lock().unwrap();
         cache.insert(key, entry);
+
+        // LRU eviction: if cache exceeds limit, remove least recently accessed entry
+        if cache.len() > MAX_CACHE_ENTRIES {
+            if let Some(lru_key) = cache
+                .iter()
+                .min_by_key(|(_, entry)| entry.last_accessed)
+                .map(|(key, _)| key.clone())
+            {
+                cache.remove(&lru_key);
+            }
+        }
 
         etag
     }
@@ -80,7 +99,7 @@ impl ResponseCache {
     fn generate_etag(body: &Bytes) -> String {
         let mut hasher = DefaultHasher::new();
         body.hash(&mut hasher);
-        format!("\"{}\"", hasher.finish())
+        format!("{}", hasher.finish())
     }
 
     /// Clear all cached entries (useful for testing)
@@ -88,6 +107,17 @@ impl ResponseCache {
     pub fn clear(&self) {
         let mut cache = self.cache.lock().unwrap();
         cache.clear();
+    }
+
+    /// Remove expired entries from cache (prevents memory accumulation)
+    pub fn cleanup_expired(&self) -> usize {
+        let mut cache = self.cache.lock().unwrap();
+        let initial_size = cache.len();
+
+        cache.retain(|_, entry| entry.timestamp.elapsed().unwrap_or(self.ttl) < self.ttl);
+
+        let removed = initial_size - cache.len();
+        removed
     }
 
     /// Get cache statistics (useful for monitoring)
