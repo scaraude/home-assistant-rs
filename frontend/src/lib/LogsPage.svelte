@@ -36,8 +36,8 @@
   async function loadSystemMetrics() {
     try {
       const maxLines = timeRangeToLines[selectedTimeRange];
-      const entries = (await fetchLogView('system_monitor.log', maxLines)) as any[];
-      systemEntries = entries.filter((e) => 'cpu_usage' in e) as SystemMonitorEntry[];
+      const result = await fetchLogView('system_monitor.log', maxLines);
+      systemEntries = result.entries.filter((e: any) => 'cpu_usage' in e) as SystemMonitorEntry[];
     } catch (e) {
       console.error('Failed to load system metrics:', e);
       error = 'Failed to load system metrics';
@@ -47,8 +47,8 @@
   async function loadProcessMetrics() {
     try {
       const maxLines = timeRangeToLines[selectedTimeRange];
-      const entries = (await fetchLogView('process_monitor.log', maxLines)) as any[];
-      processEntries = entries.filter((e) => 'process' in e && 'status' in e) as ProcessMonitorEntry[];
+      const result = await fetchLogView('process_monitor.log', maxLines);
+      processEntries = result.entries.filter((e: any) => 'process' in e && 'status' in e) as ProcessMonitorEntry[];
     } catch (e) {
       console.error('Failed to load process metrics:', e);
       error = 'Failed to load process metrics';
@@ -58,8 +58,8 @@
   async function loadTopCpuConsumers() {
     try {
       const maxLines = timeRangeToLines[selectedTimeRange];
-      const entries = (await fetchLogView('top_cpu_consumers.log', maxLines)) as any[];
-      topCpuEntries = entries.filter((e) => 'rank' in e) as TopConsumerEntry[];
+      const result = await fetchLogView('top_cpu_consumers.log', maxLines);
+      topCpuEntries = result.entries.filter((e: any) => 'rank' in e) as TopConsumerEntry[];
     } catch (e) {
       console.error('Failed to load top CPU consumers:', e);
       error = 'Failed to load top CPU consumers';
@@ -69,8 +69,8 @@
   async function loadTopRamConsumers() {
     try {
       const maxLines = timeRangeToLines[selectedTimeRange];
-      const entries = (await fetchLogView('top_ram_consumers.log', maxLines)) as any[];
-      topRamEntries = entries.filter((e) => 'rank' in e) as TopConsumerEntry[];
+      const result = await fetchLogView('top_ram_consumers.log', maxLines);
+      topRamEntries = result.entries.filter((e: any) => 'rank' in e) as TopConsumerEntry[];
     } catch (e) {
       console.error('Failed to load top RAM consumers:', e);
       error = 'Failed to load top RAM consumers';

@@ -106,15 +106,22 @@ async fn handle_request(
     let client_etag = req
         .headers()
         .get("if-none-match")
-        .and_then(|v| v.to_str().ok());
+        .and_then(|v| v.to_str().ok())
+        .map(normalize_etag);
 
     // Try to get cached response for GET requests on cacheable endpoints
     if method == hyper::Method::GET && is_cacheable_path(path) {
         if let Some(cached) = cache.get(path, query) {
             // Check if client's ETag matches cached ETag
-            if let Some(etag) = client_etag {
-                if etag == cached.etag {
-                    debug!(path = %path, etag = %etag, "Cache hit - returning 304 Not Modified");
+            if let Some(ref client_etag_normalized) = client_etag {
+                let cached_etag_normalized = normalize_etag(&cached.etag);
+                if client_etag_normalized == &cached_etag_normalized {
+                    debug!(
+                        path = %path,
+                        client_etag = %client_etag_normalized,
+                        cached_etag = %cached_etag_normalized,
+                        "Cache hit - returning 304 Not Modified"
+                    );
                     return Ok(Response::builder()
                         .status(StatusCode::NOT_MODIFIED)
                         .header("ETag", cached.etag)
@@ -182,6 +189,11 @@ async fn handle_request(
     );
 
     Ok(response)
+}
+
+/// Normalize ETag for comparison (strip surrounding quotes)
+fn normalize_etag(etag: &str) -> String {
+    etag.trim_matches('"').to_string()
 }
 
 /// Determine if a path should be cached

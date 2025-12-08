@@ -30,11 +30,12 @@ export async function fetchSensors(): Promise<string[]> {
  * Fetch sensor readings with optional filters
  * @param sensorId - Optional sensor ID filter
  * @param hours - Number of hours to fetch (default: 24)
+ * @returns Readings and latest timestamp from X-Latest-Timestamp header
  */
 export async function fetchReadings(
   sensorId?: string,
   hours: number = 24
-): Promise<SensorReading[]> {
+): Promise<{ readings: SensorReading[]; latestTimestamp: number | null }> {
   const params = new URLSearchParams();
   if (sensorId) {
     params.append('sensor_id', sensorId);
@@ -45,7 +46,44 @@ export async function fetchReadings(
   if (!response.ok) {
     throw new Error(`Failed to fetch readings: ${response.statusText}`);
   }
-  return response.json();
+
+  const readings = await response.json();
+  const latestTimestamp = response.headers.get('X-Latest-Timestamp');
+
+  return {
+    readings,
+    latestTimestamp: latestTimestamp ? parseInt(latestTimestamp, 10) : null,
+  };
+}
+
+/**
+ * Fetch sensor readings since a specific timestamp (delta update)
+ * @param sinceTimestamp - Unix timestamp to fetch readings after
+ * @param sensorId - Optional sensor ID filter
+ * @returns New readings and updated latest timestamp
+ */
+export async function fetchReadingsSince(
+  sinceTimestamp: number,
+  sensorId?: string
+): Promise<{ readings: SensorReading[]; latestTimestamp: number | null }> {
+  const params = new URLSearchParams();
+  params.append('since', sinceTimestamp.toString());
+  if (sensorId) {
+    params.append('sensor_id', sensorId);
+  }
+
+  const response = await fetch(`/api/readings?${params.toString()}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch readings delta: ${response.statusText}`);
+  }
+
+  const readings = await response.json();
+  const latestTimestamp = response.headers.get('X-Latest-Timestamp');
+
+  return {
+    readings,
+    latestTimestamp: latestTimestamp ? parseInt(latestTimestamp, 10) : null,
+  };
 }
 
 /**
@@ -53,15 +91,17 @@ export async function fetchReadings(
  * @param hours - Number of hours of history to fetch
  */
 export async function fetchAllSensorData(hours: number = 24): Promise<SensorData[]> {
-  const [sensorIds, allReadings] = await Promise.all([
+  const [sensorIds, readingsResult] = await Promise.all([
     fetchSensors(),
     fetchReadings(undefined, hours),
   ]);
 
+  const allReadings = readingsResult.readings;
+
   return sensorIds.map((id) => {
     const sensorReadings = allReadings
-      .filter((r) => r.sensor_id === id)
-      .sort((a, b) => a.timestamp - b.timestamp);
+      .filter((r: SensorReading) => r.sensor_id === id)
+      .sort((a: SensorReading, b: SensorReading) => a.timestamp - b.timestamp);
 
     return {
       id,
@@ -122,11 +162,12 @@ export async function fetchLogFiles(): Promise<LogFileInfo[]> {
  * Fetch log file content
  * @param filename - Log file name (e.g., "system_monitor.log")
  * @param maxLines - Maximum number of lines to fetch (default: 1000)
+ * @returns Log entries and total lines from X-Total-Lines header
  */
 export async function fetchLogView(
   filename: string,
   maxLines: number = 1000
-): Promise<LogEntry[]> {
+): Promise<{ entries: LogEntry[]; totalLines: number }> {
   const params = new URLSearchParams();
   params.append('file', filename);
   params.append('lines', maxLines.toString());
@@ -135,5 +176,40 @@ export async function fetchLogView(
   if (!response.ok) {
     throw new Error(`Failed to fetch log view: ${response.statusText}`);
   }
-  return response.json();
+
+  const entries = await response.json();
+  const totalLines = response.headers.get('X-Total-Lines');
+
+  return {
+    entries,
+    totalLines: totalLines ? parseInt(totalLines, 10) : 0,
+  };
+}
+
+/**
+ * Fetch log file content since a specific line number (delta update)
+ * @param filename - Log file name
+ * @param sinceLine - Line number to fetch entries after
+ * @returns New log entries and updated total lines
+ */
+export async function fetchLogViewSince(
+  filename: string,
+  sinceLine: number
+): Promise<{ entries: LogEntry[]; totalLines: number }> {
+  const params = new URLSearchParams();
+  params.append('file', filename);
+  params.append('since_line', sinceLine.toString());
+
+  const response = await fetch(`/api/logs/view?${params.toString()}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch log view delta: ${response.statusText}`);
+  }
+
+  const entries = await response.json();
+  const totalLines = response.headers.get('X-Total-Lines');
+
+  return {
+    entries,
+    totalLines: totalLines ? parseInt(totalLines, 10) : 0,
+  };
 }
