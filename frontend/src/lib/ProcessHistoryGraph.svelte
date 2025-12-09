@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, tick } from 'svelte';
   import {
     Chart,
     LineController,
@@ -12,7 +12,7 @@
     Legend,
   } from 'chart.js';
   import 'chartjs-adapter-date-fns';
-  import type { ProcessMonitorEntry, TopConsumerEntry } from './api';
+  import { fetchProcessHistory, type ProcessMonitorEntry } from './api';
 
   Chart.register(
     LineController,
@@ -25,17 +25,37 @@
     Legend
   );
 
-  export let entries: (ProcessMonitorEntry | TopConsumerEntry)[] = [];
   export let processName: string;
   export let pid: string;
 
   let canvas: HTMLCanvasElement;
   let chart: Chart | null = null;
+  let filteredEntries: ProcessMonitorEntry[] = [];
+  let loading = true;
+  let error: string | null = null;
 
-  // Filter entries for this specific process
-  $: filteredEntries = entries
-    .filter((e) => e.process === processName && e.pid === pid)
-    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  // Load process history from backend on mount
+  async function loadProcessHistory() {
+    loading = true;
+    error = null;
+    try {
+      const entries = await fetchProcessHistory(processName, pid, 10000);
+      filteredEntries = entries.sort(
+        (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      );
+      loading = false;
+
+      // Wait for DOM update, then create chart
+      await tick();
+      if (filteredEntries.length > 0) {
+        createChart();
+      }
+    } catch (e) {
+      console.error('Failed to load process history:', e);
+      error = 'Failed to load process history';
+      loading = false;
+    }
+  }
 
   function createChart() {
     if (!canvas || filteredEntries.length === 0) return;
@@ -146,41 +166,21 @@
     });
   }
 
-  function updateChart() {
-    if (!chart || filteredEntries.length === 0) return;
-
-    const timestamps = filteredEntries.map((e) => new Date(e.timestamp).getTime());
-    const cpuData = filteredEntries.map((e) => e.cpu);
-    const ramData = filteredEntries.map((e) => e.ram);
-
-    chart.data.labels = timestamps;
-    chart.data.datasets[0].data = cpuData;
-    chart.data.datasets[1].data = ramData;
-
-    chart.update('none');
-  }
-
   onMount(() => {
-    if (filteredEntries.length > 0) {
-      createChart();
-    }
+    loadProcessHistory();
   });
 
   onDestroy(() => {
     if (chart) chart.destroy();
   });
-
-  $: if (filteredEntries && filteredEntries.length > 0) {
-    if (!chart) {
-      createChart();
-    } else {
-      updateChart();
-    }
-  }
 </script>
 
 <div class="process-history">
-  {#if filteredEntries.length === 0}
+  {#if loading}
+    <div class="loading">Loading process history...</div>
+  {:else if error}
+    <div class="error">{error}</div>
+  {:else if filteredEntries.length === 0}
     <div class="no-data">No historical data available for this process</div>
   {:else}
     <div class="graph-container">
@@ -196,11 +196,17 @@
     border-top: 1px solid #e5e7eb;
   }
 
+  .loading,
+  .error,
   .no-data {
     padding: 1rem;
     text-align: center;
     color: #6b7280;
     font-size: 0.875rem;
+  }
+
+  .error {
+    color: #dc2626;
   }
 
   .graph-container {

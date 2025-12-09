@@ -166,6 +166,10 @@ async fn handle_request(
             debug!(query = ?query, "Serving log file view");
             serve_log_view(&cache, path, query)
         }
+        "/api/logs/process" => {
+            debug!(query = ?query, "Serving process history");
+            serve_process_history(&cache, path, query)
+        }
         _ if path.starts_with("/assets/") || path.ends_with(".svg") => {
             debug!(path = %path, "Serving static asset");
             serve_static_asset(path)
@@ -585,6 +589,118 @@ fn serve_log_view(cache: &ResponseCache, path: &str, query: Option<&str>) -> Res
         }
         Err(e) => {
             error!(error = %e, filename = %file, "Failed to read log file");
+            Response::builder()
+                .status(StatusCode::BAD_REQUEST)
+                .body(Full::new(Bytes::from(format!(r#"{{"error":"{}"}}"#, e))))
+                .unwrap()
+        }
+    }
+}
+
+fn serve_process_history(
+    cache: &ResponseCache,
+    path: &str,
+    query: Option<&str>,
+) -> Response<Full<Bytes>> {
+    debug!(query = ?query, "Parsing query parameters for process history");
+
+    // Parse query parameters for process, pid, and lines
+    let mut process_name: Option<&str> = None;
+    let mut pid: Option<&str> = None;
+    let mut max_lines: usize = 10000; // Default to large number for full history
+
+    if let Some(q) = query {
+        for param in q.split('&') {
+            if let Some((key, value)) = param.split_once('=') {
+                match key {
+                    "process" => {
+                        process_name = Some(value);
+                        debug!(process = %value, "Parsed process parameter");
+                    }
+                    "pid" => {
+                        pid = Some(value);
+                        debug!(pid = %value, "Parsed pid parameter");
+                    }
+                    "lines" => {
+                        max_lines = value.parse().unwrap_or_else(|e| {
+                            warn!(
+                                value = %value,
+                                error = %e,
+                                "Failed to parse lines parameter, using default (10000)"
+                            );
+                            10000
+                        });
+                        debug!(max_lines = max_lines, "Parsed lines parameter");
+                    }
+                    _ => {
+                        debug!(key = %key, value = %value, "Ignoring unknown query parameter");
+                    }
+                }
+            }
+        }
+    }
+
+    // Require process and pid parameters
+    let (Some(process), Some(process_pid)) = (process_name, pid) else {
+        warn!("Missing required 'process' or 'pid' parameter");
+        return Response::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .body(Full::new(Bytes::from(
+                r#"{"error":"Missing required 'process' and 'pid' parameters"}"#,
+            )))
+            .unwrap();
+    };
+
+    info!(
+        process = %process,
+        pid = %process_pid,
+        max_lines = max_lines,
+        "Reading process history"
+    );
+
+    // Read process history from log file
+    match logs::read_process_history(process, process_pid, max_lines) {
+        Ok(entries) => {
+            debug!(
+                entry_count = entries.len(),
+                process = %process,
+                pid = %process_pid,
+                "Retrieved process history"
+            );
+
+            match serde_json::to_string(&entries) {
+                Ok(json) => {
+                    info!(
+                        entry_count = entries.len(),
+                        response_size = json.len(),
+                        process = %process,
+                        pid = %process_pid,
+                        "Successfully serialized process history to JSON"
+                    );
+
+                    // Create cached response
+                    let bytes = Bytes::from(json);
+                    let etag = cache.put(path, query, bytes.clone());
+
+                    Response::builder()
+                        .status(StatusCode::OK)
+                        .header("Content-Type", "application/json")
+                        .header("ETag", etag)
+                        .header("Cache-Control", "private, must-revalidate")
+                        .body(Full::new(bytes))
+                        .unwrap()
+                }
+                Err(e) => {
+                    error!(error = %e, process = %process, pid = %process_pid, "Failed to serialize process history to JSON");
+                    Response::builder()
+                        .status(StatusCode::INTERNAL_SERVER_ERROR)
+                        .body(Full::new(Bytes::from("[]")))
+                        .unwrap()
+                }
+            }
+        }
+        Err(e) => {
+            error!(error = %e, process = %process, pid = %process_pid, "Failed to read process history");
             Response::builder()
                 .status(StatusCode::BAD_REQUEST)
                 .body(Full::new(Bytes::from(format!(r#"{{"error":"{}"}}"#, e))))

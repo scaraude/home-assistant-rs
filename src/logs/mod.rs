@@ -178,6 +178,92 @@ pub fn read_log_file_with_offset(
     Ok((entries, total_lines))
 }
 
+/// Read process history for a specific process/PID combination
+/// Returns only entries matching the specified process and PID
+pub fn read_process_history(
+    process_name: &str,
+    pid: &str,
+    max_lines: usize,
+) -> Result<Vec<LogEntry>, String> {
+    let filename = "process_monitor.log";
+
+    // Validate filename
+    if !is_valid_log_file(filename) {
+        return Err(format!("Invalid log file name: {}", filename));
+    }
+
+    // Build full path
+    let log_dir = get_log_dir();
+    let file_path = log_dir.join(filename);
+
+    // Check if file exists
+    if !file_path.exists() {
+        return Err(format!("Log file not found: {}", filename));
+    }
+
+    // Read only last N lines efficiently using a circular buffer
+    let file = File::open(&file_path).map_err(|e| format!("Failed to open log file: {}", e))?;
+    let reader = BufReader::new(file);
+
+    // Use a circular buffer to keep only the last max_lines
+    let mut buffer: Vec<String> = Vec::with_capacity(max_lines);
+    let mut count = 0;
+
+    for line in reader.lines().filter_map(|l| l.ok()) {
+        // Skip header and empty lines
+        if line.starts_with("Timestamp") || line.trim().is_empty() {
+            continue;
+        }
+
+        if buffer.len() < max_lines {
+            buffer.push(line);
+        } else {
+            // Circular buffer: replace oldest entry
+            buffer[count % max_lines] = line;
+        }
+        count += 1;
+    }
+
+    // If we wrapped around, reorder the buffer
+    let lines = if count > max_lines {
+        let start_idx = count % max_lines;
+        let mut reordered = Vec::with_capacity(max_lines);
+        reordered.extend_from_slice(&buffer[start_idx..]);
+        reordered.extend_from_slice(&buffer[..start_idx]);
+        reordered
+    } else {
+        buffer
+    };
+
+    // Parse and filter for specific process/PID
+    let all_entries = parse_process_monitor_log(&lines)?;
+
+    eprintln!(
+        "[DEBUG] read_process_history: total_lines_read={}, parsed_entries={}, filtering for process='{}' pid='{}'",
+        count, all_entries.len(), process_name, pid
+    );
+
+    let filtered_entries: Vec<LogEntry> = all_entries
+        .into_iter()
+        .filter(|entry| {
+            if let LogEntry::ProcessMonitor(pm) = entry {
+                // Only filter by process name, not PID
+                // PIDs change when processes restart, but we want full history
+                pm.process == process_name
+            } else {
+                false
+            }
+        })
+        .collect();
+
+    eprintln!(
+        "[DEBUG] read_process_history: filtered_entries={} (filter by process name only)",
+        filtered_entries.len()
+    );
+
+    Ok(filtered_entries)
+}
+
 /// Parse system monitor log lines
 fn parse_system_monitor_log(lines: &[String]) -> Result<Vec<LogEntry>, String> {
     let mut entries = Vec::new();

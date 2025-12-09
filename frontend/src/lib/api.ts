@@ -213,3 +213,29 @@ export async function fetchLogViewSince(
     totalLines: totalLines ? parseInt(totalLines, 10) : 0,
   };
 }
+
+/**
+ * Fetch full history for a specific process/PID combination
+ * @param processName - The process name (e.g., "home-assistant-rs")
+ * @param pid - The process ID
+ * @param maxLines - Maximum number of lines to fetch (default: 10000)
+ * @returns Process history entries
+ */
+export async function fetchProcessHistory(
+  processName: string,
+  pid: string,
+  maxLines: number = 10000
+): Promise<ProcessMonitorEntry[]> {
+  const params = new URLSearchParams();
+  params.append('process', processName);
+  params.append('pid', pid);
+  params.append('lines', maxLines.toString());
+
+  const response = await fetch(`/api/logs/process?${params.toString()}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch process history: ${response.statusText}`);
+  }
+
+  const entries = await response.json();
+  return entries;
+}
