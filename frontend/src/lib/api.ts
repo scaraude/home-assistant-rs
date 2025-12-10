@@ -297,3 +297,23 @@ export async function executeCommand(deviceId: string, state: boolean): Promise<
     throw new Error(errorData.error || `Failed to execute command: ${response.statusText}`);
   }
 }
+
+/**
+ * Update a device name
+ * @param deviceId - Device ID (e.g., "0x7cc6b6fffec90892")
+ * @param name - New device name
+ */
+export async function updateDeviceName(deviceId: string, name: string): Promise<void> {
+  const response = await fetch(`/api/devices/${deviceId}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ name }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(errorData.error || `Failed to update device name: ${response.statusText}`);
+  }
+}

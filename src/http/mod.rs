@@ -196,6 +196,10 @@ async fn handle_request(
             debug!("Executing command");
             execute_command(req, &db, &mqtt).await
         }
+        ("PATCH", path) if path.starts_with("/api/devices/") => {
+            debug!(path = %path, "Updating device");
+            update_device(req, &db, path).await
+        }
         ("GET", "/api/logs/list") => {
             debug!("Serving logs list");
             serve_logs_list()
@@ -915,6 +919,105 @@ async fn execute_command(
                 .status(StatusCode::INTERNAL_SERVER_ERROR)
                 .body(Full::new(Bytes::from(
                     r#"{"error":"Failed to send command"}"#,
+                )))
+                .unwrap()
+        }
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct DeviceUpdate {
+    name: String,
+}
+
+async fn update_device(
+    req: Request<hyper::body::Incoming>,
+    db: &Arc<Database>,
+    path: &str,
+) -> Response<Full<Bytes>> {
+    debug!("Parsing device update request");
+
+    // Extract device ID from path (e.g., "/api/devices/0x123abc")
+    let device_id = path.strip_prefix("/api/devices/").unwrap_or("");
+
+    if device_id.is_empty() {
+        warn!("Missing device ID in path");
+        return Response::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .body(Full::new(Bytes::from(r#"{"error":"Missing device ID"}"#)))
+            .unwrap();
+    }
+
+    // Read the request body
+    let body_bytes = match req.into_body().collect().await {
+        Ok(collected) => collected.to_bytes(),
+        Err(e) => {
+            error!(error = %e, "Failed to read request body");
+            return Response::builder()
+                .status(StatusCode::BAD_REQUEST)
+                .body(Full::new(Bytes::from(
+                    r#"{"error":"Failed to read request body"}"#,
+                )))
+                .unwrap();
+        }
+    };
+
+    // Parse the update payload
+    let update: DeviceUpdate = match serde_json::from_slice::<DeviceUpdate>(&body_bytes) {
+        Ok(upd) => {
+            debug!(device_id = %device_id, name = %upd.name, "Parsed device update");
+            upd
+        }
+        Err(e) => {
+            error!(error = %e, "Failed to parse update JSON");
+            return Response::builder()
+                .status(StatusCode::BAD_REQUEST)
+                .body(Full::new(Bytes::from(r#"{"error":"Invalid JSON format"}"#)))
+                .unwrap();
+        }
+    };
+
+    // Validate name is not empty
+    if update.name.trim().is_empty() {
+        warn!(device_id = %device_id, "Device name cannot be empty");
+        return Response::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .body(Full::new(Bytes::from(
+                r#"{"error":"Device name cannot be empty"}"#,
+            )))
+            .unwrap();
+    }
+
+    info!(
+        device_id = %device_id,
+        new_name = %update.name,
+        "Updating device name"
+    );
+
+    // Update the device name in the database
+    match db.update_device_name(device_id, &update.name) {
+        Ok(_) => {
+            info!(
+                device_id = %device_id,
+                new_name = %update.name,
+                "Device name updated successfully"
+            );
+            Response::builder()
+                .status(StatusCode::OK)
+                .header("Content-Type", "application/json")
+                .body(Full::new(Bytes::from(r#"{"status":"ok"}"#)))
+                .unwrap()
+        }
+        Err(e) => {
+            error!(
+                error = %e,
+                device_id = %device_id,
+                "Failed to update device name in database"
+            );
+            Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Full::new(Bytes::from(
+                    r#"{"error":"Failed to update device name"}"#,
                 )))
                 .unwrap()
         }

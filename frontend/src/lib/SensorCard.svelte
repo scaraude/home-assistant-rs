@@ -2,6 +2,7 @@
   import TemperatureGraph from './TemperatureGraph.svelte';
   import GraphModal from './GraphModal.svelte';
   import type { SensorData } from './api';
+  import { updateDeviceName } from './api';
   import { formatDistanceToNow } from 'date-fns';
 
   export let sensorData: SensorData;
@@ -9,10 +10,14 @@
   type Metric = 'temperature' | 'humidity' | 'battery' | null;
   let selectedMetric: Metric = null;
   let isModalOpen = false;
+  let isEditingName = false;
+  let editedName = '';
+  let error: string | null = null;
 
   $: latest = sensorData.latestReading;
   $: displayName = sensorData.name.slice(0, 16) + (sensorData.name.length > 16 ? '...' : '');
   $: timeAgo = latest ? formatDistanceToNow(new Date(latest.timestamp * 1000), { addSuffix: true }) : '';
+  $: deviceId = latest?.device_id || '';
 
   function toggleMetric(metric: Metric) {
     if (selectedMetric === metric) {
@@ -25,6 +30,65 @@
   function openModal() {
     isModalOpen = true;
   }
+
+  function startEditingName() {
+    editedName = sensorData.name;
+    isEditingName = true;
+    error = null;
+  }
+
+  async function saveName() {
+    const trimmedName = editedName.trim();
+
+    if (!trimmedName) {
+      error = 'Device name cannot be empty';
+      return;
+    }
+
+    if (trimmedName === sensorData.name) {
+      isEditingName = false;
+      return;
+    }
+
+    if (!deviceId) {
+      error = 'No device ID available';
+      return;
+    }
+
+    error = null;
+    const previousName = sensorData.name;
+
+    try {
+      // Optimistic update
+      sensorData.name = trimmedName;
+      isEditingName = false;
+
+      await updateDeviceName(deviceId, trimmedName);
+    } catch (err) {
+      // Revert on error
+      sensorData.name = previousName;
+      isEditingName = true;
+      error = err instanceof Error ? err.message : 'Failed to update device name';
+      console.error('Failed to update device name:', err);
+    }
+  }
+
+  function cancelEdit() {
+    isEditingName = false;
+    error = null;
+  }
+
+  function handleNameKeydown(e: KeyboardEvent) {
+    if (e.key === 'Enter') {
+      saveName();
+    } else if (e.key === 'Escape') {
+      cancelEdit();
+    }
+  }
+
+  function focusOnMount(node: HTMLElement) {
+    node.focus();
+  }
 </script>
 
 <div class="sensor-card">
@@ -36,7 +100,25 @@
       </svg>
     </div>
     <div class="sensor-info">
-      <h3 class="sensor-name" title={sensorData.name}>{displayName}</h3>
+      {#if isEditingName}
+        <input
+          type="text"
+          class="sensor-name-input"
+          bind:value={editedName}
+          on:keydown={handleNameKeydown}
+          on:blur={saveName}
+          use:focusOnMount
+        />
+      {:else}
+        <button
+          class="sensor-name editable"
+          title={sensorData.name}
+          on:click={startEditingName}
+          type="button"
+        >
+          {displayName}
+        </button>
+      {/if}
       {#if latest}
         <div class="last-update" title={new Date(latest.timestamp * 1000).toLocaleString()}>
           {timeAgo}
@@ -129,6 +211,21 @@
       <p>No data available</p>
     </div>
   {/if}
+
+  {#if error}
+    <div class="error-message">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="currentColor"
+      >
+        <path
+          d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"
+        />
+      </svg>
+      {error}
+    </div>
+  {/if}
 </div>
 
 <GraphModal
@@ -188,6 +285,37 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .sensor-name.editable {
+    background: none;
+    border: none;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
+    transition: color 0.2s ease;
+  }
+
+  .sensor-name.editable:hover {
+    color: #3b82f6;
+  }
+
+  .sensor-name-input {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #111827;
+    border: 2px solid #3b82f6;
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem;
+    width: 100%;
+    outline: none;
+    background: white;
+  }
+
+  .sensor-name-input:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
 
   .last-update {
@@ -356,5 +484,24 @@
 
   .no-data p {
     margin: 0;
+  }
+
+  .error-message {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    padding: 0.75rem;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 6px;
+    color: #dc2626;
+    font-size: 0.875rem;
+  }
+
+  .error-message svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
   }
 </style>

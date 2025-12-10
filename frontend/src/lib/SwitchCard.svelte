@@ -1,12 +1,14 @@
 <script lang="ts">
   import type { SwitchDevice } from "./api";
-  import { executeCommand } from "./api";
+  import { executeCommand, updateDeviceName } from "./api";
   import { formatDistanceToNow } from "date-fns";
 
   export let device: SwitchDevice;
 
   let isToggling = false;
   let error: string | null = null;
+  let isEditingName = false;
+  let editedName = "";
 
   $: displayName = device.name || device.id;
   $: shortId = device.id.slice(0, 16) + (device.id.length > 16 ? "..." : "");
@@ -37,6 +39,59 @@
       isToggling = false;
     }
   }
+
+  function startEditingName() {
+    editedName = device.name;
+    isEditingName = true;
+  }
+
+  async function saveName() {
+    const trimmedName = editedName.trim();
+
+    if (!trimmedName) {
+      error = "Device name cannot be empty";
+      return;
+    }
+
+    if (trimmedName === device.name) {
+      isEditingName = false;
+      return;
+    }
+
+    error = null;
+    const previousName = device.name;
+
+    try {
+      // Optimistic update
+      device.name = trimmedName;
+      isEditingName = false;
+
+      await updateDeviceName(device.id, trimmedName);
+    } catch (err) {
+      // Revert on error
+      device.name = previousName;
+      isEditingName = true;
+      error = err instanceof Error ? err.message : "Failed to update device name";
+      console.error("Failed to update device name:", err);
+    }
+  }
+
+  function cancelEdit() {
+    isEditingName = false;
+    error = null;
+  }
+
+  function handleNameKeydown(e: KeyboardEvent) {
+    if (e.key === "Enter") {
+      saveName();
+    } else if (e.key === "Escape") {
+      cancelEdit();
+    }
+  }
+
+  function focusOnMount(node: HTMLElement) {
+    node.focus();
+  }
 </script>
 
 <div class="switch-card">
@@ -54,7 +109,25 @@
       </svg>
     </div>
     <div class="device-info">
-      <h3 class="device-name" title={device.id}>{displayName}</h3>
+      {#if isEditingName}
+        <input
+          type="text"
+          class="device-name-input"
+          bind:value={editedName}
+          on:keydown={handleNameKeydown}
+          on:blur={saveName}
+          use:focusOnMount
+        />
+      {:else}
+        <button
+          class="device-name editable"
+          title={device.id}
+          on:click={startEditingName}
+          type="button"
+        >
+          {displayName}
+        </button>
+      {/if}
       <div class="device-id">{shortId}</div>
       <div
         class="last-update"
@@ -202,6 +275,37 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .device-name.editable {
+    background: none;
+    border: none;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
+    transition: color 0.2s ease;
+  }
+
+  .device-name.editable:hover {
+    color: #3b82f6;
+  }
+
+  .device-name-input {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #111827;
+    border: 2px solid #3b82f6;
+    border-radius: 4px;
+    padding: 0.25rem 0.5rem;
+    width: 100%;
+    outline: none;
+    background: white;
+  }
+
+  .device-name-input:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
 
   .device-id {
