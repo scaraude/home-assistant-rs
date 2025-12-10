@@ -4,12 +4,15 @@ mod http;
 mod logs;
 mod models;
 mod mqtt;
+mod switch_state;
 
 use cache::ResponseCache;
 use db::Database;
 use http::HttpServer;
 use mqtt::MqttListener;
 use std::sync::Arc;
+use switch_state::SwitchStateStore;
+use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
@@ -100,6 +103,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cache = Arc::new(ResponseCache::new(60));
     info!("Response cache initialized with 60s TTL");
 
+    // Initialize switch state store
+    let switch_state = Arc::new(SwitchStateStore::new());
+    info!("Switch state store initialized");
+
     // Spawn cache cleanup task (runs every 5 minutes to prevent memory accumulation)
     let cache_clone = cache.clone();
     tokio::spawn(async move {
@@ -120,9 +127,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    // Wrap MQTT listener in Arc<Mutex> for sharing with HTTP server
+    let mqtt_listener = Arc::new(Mutex::new(mqtt_listener));
+
     // Start HTTP server
     info!(addr = %http_addr, "Starting HTTP server");
-    let server = HttpServer::new(db, cache, http_addr);
+    let server = HttpServer::new(db, cache, mqtt_listener, switch_state, http_addr);
     server.run().await?;
 
     Ok(())

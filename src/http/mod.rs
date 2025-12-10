@@ -1,7 +1,10 @@
 use crate::cache::ResponseCache;
 use crate::db::Database;
 use crate::logs;
-use http_body_util::Full;
+use crate::models::SwitchCommand;
+use crate::mqtt::MqttListener;
+use crate::switch_state::SwitchStateStore;
+use http_body_util::{BodyExt, Full};
 use hyper::body::Bytes;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
@@ -10,17 +13,32 @@ use hyper_util::rt::TokioIo;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
+use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 
 pub struct HttpServer {
     db: Arc<Database>,
     cache: Arc<ResponseCache>,
+    mqtt: Arc<Mutex<MqttListener>>,
+    switch_state: Arc<SwitchStateStore>,
     addr: SocketAddr,
 }
 
 impl HttpServer {
-    pub fn new(db: Arc<Database>, cache: Arc<ResponseCache>, addr: SocketAddr) -> Self {
-        Self { db, cache, addr }
+    pub fn new(
+        db: Arc<Database>,
+        cache: Arc<ResponseCache>,
+        mqtt: Arc<Mutex<MqttListener>>,
+        switch_state: Arc<SwitchStateStore>,
+        addr: SocketAddr,
+    ) -> Self {
+        Self {
+            db,
+            cache,
+            mqtt,
+            switch_state,
+            addr,
+        }
     }
 
     pub async fn run(self) -> Result<(), Box<dyn std::error::Error>> {
@@ -52,6 +70,7 @@ impl HttpServer {
                     let io = TokioIo::new(stream);
                     let db = self.db.clone();
                     let cache = self.cache.clone();
+                    let mqtt = self.mqtt.clone();
                     let conn_id = connection_count;
 
                     tokio::spawn(async move {
@@ -61,7 +80,9 @@ impl HttpServer {
                         if let Err(err) = http1::Builder::new()
                             .serve_connection(
                                 io,
-                                service_fn(|req| handle_request(req, db.clone(), cache.clone())),
+                                service_fn(|req| {
+                                    handle_request(req, db.clone(), cache.clone(), mqtt.clone())
+                                }),
                             )
                             .await
                         {
@@ -88,10 +109,11 @@ async fn handle_request(
     req: Request<hyper::body::Incoming>,
     db: Arc<Database>,
     cache: Arc<ResponseCache>,
+    mqtt: Arc<Mutex<MqttListener>>,
 ) -> Result<Response<Full<Bytes>>, hyper::Error> {
-    let path = req.uri().path();
-    let method = req.method();
-    let query = req.uri().query();
+    let path = req.uri().path().to_string();
+    let method = req.method().clone();
+    let query = req.uri().query().map(|s| s.to_string());
 
     let start = std::time::Instant::now();
 
@@ -110,8 +132,8 @@ async fn handle_request(
         .map(|s| s.trim_matches('"').to_string());
 
     // Try to get cached response for GET requests on cacheable endpoints
-    if method == hyper::Method::GET && is_cacheable_path(path, query) {
-        if let Some(cached) = cache.get(path, query) {
+    if method == hyper::Method::GET && is_cacheable_path(&path, query.as_deref()) {
+        if let Some(cached) = cache.get(&path, query.as_deref()) {
             // Check if client's ETag matches cached ETag
             if let Some(ref client_etag_value) = client_etag {
                 if client_etag_value == &cached.etag {
@@ -141,41 +163,49 @@ async fn handle_request(
         }
     }
 
-    let response = match path {
-        "/" => {
+    let response = match (method.as_str(), path.as_str()) {
+        ("GET", "/") => {
             debug!("Serving index page");
             serve_static_file("static/index.html", "text/html; charset=utf-8")
         }
-        "/health" => {
+        ("GET", "/health") => {
             debug!("Health check request");
             health_check()
         }
-        "/api/sensors" => {
+        ("GET", "/api/sensors") => {
             debug!("Serving sensors list");
-            serve_sensors(&db, &cache, path, query)
+            serve_sensors(&db, &cache, &path, query.as_deref())
         }
-        "/api/readings" => {
+        ("GET", "/api/readings") => {
             debug!(query = ?query, "Serving readings");
-            serve_readings(&db, &cache, path, query)
+            serve_readings(&db, &cache, &path, query.as_deref())
         }
-        "/api/logs/list" => {
+        ("GET", "/api/devices/switches") => {
+            debug!("Serving switches list");
+            serve_switches_list()
+        }
+        ("POST", "/api/commands/execute") => {
+            debug!("Executing command");
+            execute_command(req, &mqtt).await
+        }
+        ("GET", "/api/logs/list") => {
             debug!("Serving logs list");
             serve_logs_list()
         }
-        "/api/logs/view" => {
+        ("GET", "/api/logs/view") => {
             debug!(query = ?query, "Serving log file view");
-            serve_log_view(&cache, path, query)
+            serve_log_view(&cache, &path, query.as_deref())
         }
-        "/api/logs/process" => {
+        ("GET", "/api/logs/process") => {
             debug!(query = ?query, "Serving process history");
-            serve_process_history(&cache, path, query)
+            serve_process_history(&cache, &path, query.as_deref())
         }
-        _ if path.starts_with("/assets/") || path.ends_with(".svg") => {
-            debug!(path = %path, "Serving static asset");
-            serve_static_asset(path)
+        (_, path_str) if path_str.starts_with("/assets/") || path_str.ends_with(".svg") => {
+            debug!(path = %path_str, "Serving static asset");
+            serve_static_asset(path_str)
         }
         _ => {
-            warn!(path = %path, "Request to unknown path");
+            warn!(path = %path, method = %method, "Request to unknown path");
             not_found()
         }
     };
@@ -704,6 +734,111 @@ fn serve_process_history(
             Response::builder()
                 .status(StatusCode::BAD_REQUEST)
                 .body(Full::new(Bytes::from(format!(r#"{{"error":"{}"}}"#, e))))
+                .unwrap()
+        }
+    }
+}
+
+fn serve_switches_list() -> Response<Full<Bytes>> {
+    debug!("Getting list of available switches");
+
+    // For now, return a hardcoded list with the ZBMINIR2 switch
+    // In the future, this could be stored in database or config
+    let switches = vec![serde_json::json!({
+        "id": "0x7cc6b6fffec90892",
+        "name": "ZBMINIR2 Switch",
+        "state": false,
+        "link_quality": null,
+        "last_updated": chrono::Utc::now().timestamp()
+    })];
+
+    match serde_json::to_string(&switches) {
+        Ok(json) => {
+            info!(
+                switch_count = switches.len(),
+                response_size = json.len(),
+                "Successfully serialized switches list to JSON"
+            );
+            Response::builder()
+                .status(StatusCode::OK)
+                .header("Content-Type", "application/json")
+                .body(Full::new(Bytes::from(json)))
+                .unwrap()
+        }
+        Err(e) => {
+            error!(error = %e, "Failed to serialize switches to JSON");
+            Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Full::new(Bytes::from("[]")))
+                .unwrap()
+        }
+    }
+}
+
+async fn execute_command(
+    req: Request<hyper::body::Incoming>,
+    mqtt: &Arc<Mutex<MqttListener>>,
+) -> Response<Full<Bytes>> {
+    debug!("Parsing command request body");
+
+    // Read the request body
+    let body_bytes = match req.into_body().collect().await {
+        Ok(collected) => collected.to_bytes(),
+        Err(e) => {
+            error!(error = %e, "Failed to read request body");
+            return Response::builder()
+                .status(StatusCode::BAD_REQUEST)
+                .body(Full::new(Bytes::from(
+                    r#"{"error":"Failed to read request body"}"#,
+                )))
+                .unwrap();
+        }
+    };
+
+    // Parse the command
+    let command: SwitchCommand = match serde_json::from_slice::<SwitchCommand>(&body_bytes) {
+        Ok(cmd) => {
+            debug!(device_id = %cmd.device_id, state = %cmd.state, "Parsed command");
+            cmd
+        }
+        Err(e) => {
+            error!(error = %e, "Failed to parse command JSON");
+            return Response::builder()
+                .status(StatusCode::BAD_REQUEST)
+                .body(Full::new(Bytes::from(r#"{"error":"Invalid JSON format"}"#)))
+                .unwrap();
+        }
+    };
+
+    // Build the MQTT payload
+    let state_str = if command.state { "ON" } else { "OFF" };
+    let payload = format!(r#"{{"state":"{}"}}"#, state_str);
+
+    info!(
+        device_id = %command.device_id,
+        state = %state_str,
+        payload = %payload,
+        "Executing switch command"
+    );
+
+    // Publish to MQTT
+    let mqtt_guard = mqtt.lock().await;
+    match mqtt_guard.publish(&command.device_id, &payload).await {
+        Ok(_) => {
+            info!(device_id = %command.device_id, state = %state_str, "Command executed successfully");
+            Response::builder()
+                .status(StatusCode::OK)
+                .header("Content-Type", "application/json")
+                .body(Full::new(Bytes::from(r#"{"status":"ok"}"#)))
+                .unwrap()
+        }
+        Err(e) => {
+            error!(error = %e, device_id = %command.device_id, "Failed to publish command to MQTT");
+            Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Full::new(Bytes::from(
+                    r#"{"error":"Failed to send command"}"#,
+                )))
                 .unwrap()
         }
     }

@@ -199,4 +199,39 @@ impl MqttListener {
             }
         }
     }
+
+    /// Publish a command to a device
+    pub async fn publish(
+        &self,
+        device_id: &str,
+        payload: &str,
+    ) -> Result<(), rumqttc::ClientError> {
+        let topic = format!("zigbee2mqtt/{}/set", device_id);
+
+        info!(
+            topic = %topic,
+            payload = %payload,
+            "Publishing MQTT command"
+        );
+
+        match self
+            .client
+            .publish(&topic, QoS::AtLeastOnce, false, payload.as_bytes())
+            .await
+        {
+            Ok(_) => {
+                info!(topic = %topic, "Successfully published command");
+                Ok(())
+            }
+            Err(e) => {
+                error!(error = %e, topic = %topic, "Failed to publish command");
+                Err(e)
+            }
+        }
+    }
+
+    /// Get a clone of the MQTT client for publishing from other parts of the application
+    pub fn get_client(&self) -> AsyncClient {
+        self.client.clone()
+    }
 }

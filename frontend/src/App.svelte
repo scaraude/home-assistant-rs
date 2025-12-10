@@ -2,17 +2,20 @@
   import Router, { location } from 'svelte-spa-router';
   import SensorsView from './routes/SensorsView.svelte';
   import LogsView from './routes/LogsView.svelte';
+  import CommanderView from './routes/CommanderView.svelte';
 
   // Route definitions
   const routes = {
     '/': SensorsView,
     '/sensors': SensorsView,
+    '/commander': CommanderView,
     '/logs': LogsView,
   };
 
   // Track current route for active state
   $: currentPath = $location;
   $: isOnSensors = currentPath === '/' || currentPath === '/sensors';
+  $: isOnCommander = currentPath === '/commander';
   $: isOnLogs = currentPath === '/logs';
 </script>
 
@@ -33,6 +36,13 @@
           class:active={isOnSensors}
         >
           Sensors
+        </a>
+        <a
+          href="#/commander"
+          class="nav-button"
+          class:active={isOnCommander}
+        >
+          Commander
         </a>
         <a
           href="#/logs"
