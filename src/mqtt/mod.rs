@@ -89,6 +89,15 @@ impl MqttListener {
                                 continue;
                             }
 
+                            // Skip /set topics (command topics, not device state)
+                            if mqtt_topic.ends_with("/set") {
+                                debug!(
+                                    topic = %p.topic,
+                                    "Skipping /set command topic"
+                                );
+                                continue;
+                            }
+
                             // Try parsing as switch message first
                             if let Ok(switch_msg) =
                                 serde_json::from_slice::<SwitchMqttMessage>(&p.payload)

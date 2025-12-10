@@ -190,11 +190,11 @@ async fn handle_request(
         }
         ("GET", "/api/devices/switches") => {
             debug!("Serving switches list");
-            serve_switches_list(&switch_state)
+            serve_switches_list(&db, &switch_state)
         }
         ("POST", "/api/commands/execute") => {
             debug!("Executing command");
-            execute_command(req, &mqtt).await
+            execute_command(req, &db, &mqtt).await
         }
         ("GET", "/api/logs/list") => {
             debug!("Serving logs list");
@@ -747,28 +747,49 @@ fn serve_process_history(
     }
 }
 
-fn serve_switches_list(switch_state: &Arc<SwitchStateStore>) -> Response<Full<Bytes>> {
-    debug!("Getting list of available switches");
+fn serve_switches_list(
+    db: &Arc<Database>,
+    switch_state: &Arc<SwitchStateStore>,
+) -> Response<Full<Bytes>> {
+    debug!("Getting list of available switches from database");
 
-    // Get current state from the store for the ZBMINIR2 switch
-    let device_id = "0x7cc6b6fffec90892";
-    let current_state = switch_state.get_state(device_id).unwrap_or(false);
+    // Get all devices from database and filter for commanders (switches)
+    let devices = match db.get_all_devices() {
+        Ok(devices) => devices,
+        Err(e) => {
+            error!(error = %e, "Failed to query devices from database");
+            return Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Full::new(Bytes::from("[]")))
+                .unwrap();
+        }
+    };
 
-    info!(
-        device_id = %device_id,
-        state = %current_state,
-        "Retrieved switch state from store"
-    );
+    // Filter for commander devices and build switch list
+    let switches: Vec<_> = devices
+        .into_iter()
+        .filter(|device| device.device_type == crate::models::DeviceType::Commander)
+        .map(|device| {
+            let current_state = switch_state.get_state(&device.mqtt_topic).unwrap_or(false);
 
-    // For now, return a hardcoded list with the ZBMINIR2 switch but with real state
-    // In the future, this could be stored in database or config
-    let switches = vec![serde_json::json!({
-        "id": device_id,
-        "name": "ZBMINIR2 Switch",
-        "state": current_state,
-        "link_quality": null,
-        "last_updated": chrono::Utc::now().timestamp()
-    })];
+            info!(
+                device_id = %device.id,
+                mqtt_topic = %device.mqtt_topic,
+                name = %device.name,
+                state = %current_state,
+                "Retrieved switch state from store"
+            );
+
+            serde_json::json!({
+                "id": device.id,
+                "mqtt_topic": device.mqtt_topic,
+                "name": device.name,
+                "state": current_state,
+                "link_quality": null,
+                "last_updated": chrono::Utc::now().timestamp()
+            })
+        })
+        .collect();
 
     match serde_json::to_string(&switches) {
         Ok(json) => {
@@ -795,6 +816,7 @@ fn serve_switches_list(switch_state: &Arc<SwitchStateStore>) -> Response<Full<By
 
 async fn execute_command(
     req: Request<hyper::body::Incoming>,
+    db: &Arc<Database>,
     mqtt: &Arc<Mutex<MqttListener>>,
 ) -> Response<Full<Bytes>> {
     debug!("Parsing command request body");
@@ -828,22 +850,54 @@ async fn execute_command(
         }
     };
 
+    // Look up the MQTT topic for this device ID
+    let mqtt_topic = match db.get_mqtt_topic_for_device(&command.device_id) {
+        Ok(Some(topic)) => {
+            debug!(
+                device_id = %command.device_id,
+                mqtt_topic = %topic,
+                "Found MQTT topic for device"
+            );
+            topic
+        }
+        Ok(None) => {
+            warn!(device_id = %command.device_id, "Device not found in database");
+            return Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .body(Full::new(Bytes::from(r#"{"error":"Device not found"}"#)))
+                .unwrap();
+        }
+        Err(e) => {
+            error!(error = %e, device_id = %command.device_id, "Failed to query device from database");
+            return Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Full::new(Bytes::from(r#"{"error":"Database error"}"#)))
+                .unwrap();
+        }
+    };
+
     // Build the MQTT payload
     let state_str = if command.state { "ON" } else { "OFF" };
     let payload = format!(r#"{{"state":"{}"}}"#, state_str);
 
     info!(
         device_id = %command.device_id,
+        mqtt_topic = %mqtt_topic,
         state = %state_str,
         payload = %payload,
         "Executing switch command"
     );
 
-    // Publish to MQTT
+    // Publish to MQTT using the actual MQTT topic
     let mqtt_guard = mqtt.lock().await;
-    match mqtt_guard.publish(&command.device_id, &payload).await {
+    match mqtt_guard.publish(&mqtt_topic, &payload).await {
         Ok(_) => {
-            info!(device_id = %command.device_id, state = %state_str, "Command executed successfully");
+            info!(
+                device_id = %command.device_id,
+                mqtt_topic = %mqtt_topic,
+                state = %state_str,
+                "Command executed successfully"
+            );
             Response::builder()
                 .status(StatusCode::OK)
                 .header("Content-Type", "application/json")
@@ -851,7 +905,12 @@ async fn execute_command(
                 .unwrap()
         }
         Err(e) => {
-            error!(error = %e, device_id = %command.device_id, "Failed to publish command to MQTT");
+            error!(
+                error = %e,
+                device_id = %command.device_id,
+                mqtt_topic = %mqtt_topic,
+                "Failed to publish command to MQTT"
+            );
             Response::builder()
                 .status(StatusCode::INTERNAL_SERVER_ERROR)
                 .body(Full::new(Bytes::from(

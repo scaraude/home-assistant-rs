@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { cache } from "../lib/stores/cache";
   import { onDestroy, onMount } from "svelte";
   import SensorCard from "../lib/SensorCard.svelte";
   import {
@@ -9,7 +10,6 @@
     type SensorReading,
     type DeviceInfo,
   } from "../lib/api";
-  import { cache } from "../lib/stores/cache";
 
   type TimeRange = "1h" | "6h" | "24h" | "all";
 

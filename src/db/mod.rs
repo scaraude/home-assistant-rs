@@ -618,4 +618,38 @@ impl Database {
             }
         }
     }
+
+    /// Get MQTT topic for a device ID (useful for sending commands)
+    pub fn get_mqtt_topic_for_device(&self, device_id: &str) -> Result<Option<String>> {
+        debug!(device_id = %device_id, "Looking up MQTT topic for device ID");
+        let start = std::time::Instant::now();
+
+        let conn = self.conn.lock().unwrap();
+        let result = conn.query_row(
+            "SELECT mqtt_topic FROM devices WHERE id = ?1",
+            params![device_id],
+            |row| row.get(0),
+        );
+
+        let elapsed = start.elapsed();
+        match result {
+            Ok(mqtt_topic) => {
+                debug!(
+                    device_id = %device_id,
+                    mqtt_topic = %mqtt_topic,
+                    duration_us = elapsed.as_micros(),
+                    "Found MQTT topic for device"
+                );
+                Ok(Some(mqtt_topic))
+            }
+            Err(rusqlite::Error::QueryReturnedNoRows) => {
+                debug!(device_id = %device_id, "No device found for ID");
+                Ok(None)
+            }
+            Err(e) => {
+                error!(error = %e, device_id = %device_id, "Failed to query MQTT topic");
+                Err(e)
+            }
+        }
+    }
 }
