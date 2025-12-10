@@ -143,7 +143,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Start HTTP server
     info!(addr = %http_addr, "Starting HTTP server");
-    let server = HttpServer::new(db, cache, mqtt_listener, switch_state, http_addr);
+    let server = HttpServer::new(
+        db,
+        cache,
+        mqtt_listener,
+        switch_state,
+        device_state,
+        http_addr,
+    );
     server.run().await?;
 
     Ok(())

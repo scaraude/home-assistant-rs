@@ -163,6 +163,8 @@ impl Database {
             device_id = %reading.device_id,
             temperature = %reading.temperature,
             humidity = ?reading.humidity,
+            battery = ?reading.battery,
+            link_quality = ?reading.link_quality,
             timestamp = %reading.timestamp,
             "Inserting temperature reading"
         );
@@ -170,12 +172,14 @@ impl Database {
         let start = std::time::Instant::now();
         let result = self.conn.lock().unwrap().execute(
             "INSERT INTO temperature_readings
-             (device_id, temperature, humidity, timestamp)
-             VALUES (?1, ?2, ?3, ?4)",
+             (device_id, temperature, humidity, battery, link_quality, timestamp)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
                 reading.device_id,
                 reading.temperature,
                 reading.humidity,
+                reading.battery,
+                reading.link_quality,
                 reading.timestamp.timestamp()
             ],
         );
@@ -245,7 +249,7 @@ impl Database {
 
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT device_id, temperature, humidity, timestamp
+            "SELECT device_id, temperature, humidity, battery, link_quality, timestamp
              FROM temperature_readings
              WHERE timestamp > ?1
              ORDER BY device_id, timestamp DESC",
@@ -257,7 +261,9 @@ impl Database {
                     device_id: row.get(0)?,
                     temperature: row.get(1)?,
                     humidity: row.get(2)?,
-                    timestamp: chrono::DateTime::from_timestamp(row.get(3)?, 0).unwrap_or_default(),
+                    battery: row.get(3)?,
+                    link_quality: row.get(4)?,
+                    timestamp: chrono::DateTime::from_timestamp(row.get(5)?, 0).unwrap_or_default(),
                 })
             })?
             .collect::<Result<Vec<_>>>()?;
@@ -295,7 +301,7 @@ impl Database {
 
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT device_id, temperature, humidity, timestamp
+            "SELECT device_id, temperature, humidity, battery, link_quality, timestamp
              FROM temperature_readings
              WHERE device_id = ?1 AND timestamp > ?2
              ORDER BY timestamp DESC",
@@ -307,7 +313,9 @@ impl Database {
                     device_id: row.get(0)?,
                     temperature: row.get(1)?,
                     humidity: row.get(2)?,
-                    timestamp: chrono::DateTime::from_timestamp(row.get(3)?, 0).unwrap_or_default(),
+                    battery: row.get(3)?,
+                    link_quality: row.get(4)?,
+                    timestamp: chrono::DateTime::from_timestamp(row.get(5)?, 0).unwrap_or_default(),
                 })
             })?
             .collect::<Result<Vec<_>>>()?;

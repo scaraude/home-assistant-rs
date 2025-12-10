@@ -118,6 +118,12 @@ impl MqttListener {
                                             "Received switch state update"
                                         );
 
+                                        // Update device state with link quality
+                                        if let Some(lq) = switch_msg.linkquality {
+                                            device_state.update_link_quality(device_id.clone(), lq);
+                                        }
+                                        device_state.mark_seen(device_id.clone());
+
                                         // Update switch state store
                                         switch_state.set_state(device_id.to_string(), state);
                                         debug!(

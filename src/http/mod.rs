@@ -1,5 +1,6 @@
 use crate::cache::ResponseCache;
 use crate::db::Database;
+use crate::device_state::DeviceStateStore;
 use crate::logs;
 use crate::models::SwitchCommand;
 use crate::mqtt::MqttListener;
@@ -21,6 +22,7 @@ pub struct HttpServer {
     cache: Arc<ResponseCache>,
     mqtt: Arc<Mutex<MqttListener>>,
     switch_state: Arc<SwitchStateStore>,
+    device_state: DeviceStateStore,
     addr: SocketAddr,
 }
 
@@ -30,6 +32,7 @@ impl HttpServer {
         cache: Arc<ResponseCache>,
         mqtt: Arc<Mutex<MqttListener>>,
         switch_state: Arc<SwitchStateStore>,
+        device_state: DeviceStateStore,
         addr: SocketAddr,
     ) -> Self {
         Self {
@@ -37,6 +40,7 @@ impl HttpServer {
             cache,
             mqtt,
             switch_state,
+            device_state,
             addr,
         }
     }
@@ -72,6 +76,7 @@ impl HttpServer {
                     let cache = self.cache.clone();
                     let mqtt = self.mqtt.clone();
                     let switch_state = self.switch_state.clone();
+                    let device_state = self.device_state.clone();
                     let conn_id = connection_count;
 
                     tokio::spawn(async move {
@@ -88,6 +93,7 @@ impl HttpServer {
                                         cache.clone(),
                                         mqtt.clone(),
                                         switch_state.clone(),
+                                        device_state.clone(),
                                     )
                                 }),
                             )
@@ -118,6 +124,7 @@ async fn handle_request(
     cache: Arc<ResponseCache>,
     mqtt: Arc<Mutex<MqttListener>>,
     switch_state: Arc<SwitchStateStore>,
+    device_state: DeviceStateStore,
 ) -> Result<Response<Full<Bytes>>, hyper::Error> {
     let path = req.uri().path().to_string();
     let method = req.method().clone();
@@ -190,7 +197,7 @@ async fn handle_request(
         }
         ("GET", "/api/devices/switches") => {
             debug!("Serving switches list");
-            serve_switches_list(&db, &switch_state)
+            serve_switches_list(&db, &switch_state, &device_state)
         }
         ("POST", "/api/commands/execute") => {
             debug!("Executing command");
@@ -754,6 +761,7 @@ fn serve_process_history(
 fn serve_switches_list(
     db: &Arc<Database>,
     switch_state: &Arc<SwitchStateStore>,
+    device_state: &DeviceStateStore,
 ) -> Response<Full<Bytes>> {
     debug!("Getting list of available switches from database");
 
@@ -775,12 +783,16 @@ fn serve_switches_list(
         .filter(|device| device.device_type == crate::models::DeviceType::Commander)
         .map(|device| {
             let current_state = switch_state.get_state(&device.mqtt_topic).unwrap_or(false);
+            let link_quality = device_state
+                .get_state(&device.id)
+                .and_then(|state| state.link_quality);
 
             info!(
                 device_id = %device.id,
                 mqtt_topic = %device.mqtt_topic,
                 name = %device.name,
                 state = %current_state,
+                link_quality = ?link_quality,
                 "Retrieved switch state from store"
             );
 
@@ -789,7 +801,7 @@ fn serve_switches_list(
                 "mqtt_topic": device.mqtt_topic,
                 "name": device.name,
                 "state": current_state,
-                "link_quality": null,
+                "link_quality": link_quality,
                 "last_updated": chrono::Utc::now().timestamp()
             })
         })

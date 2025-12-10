@@ -14,6 +14,12 @@ pub struct TemperatureReading {
     /// Optional humidity percentage
     pub humidity: Option<f32>,
 
+    /// Optional battery level percentage
+    pub battery: Option<u8>,
+
+    /// Optional link quality indicator
+    pub link_quality: Option<u8>,
+
     /// Timestamp when the reading was received
     #[serde(with = "chrono::serde::ts_seconds")]
     pub timestamp: DateTime<Utc>,
@@ -55,12 +61,16 @@ impl TemperatureReading {
                     device_id = %device_id,
                     temperature = %temperature,
                     humidity = ?msg.humidity,
+                    battery = ?msg.battery,
+                    linkquality = ?msg.linkquality,
                     "Successfully created TemperatureReading"
                 );
                 Some(Self {
                     device_id,
                     temperature,
                     humidity: msg.humidity,
+                    battery: msg.battery,
+                    link_quality: msg.linkquality,
                     timestamp: Utc::now(),
                 })
             }
@@ -68,6 +78,8 @@ impl TemperatureReading {
                 debug!(
                     device_id = %device_id,
                     humidity = ?msg.humidity,
+                    battery = ?msg.battery,
+                    linkquality = ?msg.linkquality,
                     "MQTT message does not contain temperature data - skipping reading creation"
                 );
                 None
