@@ -71,6 +71,7 @@ impl HttpServer {
                     let db = self.db.clone();
                     let cache = self.cache.clone();
                     let mqtt = self.mqtt.clone();
+                    let switch_state = self.switch_state.clone();
                     let conn_id = connection_count;
 
                     tokio::spawn(async move {
@@ -81,7 +82,13 @@ impl HttpServer {
                             .serve_connection(
                                 io,
                                 service_fn(|req| {
-                                    handle_request(req, db.clone(), cache.clone(), mqtt.clone())
+                                    handle_request(
+                                        req,
+                                        db.clone(),
+                                        cache.clone(),
+                                        mqtt.clone(),
+                                        switch_state.clone(),
+                                    )
                                 }),
                             )
                             .await
@@ -110,6 +117,7 @@ async fn handle_request(
     db: Arc<Database>,
     cache: Arc<ResponseCache>,
     mqtt: Arc<Mutex<MqttListener>>,
+    switch_state: Arc<SwitchStateStore>,
 ) -> Result<Response<Full<Bytes>>, hyper::Error> {
     let path = req.uri().path().to_string();
     let method = req.method().clone();
@@ -182,7 +190,7 @@ async fn handle_request(
         }
         ("GET", "/api/devices/switches") => {
             debug!("Serving switches list");
-            serve_switches_list()
+            serve_switches_list(&switch_state)
         }
         ("POST", "/api/commands/execute") => {
             debug!("Executing command");
@@ -739,15 +747,25 @@ fn serve_process_history(
     }
 }
 
-fn serve_switches_list() -> Response<Full<Bytes>> {
+fn serve_switches_list(switch_state: &Arc<SwitchStateStore>) -> Response<Full<Bytes>> {
     debug!("Getting list of available switches");
 
-    // For now, return a hardcoded list with the ZBMINIR2 switch
+    // Get current state from the store for the ZBMINIR2 switch
+    let device_id = "0x7cc6b6fffec90892";
+    let current_state = switch_state.get_state(device_id).unwrap_or(false);
+
+    info!(
+        device_id = %device_id,
+        state = %current_state,
+        "Retrieved switch state from store"
+    );
+
+    // For now, return a hardcoded list with the ZBMINIR2 switch but with real state
     // In the future, this could be stored in database or config
     let switches = vec![serde_json::json!({
-        "id": "0x7cc6b6fffec90892",
+        "id": device_id,
         "name": "ZBMINIR2 Switch",
-        "state": false,
+        "state": current_state,
         "link_quality": null,
         "last_updated": chrono::Utc::now().timestamp()
     })];

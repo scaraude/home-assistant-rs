@@ -50,14 +50,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db = Arc::new(Database::new(db_path)?);
     info!("Database initialized successfully");
 
+    // Initialize switch state store (before MQTT listener so we can pass it)
+    let switch_state = Arc::new(SwitchStateStore::new());
+    info!("Switch state store initialized");
+
     // Start MQTT listener
     info!(
         broker = %mqtt_broker,
         port = mqtt_port,
         "Connecting to MQTT broker"
     );
-    let (mqtt_listener, mut readings_rx) =
-        MqttListener::new(&mqtt_broker, mqtt_port, "home-assistant-rs");
+    let (mqtt_listener, mut readings_rx) = MqttListener::new(
+        &mqtt_broker,
+        mqtt_port,
+        "home-assistant-rs",
+        (*switch_state).clone(),
+    );
 
     mqtt_listener.subscribe().await?;
     info!("Successfully subscribed to zigbee2mqtt topics");
@@ -102,10 +110,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize response cache (60 second TTL matches monitor.sh interval)
     let cache = Arc::new(ResponseCache::new(60));
     info!("Response cache initialized with 60s TTL");
-
-    // Initialize switch state store
-    let switch_state = Arc::new(SwitchStateStore::new());
-    info!("Switch state store initialized");
 
     // Spawn cache cleanup task (runs every 5 minutes to prevent memory accumulation)
     let cache_clone = cache.clone();

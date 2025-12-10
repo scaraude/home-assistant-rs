@@ -1,4 +1,5 @@
-use crate::models::{TemperatureReading, Zigbee2MqttMessage};
+use crate::models::{SwitchMqttMessage, TemperatureReading, Zigbee2MqttMessage};
+use crate::switch_state::SwitchStateStore;
 use rumqttc::{AsyncClient, Event, MqttOptions, Packet, QoS};
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
@@ -13,6 +14,7 @@ impl MqttListener {
         broker_host: &str,
         broker_port: u16,
         client_id: &str,
+        switch_state: SwitchStateStore,
     ) -> (Self, mpsc::Receiver<TemperatureReading>) {
         info!(
             broker = %broker_host,
@@ -75,7 +77,30 @@ impl MqttListener {
                                 continue;
                             }
 
-                            // Parse the message
+                            // Try parsing as switch message first
+                            if let Ok(switch_msg) =
+                                serde_json::from_slice::<SwitchMqttMessage>(&p.payload)
+                            {
+                                if let Some(state_str) = &switch_msg.state {
+                                    let state = state_str.to_uppercase() == "ON";
+                                    info!(
+                                        sensor_id = %sensor_id,
+                                        state = %state,
+                                        linkquality = ?switch_msg.linkquality,
+                                        "Received switch state update"
+                                    );
+
+                                    // Update switch state store
+                                    switch_state.set_state(sensor_id.to_string(), state);
+                                    debug!(
+                                        sensor_id = %sensor_id,
+                                        state = %state,
+                                        "Updated switch state in store"
+                                    );
+                                }
+                            }
+
+                            // Also try parsing as temperature message
                             match serde_json::from_slice::<Zigbee2MqttMessage>(&p.payload) {
                                 Ok(msg) => {
                                     debug!(

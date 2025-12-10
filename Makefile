@@ -264,15 +264,11 @@ deploy-full: ## Full deployment (build, transfer, configure, and start services)
 
 deploy: deploy-full ## Alias for deploy-full
 
-quick-deploy: build transfer-binary restart ## Quick deploy: build, transfer binary, and restart service
+quick-deploy: build transfer-binary restart-home-assistant## Quick deploy: build, transfer binary, and restart service
 	@echo "$(COLOR_GREEN)✓ Quick deployment complete$(COLOR_RESET)"
 
-quick-deploy-frontend: check-ssh transfer-frontend ## Quick deploy frontend only
-	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "sudo systemctl restart home-assistant-rs.service"
+quick-deploy-frontend: check-ssh transfer-frontend restart-home-assistant ## Quick deploy frontend only
 	@echo "$(COLOR_GREEN)✓ Frontend quick deployment complete$(COLOR_RESET)"
-	@ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "\
-		echo '$(COLOR_BOLD)Home Assistant RS:$(COLOR_RESET)' && \
-		sudo systemctl status home-assistant-rs.service --no-pager -l | head -n 10"
 	
 start: check-ssh ## Start all services on Raspberry Pi
 	@echo "$(COLOR_BLUE)Starting services...$(COLOR_RESET)"
@@ -304,6 +300,15 @@ restart: check-ssh ## Restart all services on Raspberry Pi
 	@echo "$(COLOR_GREEN)✓ Services restarted$(COLOR_RESET)"
 	@sleep 2
 	$(MAKE) status
+
+restart-home-assistant: check-ssh ## Restart all services on Raspberry Pi
+	@echo "$(COLOR_BLUE)Restarting services...$(COLOR_RESET)"
+	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "\
+		sudo systemctl restart home-assistant-rs.service"
+	@echo "$(COLOR_GREEN)✓ Services restarted$(COLOR_RESET)"
+	@ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "\
+		echo '$(COLOR_BOLD)Home Assistant RS:$(COLOR_RESET)' && \
+		sudo systemctl status home-assistant-rs.service --no-pager -l | head -n 10"
 
 status: check-ssh ## Check status of all services
 	@echo "$(COLOR_BLUE)Service Status:$(COLOR_RESET)"
