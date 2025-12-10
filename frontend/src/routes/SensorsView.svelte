@@ -1,22 +1,29 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
-  import SensorCard from '../lib/SensorCard.svelte';
-  import { fetchSensors, fetchReadings, fetchReadingsSince, type SensorData, type SensorReading } from '../lib/api';
-  import { cache } from '../lib/stores/cache';
+  import { onDestroy, onMount } from "svelte";
+  import SensorCard from "../lib/SensorCard.svelte";
+  import {
+    fetchSensors,
+    fetchReadings,
+    fetchReadingsSince,
+    type SensorData,
+    type SensorReading,
+    type DeviceInfo,
+  } from "../lib/api";
+  import { cache } from "../lib/stores/cache";
 
-  type TimeRange = '1h' | '6h' | '24h' | 'all';
+  type TimeRange = "1h" | "6h" | "24h" | "all";
 
-  const TIME_RANGE_KEY = 'homeAssistant:sensorTimeRange';
+  const TIME_RANGE_KEY = "homeAssistant:sensorTimeRange";
 
   // Map time ranges to hours
   const timeRangeToHours: Record<TimeRange, number> = {
-    '1h': 1,
-    '6h': 6,
-    '24h': 24,
-    'all': 168, // 7 days
+    "1h": 1,
+    "6h": 6,
+    "24h": 24,
+    all: 168, // 7 days
   };
 
-  let selectedTimeRange: TimeRange = '24h';
+  let selectedTimeRange: TimeRange = "24h";
   let sensorData: SensorData[] = [];
   let loading = true;
   let error: string | null = null;
@@ -24,14 +31,18 @@
   let isFirstLoad = true;
 
   // Build sensor data from readings
-  function buildSensorData(sensorIds: string[], readings: SensorReading[]): SensorData[] {
-    return sensorIds.map((id) => {
+  function buildSensorData(
+    sensors: DeviceInfo[],
+    readings: SensorReading[]
+  ): SensorData[] {
+    return sensors.map(({ device_id, name }) => {
       const sensorReadings = readings
-        .filter((r) => r.device_id === id)
+        .filter((r) => r.device_id === device_id)
         .sort((a, b) => a.timestamp - b.timestamp);
 
       return {
-        id,
+        device_id,
+        name,
         latestReading: sensorReadings[sensorReadings.length - 1] || null,
         history: sensorReadings,
       };
@@ -43,20 +54,23 @@
       error = null;
       const hours = timeRangeToHours[selectedTimeRange];
 
-      const [sensorIds, readingsResult] = await Promise.all([
+      const [sensors, readingsResult] = await Promise.all([
         fetchSensors(),
         fetchReadings(undefined, hours),
       ]);
 
       // Store in cache
       if (readingsResult.latestTimestamp !== null) {
-        cache.setSensorReadings(readingsResult.readings, readingsResult.latestTimestamp);
+        cache.setSensorReadings(
+          readingsResult.readings,
+          readingsResult.latestTimestamp
+        );
       }
 
-      sensorData = buildSensorData(sensorIds, readingsResult.readings);
+      sensorData = buildSensorData(sensors, readingsResult.readings);
       loading = false;
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Failed to load sensor data';
+      error = err instanceof Error ? err.message : "Failed to load sensor data";
       loading = false;
     }
   }
@@ -71,14 +85,20 @@
         return loadDataFull();
       }
 
-      const [sensorIds, deltaResult] = await Promise.all([
+      const [sensors, deltaResult] = await Promise.all([
         fetchSensors(),
         fetchReadingsSince(latestTimestamp),
       ]);
 
       // If we got new readings, merge them
-      if (deltaResult.readings.length > 0 && deltaResult.latestTimestamp !== null) {
-        cache.mergeSensorReadings(deltaResult.readings, deltaResult.latestTimestamp);
+      if (
+        deltaResult.readings.length > 0 &&
+        deltaResult.latestTimestamp !== null
+      ) {
+        cache.mergeSensorReadings(
+          deltaResult.readings,
+          deltaResult.latestTimestamp
+        );
       }
 
       // Rebuild sensor data from cache
@@ -87,9 +107,9 @@
         allReadings = state.sensors.readings;
       })();
 
-      sensorData = buildSensorData(sensorIds, allReadings);
+      sensorData = buildSensorData(sensors, allReadings);
     } catch (err) {
-      console.error('Delta update failed, falling back to full load:', err);
+      console.error("Delta update failed, falling back to full load:", err);
       loadDataFull();
     }
   }
@@ -132,7 +152,12 @@
   onMount(() => {
     // Restore saved time range from localStorage
     const savedTimeRange = localStorage.getItem(TIME_RANGE_KEY);
-    if (savedTimeRange === '1h' || savedTimeRange === '6h' || savedTimeRange === '24h' || savedTimeRange === 'all') {
+    if (
+      savedTimeRange === "1h" ||
+      savedTimeRange === "6h" ||
+      savedTimeRange === "24h" ||
+      savedTimeRange === "all"
+    ) {
       selectedTimeRange = savedTimeRange;
     }
 
@@ -151,29 +176,29 @@
       <span class="time-range-label">Time range:</span>
       <button
         class="time-range-btn"
-        class:active={selectedTimeRange === '1h'}
-        on:click={() => setTimeRange('1h')}
+        class:active={selectedTimeRange === "1h"}
+        on:click={() => setTimeRange("1h")}
       >
         1h
       </button>
       <button
         class="time-range-btn"
-        class:active={selectedTimeRange === '6h'}
-        on:click={() => setTimeRange('6h')}
+        class:active={selectedTimeRange === "6h"}
+        on:click={() => setTimeRange("6h")}
       >
         6h
       </button>
       <button
         class="time-range-btn"
-        class:active={selectedTimeRange === '24h'}
-        on:click={() => setTimeRange('24h')}
+        class:active={selectedTimeRange === "24h"}
+        on:click={() => setTimeRange("24h")}
       >
         24h
       </button>
       <button
         class="time-range-btn"
-        class:active={selectedTimeRange === 'all'}
-        on:click={() => setTimeRange('all')}
+        class:active={selectedTimeRange === "all"}
+        on:click={() => setTimeRange("all")}
       >
         All
       </button>
@@ -196,7 +221,7 @@
     </div>
   {:else}
     <div class="sensor-grid">
-      {#each sensorData as sensor (sensor.id)}
+      {#each sensorData as sensor (sensor.name)}
         <SensorCard sensorData={sensor} />
       {/each}
     </div>

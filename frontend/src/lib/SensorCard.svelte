@@ -11,7 +11,7 @@
   let isModalOpen = false;
 
   $: latest = sensorData.latestReading;
-  $: displayName = sensorData.id.slice(0, 16) + (sensorData.id.length > 16 ? '...' : '');
+  $: displayName = sensorData.name.slice(0, 16) + (sensorData.name.length > 16 ? '...' : '');
   $: timeAgo = latest ? formatDistanceToNow(new Date(latest.timestamp * 1000), { addSuffix: true }) : '';
 
   function toggleMetric(metric: Metric) {
@@ -36,7 +36,7 @@
       </svg>
     </div>
     <div class="sensor-info">
-      <h3 class="sensor-name" title={sensorData.id}>{displayName}</h3>
+      <h3 class="sensor-name" title={sensorData.name}>{displayName}</h3>
       {#if latest}
         <div class="last-update" title={new Date(latest.timestamp * 1000).toLocaleString()}>
           {timeAgo}
@@ -135,7 +135,7 @@
   bind:isOpen={isModalOpen}
   readings={sensorData.history}
   {selectedMetric}
-  sensorName={sensorData.id}
+  sensorName={sensorData.name}
 />
 
 <style>

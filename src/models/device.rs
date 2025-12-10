@@ -104,6 +104,16 @@ impl Device {
     }
 }
 
+/// Minimal device info for API responses (ID + name only)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeviceInfo {
+    /// Device ID
+    pub device_id: String,
+
+    /// Human-readable name
+    pub name: String,
+}
+
 /// Dynamic device state (ephemeral, not persisted to DB)
 /// This represents frequently changing data that's tracked in memory
 /// and reconstructed from MQTT messages on restart

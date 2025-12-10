@@ -1,4 +1,4 @@
-use crate::models::{Device, DeviceType, PowerSource, TemperatureReading};
+use crate::models::{Device, DeviceInfo, DeviceType, PowerSource, TemperatureReading};
 use rusqlite::{params, Connection, Result};
 use std::fs;
 use std::path::Path;
@@ -202,29 +202,35 @@ impl Database {
         }
     }
 
-    /// Get all sensors with their latest reading
-    pub fn get_all_sensors(&self) -> Result<Vec<String>> {
-        debug!("Querying all distinct sensor IDs");
+    /// Get all sensors with their device info (ID + name)
+    pub fn get_all_sensors(&self) -> Result<Vec<DeviceInfo>> {
+        debug!("Querying all distinct sensors with device info");
         let start = std::time::Instant::now();
 
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT DISTINCT device_id
-             FROM temperature_readings
-             ORDER BY device_id",
+            "SELECT DISTINCT tr.device_id, COALESCE(d.name, tr.device_id) as name
+             FROM temperature_readings tr
+             LEFT JOIN devices d ON tr.device_id = d.id
+             ORDER BY name",
         )?;
 
         let sensors = stmt
-            .query_map([], |row| row.get(0))?
+            .query_map([], |row| {
+                Ok(DeviceInfo {
+                    device_id: row.get(0)?,
+                    name: row.get(1)?,
+                })
+            })?
             .collect::<Result<Vec<_>>>()?;
 
         let elapsed = start.elapsed();
         info!(
             sensor_count = sensors.len(),
             duration_ms = elapsed.as_millis(),
-            "Retrieved all sensors"
+            "Retrieved all sensors with device info"
         );
-        debug!(sensors = ?sensors, "Sensor IDs");
+        debug!(sensors = ?sensors, "Sensor device info");
 
         Ok(sensors)
     }

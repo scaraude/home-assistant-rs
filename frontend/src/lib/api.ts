@@ -9,16 +9,21 @@ export interface SensorReading {
   timestamp: number;
 }
 
+export interface DeviceInfo {
+  device_id: string;
+  name: string;
+}
+
 export interface SensorData {
-  id: string;
+  name: string;
   latestReading: SensorReading | null;
   history: SensorReading[];
 }
 
 /**
- * Fetch list of all sensor IDs
+ * Fetch list of all sensors with their device info (ID + name)
  */
-export async function fetchSensors(): Promise<string[]> {
+export async function fetchSensors(): Promise<DeviceInfo[]> {
   const response = await fetch('/api/sensors');
   if (!response.ok) {
     throw new Error(`Failed to fetch sensors: ${response.statusText}`);
@@ -91,20 +96,20 @@ export async function fetchReadingsSince(
  * @param hours - Number of hours of history to fetch
  */
 export async function fetchAllSensorData(hours: number = 24): Promise<SensorData[]> {
-  const [sensorIds, readingsResult] = await Promise.all([
+  const [sensors, readingsResult] = await Promise.all([
     fetchSensors(),
     fetchReadings(undefined, hours),
   ]);
 
   const allReadings = readingsResult.readings;
 
-  return sensorIds.map((id) => {
+  return sensors.map((sensor) => {
     const sensorReadings = allReadings
-      .filter((r: SensorReading) => r.device_id === id)
+      .filter((r: SensorReading) => r.device_id === sensor.device_id)
       .sort((a: SensorReading, b: SensorReading) => a.timestamp - b.timestamp);
 
     return {
-      id,
+      name: sensor.name,
       latestReading: sensorReadings[sensorReadings.length - 1] || null,
       history: sensorReadings,
     };
