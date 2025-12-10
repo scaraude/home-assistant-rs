@@ -782,7 +782,7 @@ fn serve_switches_list(
         .into_iter()
         .filter(|device| device.device_type == crate::models::DeviceType::Commander)
         .map(|device| {
-            let current_state = switch_state.get_state(&device.mqtt_topic).unwrap_or(false);
+            let current_state = switch_state.get_state(&device.id).unwrap_or(false);
             let link_quality = device_state
                 .get_state(&device.id)
                 .and_then(|state| state.link_quality);
