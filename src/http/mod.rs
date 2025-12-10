@@ -373,8 +373,8 @@ fn serve_readings(
 ) -> Response<Full<Bytes>> {
     debug!(query = ?query, "Parsing query parameters");
 
-    // Parse query parameters for sensor_id, hours, and since
-    let mut sensor_id: Option<&str> = None;
+    // Parse query parameters for device_id, hours, and since
+    let mut device_id: Option<&str> = None;
     let mut hours: Option<i64> = None;
     let mut since_param: Option<i64> = None;
 
@@ -382,9 +382,9 @@ fn serve_readings(
         for param in q.split('&') {
             if let Some((key, value)) = param.split_once('=') {
                 match key {
-                    "sensor_id" => {
-                        sensor_id = Some(value);
-                        debug!(sensor_id = %value, "Parsed sensor_id parameter");
+                    "device_id" => {
+                        device_id = Some(value);
+                        debug!(device_id = %value, "Parsed device_id parameter");
                     }
                     "hours" => {
                         hours = Some(value.parse().unwrap_or_else(|e| {
@@ -422,14 +422,14 @@ fn serve_readings(
     };
 
     info!(
-        sensor_id = ?sensor_id,
+        device_id = ?device_id,
         since_timestamp = since,
         "Querying readings (delta support enabled)"
     );
 
     // Use SQL-filtered queries - no more Rust-side filtering!
-    let result = if let Some(sid) = sensor_id {
-        debug!(sensor_id = %sid, since = since, "Querying readings for specific sensor");
+    let result = if let Some(sid) = device_id {
+        debug!(device_id = %sid, since = since, "Querying readings for specific sensor");
         // Get readings for specific sensor with time filter in SQL
         db.get_readings_for_sensor_since(sid, since)
     } else {
@@ -457,7 +457,7 @@ fn serve_readings(
                     info!(
                         reading_count = readings.len(),
                         response_size = json.len(),
-                        sensor_id = ?sensor_id,
+                        device_id = ?device_id,
                         latest_ts = latest_timestamp,
                         "Successfully serialized readings to JSON"
                     );
@@ -485,7 +485,7 @@ fn serve_readings(
             }
         }
         Err(e) => {
-            error!(error = %e, sensor_id = ?sensor_id, hours = hours, "Database error while fetching readings");
+            error!(error = %e, device_id = ?device_id, hours = hours, "Database error while fetching readings");
             Response::builder()
                 .status(StatusCode::INTERNAL_SERVER_ERROR)
                 .body(Full::new(Bytes::from("Database error")))

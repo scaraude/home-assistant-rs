@@ -1,7 +1,7 @@
 // API client for home-assistant-rs backend
 
 export interface SensorReading {
-  sensor_id: string;
+  device_id: string;
   temperature: number;
   humidity: number | null;
   battery: number | null;
@@ -38,7 +38,7 @@ export async function fetchReadings(
 ): Promise<{ readings: SensorReading[]; latestTimestamp: number | null }> {
   const params = new URLSearchParams();
   if (sensorId) {
-    params.append('sensor_id', sensorId);
+    params.append('device_id', sensorId);
   }
   params.append('hours', hours.toString());
 
@@ -69,7 +69,7 @@ export async function fetchReadingsSince(
   const params = new URLSearchParams();
   params.append('since', sinceTimestamp.toString());
   if (sensorId) {
-    params.append('sensor_id', sensorId);
+    params.append('device_id', sensorId);
   }
 
   const response = await fetch(`/api/readings?${params.toString()}`);
@@ -100,7 +100,7 @@ export async function fetchAllSensorData(hours: number = 24): Promise<SensorData
 
   return sensorIds.map((id) => {
     const sensorReadings = allReadings
-      .filter((r: SensorReading) => r.sensor_id === id)
+      .filter((r: SensorReading) => r.device_id === id)
       .sort((a: SensorReading, b: SensorReading) => a.timestamp - b.timestamp);
 
     return {

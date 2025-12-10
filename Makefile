@@ -264,7 +264,11 @@ deploy-full: ## Full deployment (build, transfer, configure, and start services)
 
 deploy: deploy-full ## Alias for deploy-full
 
-quick-deploy: build transfer-binary restart-home-assistant## Quick deploy: build, transfer binary, and restart service
+quick-deploy: 
+	@echo "$(COLOR_BLUE)Stopping services...$(COLOR_RESET)"
+	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "sudo systemctl stop home-assistant-rs.service"
+	@echo "$(COLOR_GREEN)✓ Service stopped$(COLOR_RESET)"
+	$(MAKE) build transfer-binary restart-home-assistant ## Quick deploy: build, transfer binary, and restart service
 	@echo "$(COLOR_GREEN)✓ Quick deployment complete$(COLOR_RESET)"
 
 quick-deploy-frontend: check-ssh transfer-frontend restart-home-assistant ## Quick deploy frontend only

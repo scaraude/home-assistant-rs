@@ -27,7 +27,7 @@
   function buildSensorData(sensorIds: string[], readings: SensorReading[]): SensorData[] {
     return sensorIds.map((id) => {
       const sensorReadings = readings
-        .filter((r) => r.sensor_id === id)
+        .filter((r) => r.device_id === id)
         .sort((a, b) => a.timestamp - b.timestamp);
 
       return {
