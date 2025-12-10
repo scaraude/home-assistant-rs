@@ -1,11 +1,21 @@
-use crate::models::{SwitchMqttMessage, TemperatureReading, Zigbee2MqttMessage};
+use crate::db::Database;
+use crate::device_state::DeviceStateStore;
+use crate::models::{
+    Device, DeviceType, PowerSource, SwitchMqttMessage, TemperatureReading, Zigbee2MqttMessage,
+};
 use crate::switch_state::SwitchStateStore;
 use rumqttc::{AsyncClient, Event, MqttOptions, Packet, QoS};
+use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 
 pub struct MqttListener {
     client: AsyncClient,
+}
+
+enum MqttMessage {
+    TempHumiditySensor(Zigbee2MqttMessage),
+    Switch(SwitchMqttMessage),
 }
 
 impl MqttListener {
@@ -14,6 +24,8 @@ impl MqttListener {
         broker_host: &str,
         broker_port: u16,
         client_id: &str,
+        db: Arc<Database>,
+        device_state: DeviceStateStore,
         switch_state: SwitchStateStore,
     ) -> (Self, mpsc::Receiver<TemperatureReading>) {
         info!(
@@ -64,10 +76,10 @@ impl MqttListener {
                             "Received MQTT message"
                         );
 
-                        // Extract sensor ID from topic: zigbee2mqtt/<sensor_id>
-                        if let Some(sensor_id) = p.topic.strip_prefix("zigbee2mqtt/") {
+                        // Extract MQTT identifier from topic: zigbee2mqtt/<mqtt_id>
+                        if let Some(mqtt_topic) = p.topic.strip_prefix("zigbee2mqtt/") {
                             // Skip bridge topics
-                            if sensor_id.starts_with("bridge/") {
+                            if mqtt_topic.starts_with("bridge/") {
                                 skipped_bridge += 1;
                                 debug!(
                                     topic = %p.topic,
@@ -81,22 +93,30 @@ impl MqttListener {
                             if let Ok(switch_msg) =
                                 serde_json::from_slice::<SwitchMqttMessage>(&p.payload)
                             {
-                                if let Some(state_str) = &switch_msg.state {
-                                    let state = state_str.to_uppercase() == "ON";
-                                    info!(
-                                        sensor_id = %sensor_id,
-                                        state = %state,
-                                        linkquality = ?switch_msg.linkquality,
-                                        "Received switch state update"
-                                    );
+                                if let Some(device_id) = get_or_create_device(
+                                    &db,
+                                    mqtt_topic,
+                                    MqttMessage::Switch(switch_msg.clone()),
+                                )
+                                .await
+                                {
+                                    if let Some(state_str) = &switch_msg.state {
+                                        let state = state_str.to_uppercase() == "ON";
+                                        info!(
+                                            device_id = %device_id,
+                                            state = %state,
+                                            linkquality = ?switch_msg.linkquality,
+                                            "Received switch state update"
+                                        );
 
-                                    // Update switch state store
-                                    switch_state.set_state(sensor_id.to_string(), state);
-                                    debug!(
-                                        sensor_id = %sensor_id,
-                                        state = %state,
-                                        "Updated switch state in store"
-                                    );
+                                        // Update switch state store
+                                        switch_state.set_state(device_id.to_string(), state);
+                                        debug!(
+                                            device_id = %device_id,
+                                            state = %state,
+                                            "Updated switch state in store"
+                                        );
+                                    }
                                 }
                             }
 
@@ -104,54 +124,76 @@ impl MqttListener {
                             match serde_json::from_slice::<Zigbee2MqttMessage>(&p.payload) {
                                 Ok(msg) => {
                                     debug!(
-                                        sensor_id = %sensor_id,
+                                        mqtt_topic = %mqtt_topic,
                                         message = ?msg,
                                         "Successfully parsed MQTT message"
                                     );
 
-                                    // Create temperature reading if the message contains temperature data
-                                    match TemperatureReading::from_mqtt(sensor_id.to_string(), msg)
+                                    // Get or create device
+                                    if let Some(device_id) = get_or_create_device(
+                                        &db,
+                                        mqtt_topic,
+                                        MqttMessage::TempHumiditySensor(msg.clone()),
+                                    )
+                                    .await
                                     {
-                                        Some(reading) => {
-                                            info!(
-                                                sensor_id = %reading.sensor_id,
-                                                temperature = %reading.temperature,
-                                                humidity = ?reading.humidity,
-                                                battery = ?reading.battery,
-                                                "Created temperature reading from MQTT message"
-                                            );
+                                        // Update device state with link quality and battery
+                                        if let Some(lq) = msg.linkquality {
+                                            device_state.update_link_quality(device_id.clone(), lq);
+                                        }
+                                        if let Some(battery) = msg.battery {
+                                            device_state.update_battery(device_id.clone(), battery);
+                                        }
+                                        device_state.mark_seen(device_id.clone());
 
-                                            // Send to channel (drop if full to avoid blocking)
-                                            match tx.send(reading).await {
-                                                Ok(_) => {
-                                                    debug!(sensor_id = %sensor_id, "Sent reading to channel");
-                                                }
-                                                Err(e) => {
-                                                    send_failures += 1;
-                                                    error!(
-                                                        error = %e,
-                                                        sensor_id = %sensor_id,
-                                                        send_failures = send_failures,
-                                                        "Failed to send reading to channel - receiver dropped?"
-                                                    );
+                                        // Create temperature reading if the message contains temperature data
+                                        match TemperatureReading::from_mqtt(device_id.clone(), msg)
+                                        {
+                                            Some(reading) => {
+                                                info!(
+                                                    device_id = %reading.device_id,
+                                                    temperature = %reading.temperature,
+                                                    humidity = ?reading.humidity,
+                                                    "Created temperature reading from MQTT message"
+                                                );
+
+                                                // Send to channel (drop if full to avoid blocking)
+                                                match tx.send(reading).await {
+                                                    Ok(_) => {
+                                                        debug!(device_id = %device_id, "Sent reading to channel");
+                                                    }
+                                                    Err(e) => {
+                                                        send_failures += 1;
+                                                        error!(
+                                                            error = %e,
+                                                            device_id = %device_id,
+                                                            send_failures = send_failures,
+                                                            "Failed to send reading to channel - receiver dropped?"
+                                                        );
+                                                    }
                                                 }
                                             }
+                                            None => {
+                                                no_temperature += 1;
+                                                debug!(
+                                                    device_id = %device_id,
+                                                    no_temp_count = no_temperature,
+                                                    "Message does not contain temperature data"
+                                                );
+                                            }
                                         }
-                                        None => {
-                                            no_temperature += 1;
-                                            debug!(
-                                                sensor_id = %sensor_id,
-                                                no_temp_count = no_temperature,
-                                                "Message does not contain temperature data"
-                                            );
-                                        }
+                                    } else {
+                                        error!(
+                                            mqtt_topic = %mqtt_topic,
+                                            "Failed to get or create device, skipping message"
+                                        );
                                     }
                                 }
                                 Err(e) => {
                                     parse_errors += 1;
                                     warn!(
                                         error = %e,
-                                        sensor_id = %sensor_id,
+                                        mqtt_topic = %mqtt_topic,
                                         topic = %p.topic,
                                         payload_preview = ?String::from_utf8_lossy(&p.payload[..p.payload.len().min(100)]),
                                         parse_error_count = parse_errors,
@@ -258,5 +300,81 @@ impl MqttListener {
     /// Get a clone of the MQTT client for publishing from other parts of the application
     pub fn get_client(&self) -> AsyncClient {
         self.client.clone()
+    }
+}
+
+/// Helper function to get or create a device from MQTT topic
+/// Returns the device UUID if successful
+async fn get_or_create_device(db: &Database, mqtt_topic: &str, msg: MqttMessage) -> Option<String> {
+    // Try to get existing device
+    match db.get_device_by_mqtt_topic(mqtt_topic) {
+        Ok(Some(device)) => {
+            debug!(
+                device_id = %device.id,
+                mqtt_topic = %mqtt_topic,
+                "Found existing device"
+            );
+            return Some(device.id);
+        }
+        Ok(None) => {
+            // Device doesn't exist, create it
+            info!(
+                mqtt_topic = %mqtt_topic,
+                "New device detected, creating entry"
+            );
+
+            // Determine device type based on available fields
+            let device_type = match msg {
+                MqttMessage::TempHumiditySensor(_) => DeviceType::TempHumiditySensor,
+                MqttMessage::Switch(_) => DeviceType::Commander,
+            };
+
+            // Determine power source (if battery field exists, assume battery powered)
+            let power_source: PowerSource = match msg {
+                MqttMessage::TempHumiditySensor(_) => PowerSource::Battery,
+                MqttMessage::Switch(switch_msg) => {
+                    if switch_msg.other.get("battery").is_some() {
+                        PowerSource::Battery
+                    } else {
+                        PowerSource::Plugged
+                    }
+                }
+            };
+
+            let device = Device::new(
+                mqtt_topic.to_string(),
+                mqtt_topic.to_string(), // Use MQTT topic as default name
+                device_type,
+                power_source,
+            );
+
+            match db.insert_device(&device) {
+                Ok(_) => {
+                    info!(
+                        device_id = %device.id,
+                        mqtt_topic = %mqtt_topic,
+                        device_type = ?device.device_type,
+                        "Successfully created new device"
+                    );
+                    Some(device.id)
+                }
+                Err(e) => {
+                    error!(
+                        error = %e,
+                        mqtt_topic = %mqtt_topic,
+                        "Failed to insert new device"
+                    );
+                    None
+                }
+            }
+        }
+        Err(e) => {
+            error!(
+                error = %e,
+                mqtt_topic = %mqtt_topic,
+                "Failed to query device"
+            );
+            None
+        }
     }
 }

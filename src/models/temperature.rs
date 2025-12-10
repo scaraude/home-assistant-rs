@@ -1,24 +1,18 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use tracing::{debug, warn};
+use tracing::debug;
 
 /// Temperature reading from a sensor
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TemperatureReading {
-    /// Unique sensor identifier (e.g., "0x00158d0001a2b3c4")
-    pub sensor_id: String,
+    /// Device ID (foreign key to devices table)
+    pub device_id: String,
 
     /// Temperature in Celsius
     pub temperature: f32,
 
     /// Optional humidity percentage
     pub humidity: Option<f32>,
-
-    /// Optional battery level percentage
-    pub battery: Option<u8>,
-
-    /// Optional battery level percentage
-    pub link_quality: Option<u8>,
 
     /// Timestamp when the reading was received
     #[serde(with = "chrono::serde::ts_seconds")]
@@ -27,7 +21,7 @@ pub struct TemperatureReading {
 
 /// Zigbee2MQTT message format
 /// This matches the JSON structure published by zigbee2mqtt
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Zigbee2MqttMessage {
     /// Temperature in Celsius
     pub temperature: Option<f32>,
@@ -45,13 +39,12 @@ pub struct Zigbee2MqttMessage {
 
 impl TemperatureReading {
     /// Create a new temperature reading from a zigbee2mqtt message
-    pub fn from_mqtt(sensor_id: String, msg: Zigbee2MqttMessage) -> Option<Self> {
+    /// Note: device_id should be the UUID from the devices table, not the MQTT topic
+    pub fn from_mqtt(device_id: String, msg: Zigbee2MqttMessage) -> Option<Self> {
         debug!(
-            sensor_id = %sensor_id,
+            device_id = %device_id,
             temperature = ?msg.temperature,
             humidity = ?msg.humidity,
-            battery = ?msg.battery,
-            linkquality = ?msg.linkquality,
             "Attempting to create TemperatureReading from MQTT message"
         );
 
@@ -59,28 +52,22 @@ impl TemperatureReading {
         match msg.temperature {
             Some(temperature) => {
                 debug!(
-                    sensor_id = %sensor_id,
+                    device_id = %device_id,
                     temperature = %temperature,
                     humidity = ?msg.humidity,
-                    link_quality = ?msg.linkquality,
-                    battery = ?msg.battery,
                     "Successfully created TemperatureReading"
                 );
                 Some(Self {
-                    sensor_id,
+                    device_id,
                     temperature,
                     humidity: msg.humidity,
-                    battery: msg.battery,
-                    link_quality: msg.linkquality,
                     timestamp: Utc::now(),
                 })
             }
             None => {
-                warn!(
-                    sensor_id = %sensor_id,
+                debug!(
+                    device_id = %device_id,
                     humidity = ?msg.humidity,
-                    battery = ?msg.battery,
-                    linkquality = ?msg.linkquality,
                     "MQTT message does not contain temperature data - skipping reading creation"
                 );
                 None

@@ -24,7 +24,7 @@ pub struct SwitchDevice {
 
 /// Zigbee2MQTT message format for switch devices
 /// Extends the temperature message to include state field
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct SwitchMqttMessage {
     /// Switch state (ON/OFF)
     pub state: Option<String>,

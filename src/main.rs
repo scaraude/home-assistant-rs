@@ -52,6 +52,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db = Arc::new(Database::new(db_path)?);
     info!("Database initialized successfully");
 
+    // Initialize device state store
+    let device_state = DeviceStateStore::new();
+    info!("Device state store initialized");
+
     // Initialize switch state store (before MQTT listener so we can pass it)
     let switch_state = Arc::new(SwitchStateStore::new());
     info!("Switch state store initialized");
@@ -66,6 +70,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &mqtt_broker,
         mqtt_port,
         "home-assistant-rs",
+        db.clone(),
+        device_state.clone(),
         (*switch_state).clone(),
     );
 
@@ -82,10 +88,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             reading_count += 1;
 
             info!(
-                sensor_id = %reading.sensor_id,
+                device_id = %reading.device_id,
                 temperature = %reading.temperature,
                 humidity = ?reading.humidity,
-                battery = ?reading.battery,
                 count = reading_count,
                 "Received sensor reading"
             );
@@ -93,13 +98,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if let Err(e) = db_clone.insert_reading(&reading) {
                 error!(
                     error = %e,
-                    sensor_id = %reading.sensor_id,
+                    device_id = %reading.device_id,
                     reading_count = reading_count,
                     "Failed to insert reading into database"
                 );
             } else {
                 debug!(
-                    sensor_id = %reading.sensor_id,
+                    device_id = %reading.device_id,
                     reading_count = reading_count,
                     "Successfully inserted reading"
                 );

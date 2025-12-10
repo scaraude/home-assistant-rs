@@ -61,7 +61,7 @@ impl Database {
         match conn.execute(
             "CREATE TABLE IF NOT EXISTS temperature_readings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                sensor_id TEXT NOT NULL,
+                device_id TEXT NOT NULL,
                 temperature REAL NOT NULL,
                 humidity REAL,
                 battery INTEGER,
@@ -81,7 +81,7 @@ impl Database {
         debug!("Creating index idx_sensor_time if not exists");
         match conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_sensor_time
-             ON temperature_readings(sensor_id, timestamp DESC)",
+             ON temperature_readings(device_id, timestamp DESC)",
             [],
         ) {
             Ok(_) => debug!("Index idx_sensor_time created/verified"),
@@ -160,11 +160,9 @@ impl Database {
     /// Insert a temperature reading
     pub fn insert_reading(&self, reading: &TemperatureReading) -> Result<()> {
         debug!(
-            sensor_id = %reading.sensor_id,
+            device_id = %reading.device_id,
             temperature = %reading.temperature,
             humidity = ?reading.humidity,
-            battery = ?reading.battery,
-            link_quality = ?reading.link_quality,
             timestamp = %reading.timestamp,
             "Inserting temperature reading"
         );
@@ -172,14 +170,12 @@ impl Database {
         let start = std::time::Instant::now();
         let result = self.conn.lock().unwrap().execute(
             "INSERT INTO temperature_readings
-             (sensor_id, temperature, humidity, battery, link_quality, timestamp)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+             (device_id, temperature, humidity, timestamp)
+             VALUES (?1, ?2, ?3, ?4)",
             params![
-                reading.sensor_id,
+                reading.device_id,
                 reading.temperature,
                 reading.humidity,
-                reading.battery,
-                reading.link_quality,
                 reading.timestamp.timestamp()
             ],
         );
@@ -188,7 +184,7 @@ impl Database {
             Ok(rows) => {
                 let elapsed = start.elapsed();
                 debug!(
-                    sensor_id = %reading.sensor_id,
+                    device_id = %reading.device_id,
                     rows_affected = rows,
                     duration_us = elapsed.as_micros(),
                     "Successfully inserted reading"
@@ -198,7 +194,7 @@ impl Database {
             Err(e) => {
                 error!(
                     error = %e,
-                    sensor_id = %reading.sensor_id,
+                    device_id = %reading.device_id,
                     "Database insert failed"
                 );
                 Err(e)
@@ -213,9 +209,9 @@ impl Database {
 
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT DISTINCT sensor_id
+            "SELECT DISTINCT device_id
              FROM temperature_readings
-             ORDER BY sensor_id",
+             ORDER BY device_id",
         )?;
 
         let sensors = stmt
@@ -243,21 +239,19 @@ impl Database {
 
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT sensor_id, temperature, humidity, battery, link_quality, timestamp
+            "SELECT device_id, temperature, humidity, timestamp
              FROM temperature_readings
              WHERE timestamp > ?1
-             ORDER BY sensor_id, timestamp DESC",
+             ORDER BY device_id, timestamp DESC",
         )?;
 
         let readings = stmt
             .query_map(params![since_timestamp], |row| {
                 Ok(TemperatureReading {
-                    sensor_id: row.get(0)?,
+                    device_id: row.get(0)?,
                     temperature: row.get(1)?,
                     humidity: row.get(2)?,
-                    battery: row.get(3)?,
-                    link_quality: row.get(4)?,
-                    timestamp: chrono::DateTime::from_timestamp(row.get(5)?, 0).unwrap_or_default(),
+                    timestamp: chrono::DateTime::from_timestamp(row.get(3)?, 0).unwrap_or_default(),
                 })
             })?
             .collect::<Result<Vec<_>>>()?;
@@ -280,54 +274,52 @@ impl Database {
         Ok(readings)
     }
 
-    /// Get readings for a specific sensor within a time range (SQL-filtered)
+    /// Get readings for a specific device within a time range (SQL-filtered)
     pub fn get_readings_for_sensor_since(
         &self,
-        sensor_id: &str,
+        device_id: &str,
         since_timestamp: i64,
     ) -> Result<Vec<TemperatureReading>> {
         debug!(
-            sensor_id = %sensor_id,
+            device_id = %device_id,
             since_timestamp = since_timestamp,
-            "Querying readings for specific sensor since timestamp"
+            "Querying readings for specific device since timestamp"
         );
         let start = std::time::Instant::now();
 
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT sensor_id, temperature, humidity, battery, link_quality, timestamp
+            "SELECT device_id, temperature, humidity, timestamp
              FROM temperature_readings
-             WHERE sensor_id = ?1 AND timestamp > ?2
+             WHERE device_id = ?1 AND timestamp > ?2
              ORDER BY timestamp DESC",
         )?;
 
         let readings = stmt
-            .query_map(params![sensor_id, since_timestamp], |row| {
+            .query_map(params![device_id, since_timestamp], |row| {
                 Ok(TemperatureReading {
-                    sensor_id: row.get(0)?,
+                    device_id: row.get(0)?,
                     temperature: row.get(1)?,
                     humidity: row.get(2)?,
-                    battery: row.get(3)?,
-                    link_quality: row.get(4)?,
-                    timestamp: chrono::DateTime::from_timestamp(row.get(5)?, 0).unwrap_or_default(),
+                    timestamp: chrono::DateTime::from_timestamp(row.get(3)?, 0).unwrap_or_default(),
                 })
             })?
             .collect::<Result<Vec<_>>>()?;
 
         let elapsed = start.elapsed();
         info!(
-            sensor_id = %sensor_id,
+            device_id = %device_id,
             reading_count = readings.len(),
             since_timestamp = since_timestamp,
             duration_ms = elapsed.as_millis(),
-            "Retrieved readings for specific sensor"
+            "Retrieved readings for specific device"
         );
 
         if readings.is_empty() {
             warn!(
-                sensor_id = %sensor_id,
+                device_id = %device_id,
                 since_timestamp = since_timestamp,
-                "No readings found for sensor since timestamp"
+                "No readings found for device since timestamp"
             );
         }
 
