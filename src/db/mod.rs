@@ -1,4 +1,4 @@
-use crate::models::TemperatureReading;
+use crate::models::{Device, DeviceType, PowerSource, TemperatureReading};
 use rusqlite::{params, Connection, Result};
 use std::fs;
 use std::path::Path;
@@ -116,6 +116,39 @@ impl Database {
             Ok(_) => debug!("link_quality column already exists"),
             Err(e) => {
                 error!(error = %e, "Failed to check if link_quality column exists");
+                return Err(e);
+            }
+        }
+
+        // Create devices table
+        debug!("Creating devices table if not exists");
+        match conn.execute(
+            "CREATE TABLE IF NOT EXISTS devices (
+                id TEXT PRIMARY KEY,
+                mqtt_topic TEXT NOT NULL UNIQUE,
+                name TEXT NOT NULL,
+                device_type TEXT NOT NULL,
+                power_source TEXT NOT NULL,
+                added_at INTEGER NOT NULL
+            )",
+            [],
+        ) {
+            Ok(_) => debug!("Devices table created/verified"),
+            Err(e) => {
+                error!(error = %e, "Failed to create devices table");
+                return Err(e);
+            }
+        }
+
+        // Create index on mqtt_topic for fast lookups
+        debug!("Creating index idx_mqtt_topic if not exists");
+        match conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_mqtt_topic ON devices(mqtt_topic)",
+            [],
+        ) {
+            Ok(_) => debug!("Index idx_mqtt_topic created/verified"),
+            Err(e) => {
+                error!(error = %e, "Failed to create index idx_mqtt_topic");
                 return Err(e);
             }
         }
@@ -299,5 +332,292 @@ impl Database {
         }
 
         Ok(readings)
+    }
+
+    /// Insert a new device into the database
+    pub fn insert_device(&self, device: &Device) -> Result<()> {
+        debug!(
+            device_id = %device.id,
+            mqtt_topic = %device.mqtt_topic,
+            name = %device.name,
+            device_type = %device.device_type.to_db_string(),
+            power_source = %device.power_source.to_db_string(),
+            "Inserting device"
+        );
+
+        let start = std::time::Instant::now();
+        let result = self.conn.lock().unwrap().execute(
+            "INSERT INTO devices (id, mqtt_topic, name, device_type, power_source, added_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                device.id,
+                device.mqtt_topic,
+                device.name,
+                device.device_type.to_db_string(),
+                device.power_source.to_db_string(),
+                device.added_at.timestamp()
+            ],
+        );
+
+        match result {
+            Ok(rows) => {
+                let elapsed = start.elapsed();
+                info!(
+                    device_id = %device.id,
+                    rows_affected = rows,
+                    duration_us = elapsed.as_micros(),
+                    "Successfully inserted device"
+                );
+                Ok(())
+            }
+            Err(e) => {
+                error!(
+                    error = %e,
+                    device_id = %device.id,
+                    "Database insert device failed"
+                );
+                Err(e)
+            }
+        }
+    }
+
+    /// Get a device by its ID
+    pub fn get_device_by_id(&self, device_id: &str) -> Result<Option<Device>> {
+        debug!(device_id = %device_id, "Querying device by ID");
+        let start = std::time::Instant::now();
+
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, mqtt_topic, name, device_type, power_source, added_at
+             FROM devices
+             WHERE id = ?1",
+        )?;
+
+        let result = stmt.query_row(params![device_id], |row| {
+            let device_type_str: String = row.get(3)?;
+            let power_source_str: String = row.get(4)?;
+
+            Ok(Device {
+                id: row.get(0)?,
+                mqtt_topic: row.get(1)?,
+                name: row.get(2)?,
+                device_type: DeviceType::from_db_string(&device_type_str).ok_or_else(|| {
+                    rusqlite::Error::InvalidColumnType(
+                        3,
+                        "device_type".to_string(),
+                        rusqlite::types::Type::Text,
+                    )
+                })?,
+                power_source: PowerSource::from_db_string(&power_source_str).ok_or_else(|| {
+                    rusqlite::Error::InvalidColumnType(
+                        4,
+                        "power_source".to_string(),
+                        rusqlite::types::Type::Text,
+                    )
+                })?,
+                added_at: chrono::DateTime::from_timestamp(row.get(5)?, 0).unwrap_or_default(),
+            })
+        });
+
+        let elapsed = start.elapsed();
+        match result {
+            Ok(device) => {
+                debug!(
+                    device_id = %device_id,
+                    duration_us = elapsed.as_micros(),
+                    "Found device"
+                );
+                Ok(Some(device))
+            }
+            Err(rusqlite::Error::QueryReturnedNoRows) => {
+                debug!(device_id = %device_id, "Device not found");
+                Ok(None)
+            }
+            Err(e) => {
+                error!(error = %e, device_id = %device_id, "Failed to query device");
+                Err(e)
+            }
+        }
+    }
+
+    /// Get a device by its MQTT topic
+    pub fn get_device_by_mqtt_topic(&self, mqtt_topic: &str) -> Result<Option<Device>> {
+        debug!(mqtt_topic = %mqtt_topic, "Querying device by MQTT topic");
+        let start = std::time::Instant::now();
+
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, mqtt_topic, name, device_type, power_source, added_at
+             FROM devices
+             WHERE mqtt_topic = ?1",
+        )?;
+
+        let result = stmt.query_row(params![mqtt_topic], |row| {
+            let device_type_str: String = row.get(3)?;
+            let power_source_str: String = row.get(4)?;
+
+            Ok(Device {
+                id: row.get(0)?,
+                mqtt_topic: row.get(1)?,
+                name: row.get(2)?,
+                device_type: DeviceType::from_db_string(&device_type_str).ok_or_else(|| {
+                    rusqlite::Error::InvalidColumnType(
+                        3,
+                        "device_type".to_string(),
+                        rusqlite::types::Type::Text,
+                    )
+                })?,
+                power_source: PowerSource::from_db_string(&power_source_str).ok_or_else(|| {
+                    rusqlite::Error::InvalidColumnType(
+                        4,
+                        "power_source".to_string(),
+                        rusqlite::types::Type::Text,
+                    )
+                })?,
+                added_at: chrono::DateTime::from_timestamp(row.get(5)?, 0).unwrap_or_default(),
+            })
+        });
+
+        let elapsed = start.elapsed();
+        match result {
+            Ok(device) => {
+                debug!(
+                    mqtt_topic = %mqtt_topic,
+                    device_id = %device.id,
+                    duration_us = elapsed.as_micros(),
+                    "Found device"
+                );
+                Ok(Some(device))
+            }
+            Err(rusqlite::Error::QueryReturnedNoRows) => {
+                debug!(mqtt_topic = %mqtt_topic, "Device not found");
+                Ok(None)
+            }
+            Err(e) => {
+                error!(error = %e, mqtt_topic = %mqtt_topic, "Failed to query device");
+                Err(e)
+            }
+        }
+    }
+
+    /// Get all devices
+    pub fn get_all_devices(&self) -> Result<Vec<Device>> {
+        debug!("Querying all devices");
+        let start = std::time::Instant::now();
+
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, mqtt_topic, name, device_type, power_source, added_at
+             FROM devices
+             ORDER BY name",
+        )?;
+
+        let devices = stmt
+            .query_map([], |row| {
+                let device_type_str: String = row.get(3)?;
+                let power_source_str: String = row.get(4)?;
+
+                Ok(Device {
+                    id: row.get(0)?,
+                    mqtt_topic: row.get(1)?,
+                    name: row.get(2)?,
+                    device_type: DeviceType::from_db_string(&device_type_str).ok_or_else(|| {
+                        rusqlite::Error::InvalidColumnType(
+                            3,
+                            "device_type".to_string(),
+                            rusqlite::types::Type::Text,
+                        )
+                    })?,
+                    power_source: PowerSource::from_db_string(&power_source_str).ok_or_else(
+                        || {
+                            rusqlite::Error::InvalidColumnType(
+                                4,
+                                "power_source".to_string(),
+                                rusqlite::types::Type::Text,
+                            )
+                        },
+                    )?,
+                    added_at: chrono::DateTime::from_timestamp(row.get(5)?, 0).unwrap_or_default(),
+                })
+            })?
+            .collect::<Result<Vec<_>>>()?;
+
+        let elapsed = start.elapsed();
+        info!(
+            device_count = devices.len(),
+            duration_ms = elapsed.as_millis(),
+            "Retrieved all devices"
+        );
+
+        Ok(devices)
+    }
+
+    /// Update device name
+    pub fn update_device_name(&self, device_id: &str, new_name: &str) -> Result<()> {
+        debug!(
+            device_id = %device_id,
+            new_name = %new_name,
+            "Updating device name"
+        );
+
+        let start = std::time::Instant::now();
+        let result = self.conn.lock().unwrap().execute(
+            "UPDATE devices SET name = ?1 WHERE id = ?2",
+            params![new_name, device_id],
+        );
+
+        match result {
+            Ok(rows) => {
+                let elapsed = start.elapsed();
+                info!(
+                    device_id = %device_id,
+                    rows_affected = rows,
+                    duration_us = elapsed.as_micros(),
+                    "Successfully updated device name"
+                );
+                Ok(())
+            }
+            Err(e) => {
+                error!(
+                    error = %e,
+                    device_id = %device_id,
+                    "Failed to update device name"
+                );
+                Err(e)
+            }
+        }
+    }
+
+    /// Delete a device
+    pub fn delete_device(&self, device_id: &str) -> Result<()> {
+        debug!(device_id = %device_id, "Deleting device");
+
+        let start = std::time::Instant::now();
+        let result = self
+            .conn
+            .lock()
+            .unwrap()
+            .execute("DELETE FROM devices WHERE id = ?1", params![device_id]);
+
+        match result {
+            Ok(rows) => {
+                let elapsed = start.elapsed();
+                info!(
+                    device_id = %device_id,
+                    rows_affected = rows,
+                    duration_us = elapsed.as_micros(),
+                    "Successfully deleted device"
+                );
+                Ok(())
+            }
+            Err(e) => {
+                error!(
+                    error = %e,
+                    device_id = %device_id,
+                    "Failed to delete device"
+                );
+                Err(e)
+            }
+        }
     }
 }

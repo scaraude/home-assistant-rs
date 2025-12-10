@@ -1,5 +1,6 @@
 mod cache;
 mod db;
+mod device_state;
 mod http;
 mod logs;
 mod models;
@@ -8,6 +9,7 @@ mod switch_state;
 
 use cache::ResponseCache;
 use db::Database;
+use device_state::DeviceStateStore;
 use http::HttpServer;
 use mqtt::MqttListener;
 use std::sync::Arc;
