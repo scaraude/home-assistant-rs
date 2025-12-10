@@ -27,12 +27,35 @@
 
   export let processName: string;
   export let pid: string;
+  export let timeRange: '1h' | '6h' | '24h' | 'all' = '24h';
 
   let canvas: HTMLCanvasElement;
   let chart: Chart | null = null;
+  let allEntries: ProcessMonitorEntry[] = [];
   let filteredEntries: ProcessMonitorEntry[] = [];
   let loading = true;
   let error: string | null = null;
+
+  // Map time ranges to hours
+  const timeRangeToHours: Record<typeof timeRange, number> = {
+    '1h': 1,
+    '6h': 6,
+    '24h': 24,
+    'all': Infinity,
+  };
+
+  // Filter entries based on time range
+  function filterEntriesByTimeRange(entries: ProcessMonitorEntry[]): ProcessMonitorEntry[] {
+    if (timeRange === 'all') return entries;
+
+    const hoursToShow = timeRangeToHours[timeRange];
+    const cutoffTime = Date.now() - (hoursToShow * 60 * 60 * 1000);
+
+    return entries.filter(e => new Date(e.timestamp).getTime() >= cutoffTime);
+  }
+
+  // Reactive statement to filter entries when timeRange changes
+  $: filteredEntries = filterEntriesByTimeRange(allEntries);
 
   // Load process history from backend on mount
   async function loadProcessHistory() {
@@ -40,7 +63,7 @@
     error = null;
     try {
       const entries = await fetchProcessHistory(processName, pid, 10000);
-      filteredEntries = entries.sort(
+      allEntries = entries.sort(
         (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
       );
       loading = false;
@@ -55,6 +78,24 @@
       error = 'Failed to load process history';
       loading = false;
     }
+  }
+
+  function updateChartData() {
+    if (!chart || filteredEntries.length === 0) return;
+
+    const timestamps = filteredEntries.map((e) => new Date(e.timestamp).getTime());
+    const cpuData = filteredEntries.map((e) => e.cpu);
+    const ramData = filteredEntries.map((e) => e.ram);
+
+    chart.data.labels = timestamps;
+    chart.data.datasets[0].data = cpuData;
+    chart.data.datasets[1].data = ramData;
+    chart.update('none'); // Update without animation for instant response
+  }
+
+  // Reactive statement to update chart when filtered data changes
+  $: if (chart && filteredEntries.length > 0) {
+    updateChartData();
   }
 
   function createChart() {

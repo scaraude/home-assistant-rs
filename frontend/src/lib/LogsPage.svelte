@@ -139,13 +139,9 @@
 
   function setTimeRange(range: TimeRange) {
     selectedTimeRange = range;
-    // Clear cache and reload when time range changes
-    cache.clearLog('system_monitor.log');
-    cache.clearLog('process_monitor.log');
-    cache.clearLog('top_cpu_consumers.log');
-    cache.clearLog('top_ram_consumers.log');
-    isFirstLoad = true;
-    loadAllData();
+    // Note: We don't clear cache or reload data anymore.
+    // Process graphs will filter client-side, and other views
+    // already show all data with time-based filtering in the graphs.
   }
 
   onMount(() => {
@@ -249,7 +245,7 @@
       {#if activeTab === 'system'}
         <SystemMetricsView entries={systemEntries} />
       {:else if activeTab === 'processes'}
-        <ProcessTableView entries={processEntries} />
+        <ProcessTableView entries={processEntries} timeRange={selectedTimeRange} />
       {:else if activeTab === 'top-cpu'}
         <TopConsumersView entries={topCpuEntries} type="cpu" />
       {:else if activeTab === 'top-ram'}

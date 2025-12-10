@@ -3,6 +3,7 @@
   import ProcessHistoryGraph from './ProcessHistoryGraph.svelte';
 
   export let entries: ProcessMonitorEntry[] = [];
+  export let timeRange: '1h' | '6h' | '24h' | 'all' = '24h';
 
   let expandedProcess: string | null = null;
 
@@ -86,6 +87,7 @@
                   <ProcessHistoryGraph
                     processName={entry.process}
                     pid={entry.pid}
+                    timeRange={timeRange}
                   />
                 </td>
               </tr>
