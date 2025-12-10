@@ -331,13 +331,13 @@ logs: check-ssh ## Tail all service logs
 		sudo journalctl -f -u mosquitto.service -u zigbee2mqtt.service -u home-assistant-rs.service -u system-monitor.service"
 
 logs-home-assistant: check-ssh ## Tail Home Assistant RS logs only
-	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "sudo journalctl -f -u home-assistant-rs.service"
+	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "sudo tail -f -n 20 /var/log/home-assistant-rs/home-assistant-rs.log"
 
 logs-mosquitto: check-ssh ## Tail Mosquitto logs only
 	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "sudo journalctl -f -u mosquitto.service"
 
 logs-zigbee2mqtt: check-ssh ## Tail Zigbee2MQTT logs only
-	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "sudo journalctl -f -u zigbee2mqtt.service"
+	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "sudo tail -f -n 20 /var/log/home-assistant-rs/zigbee2mqtt.log"
 
 logs-monitor: check-ssh ## Tail System Monitor logs only
 	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "sudo journalctl -f -u system-monitor.service"
