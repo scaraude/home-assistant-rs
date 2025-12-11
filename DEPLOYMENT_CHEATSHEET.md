@@ -33,7 +33,7 @@ make status
 
 ```bash
 # Rebuild and deploy
-make build transfer-binary restart
+make quick-deploy
 
 # Update configs only
 make generate-configs transfer-configs restart
@@ -134,11 +134,13 @@ sudo reboot
 ## Configuration Files
 
 Generated configs are in `configs/`:
+
 - `mosquitto.conf` - Mosquitto MQTT broker config
 - `zigbee2mqtt-config.yaml` - Zigbee2MQTT config
 - `pi.env` - Application environment variables
 
 Systemd services are in `systemd/`:
+
 - `home-assistant-rs.service`
 - `mosquitto.service`
 - `zigbee2mqtt.service`

@@ -39,6 +39,7 @@ services/*/log/
 .env
 
 # Claude context
+.claude
 CLAUDE.md
 
 system_monitor_back*
