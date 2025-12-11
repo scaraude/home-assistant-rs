@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import SwitchCard from '../lib/SwitchCard.svelte';
-  import { fetchSwitches, type SwitchDevice } from '../lib/api';
+  import { fetchSwitches, fetchAutomationRules, type SwitchDevice } from '../lib/api';
+  import { automationStore } from '../lib/stores/automations';
 
   let switches: SwitchDevice[] = [];
   let loading = true;
@@ -20,9 +21,20 @@
     }
   }
 
+  async function loadAutomationRules() {
+    try {
+      const rules = await fetchAutomationRules();
+      automationStore.setRules(rules);
+    } catch (err) {
+      // Silent fail on automation rules - not critical
+      console.warn('Failed to load automation rules:', err);
+    }
+  }
+
   function startPolling() {
     // Initial load
     loadSwitches();
+    loadAutomationRules();
 
     // Poll every 15 seconds to get updated state
     intervalId = window.setInterval(() => {
@@ -35,6 +47,16 @@
         .catch(err => {
           console.error('Failed to poll switches:', err);
           // Don't update error state on polling failures to avoid UI flicker
+        });
+
+      // Also poll automation rules
+      fetchAutomationRules()
+        .then(rules => {
+          automationStore.setRules(rules);
+        })
+        .catch(err => {
+          console.warn('Failed to poll automation rules:', err);
+          // Silent fail - not critical
         });
     }, 15000);
   }
