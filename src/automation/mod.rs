@@ -284,12 +284,8 @@ impl AutomationEngine {
             }
         };
 
-        // Publish MQTT command
-        let payload = if desired_state {
-            r#"{"state":"ON"}"#
-        } else {
-            r#"{"state":"OFF"}"#
-        };
+        let state_str = if desired_state { "ON" } else { "OFF" };
+        let payload = format!(r#"{{"state":"{}"}}"#, state_str);
 
         info!(
             device_id = %action.device_id,
@@ -300,10 +296,10 @@ impl AutomationEngine {
 
         self.mqtt_client
             .publish(
-                &format!("{}/set", mqtt_topic),
+                &format!("zigbee2mqtt/{}/set", mqtt_topic),
                 rumqttc::QoS::AtLeastOnce,
                 false,
-                payload.as_bytes(),
+                payload,
             )
             .await
             .map_err(|e| format!("MQTT publish error: {}", e))?;
