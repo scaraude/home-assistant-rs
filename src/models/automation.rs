@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 /// Comparison operator for condition evaluation
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum ComparisonOperator {
     /// Equal to
     Equal,
@@ -58,7 +58,7 @@ impl ComparisonOperator {
 
 /// Type of sensor field to monitor in a condition
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum SensorField {
     Temperature,
     Humidity,

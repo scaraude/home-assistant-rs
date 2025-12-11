@@ -523,6 +523,14 @@
     max-height: 90vh;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
+  }
+
+  .modal-container form {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
   }
 
   .modal-header {
@@ -567,8 +575,29 @@
 
   .modal-body {
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 1.5rem;
     flex: 1;
+    min-height: 0;
+  }
+
+  /* Custom scrollbar for modal body */
+  .modal-body::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .modal-body::-webkit-scrollbar-track {
+    background: #f3f4f6;
+    border-radius: 4px;
+  }
+
+  .modal-body::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+  }
+
+  .modal-body::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
   }
 
   .form-section {
@@ -837,6 +866,8 @@
     gap: 0.75rem;
     padding: 1.25rem 1.5rem;
     border-top: 2px solid #e5e7eb;
+    flex-shrink: 0;
+    background: white;
   }
 
   .cancel-btn,
