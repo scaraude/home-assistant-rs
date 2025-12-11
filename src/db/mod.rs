@@ -421,6 +421,36 @@ impl Database {
         Ok(readings)
     }
 
+    /// Get the latest reading for a specific device (optimized for automation conditions)
+    pub fn get_latest_reading_for_sensor(
+        &self,
+        device_id: &str,
+    ) -> Result<Option<TemperatureReading>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT device_id, temperature, humidity, battery, link_quality, timestamp
+             FROM temperature_readings
+             WHERE device_id = ?1
+             ORDER BY timestamp DESC
+             LIMIT 1",
+        )?;
+
+        let mut readings = stmt
+            .query_map(params![device_id], |row| {
+                Ok(TemperatureReading {
+                    device_id: row.get(0)?,
+                    temperature: row.get(1)?,
+                    humidity: row.get(2)?,
+                    battery: row.get(3)?,
+                    link_quality: row.get(4)?,
+                    timestamp: chrono::DateTime::from_timestamp(row.get(5)?, 0).unwrap_or_default(),
+                })
+            })?
+            .collect::<Result<Vec<_>>>()?;
+
+        Ok(readings.pop())
+    }
+
     /// Insert a new device into the database
     pub fn insert_device(&self, device: &Device) -> Result<()> {
         debug!(

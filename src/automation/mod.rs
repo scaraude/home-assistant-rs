@@ -166,28 +166,21 @@ impl AutomationEngine {
 
     /// Evaluate a single condition
     async fn evaluate_condition(&self, condition: &crate::models::AutomationCondition) -> bool {
-        // Get the latest reading for the device
-        let readings = match self
-            .db
-            .get_readings_for_sensor_since(&condition.device_id, 0)
-        {
-            Ok(readings) => readings,
+        // Get the latest reading for the device (optimized: fetches only 1 reading)
+        let latest_reading = match self.db.get_latest_reading_for_sensor(&condition.device_id) {
+            Ok(Some(reading)) => reading,
+            Ok(None) => {
+                debug!(
+                    device_id = %condition.device_id,
+                    "No readings found for device"
+                );
+                return false;
+            }
             Err(e) => {
                 error!(
                     error = %e,
                     device_id = %condition.device_id,
-                    "Failed to fetch readings for condition evaluation"
-                );
-                return false;
-            }
-        };
-
-        let latest_reading = match readings.first() {
-            Some(r) => r,
-            None => {
-                debug!(
-                    device_id = %condition.device_id,
-                    "No readings found for device"
+                    "Failed to fetch latest reading for condition evaluation"
                 );
                 return false;
             }
