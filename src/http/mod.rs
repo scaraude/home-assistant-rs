@@ -2,7 +2,10 @@ use crate::cache::ResponseCache;
 use crate::db::Database;
 use crate::device_state::DeviceStateStore;
 use crate::logs;
-use crate::models::SwitchCommand;
+use crate::models::{
+    AutomationAction, AutomationCondition, AutomationRule, CreateAutomationRuleRequest,
+    SwitchCommand, UpdateAutomationRuleRequest,
+};
 use crate::mqtt::MqttListener;
 use crate::switch_state::SwitchStateStore;
 use http_body_util::{BodyExt, Full};
@@ -206,6 +209,33 @@ async fn handle_request(
         ("PATCH", path) if path.starts_with("/api/devices/") => {
             debug!(path = %path, "Updating device");
             update_device(req, &db, path).await
+        }
+        ("GET", "/api/automation/rules") => {
+            debug!("Serving automation rules list");
+            serve_automation_rules(&db)
+        }
+        ("GET", path) if path.starts_with("/api/automation/rules/") => {
+            debug!(path = %path, "Serving automation rule by ID");
+            let rule_id = &path["/api/automation/rules/".len()..];
+            serve_automation_rule(&db, rule_id)
+        }
+        ("POST", "/api/automation/rules") => {
+            debug!("Creating automation rule");
+            create_automation_rule(req, &db).await
+        }
+        ("PUT", path) if path.starts_with("/api/automation/rules/") => {
+            debug!(path = %path, "Updating automation rule");
+            let rule_id = &path["/api/automation/rules/".len()..];
+            update_automation_rule(req, &db, rule_id).await
+        }
+        ("DELETE", path) if path.starts_with("/api/automation/rules/") => {
+            debug!(path = %path, "Deleting automation rule");
+            let rule_id = &path["/api/automation/rules/".len()..];
+            delete_automation_rule(&db, rule_id)
+        }
+        ("GET", "/api/automation/logs") => {
+            debug!("Serving automation execution logs");
+            serve_execution_logs(&db, query.as_deref())
         }
         ("GET", "/api/logs/list") => {
             debug!("Serving logs list");
@@ -1041,4 +1071,367 @@ fn not_found() -> Response<Full<Bytes>> {
         .status(StatusCode::NOT_FOUND)
         .body(Full::new(Bytes::from("Not Found")))
         .unwrap()
+}
+fn serve_automation_rules(db: &Database) -> Response<Full<Bytes>> {
+    match db.get_all_automation_rules() {
+        Ok(rules) => {
+            let json = serde_json::to_string(&rules).unwrap_or_else(|e| {
+                error!(error = %e, "Failed to serialize automation rules");
+                "[]".to_string()
+            });
+
+            info!(rule_count = rules.len(), "Served automation rules list");
+
+            Response::builder()
+                .status(StatusCode::OK)
+                .header("Content-Type", "application/json")
+                .body(Full::new(Bytes::from(json)))
+                .unwrap()
+        }
+        Err(e) => {
+            error!(error = %e, "Failed to get automation rules");
+            Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Full::new(Bytes::from(format!(r#"{{"error":"{}"}}"#, e))))
+                .unwrap()
+        }
+    }
+}
+
+/// GET /api/automation/rules/:id - Get a single automation rule
+fn serve_automation_rule(db: &Database, rule_id: &str) -> Response<Full<Bytes>> {
+    match db.get_automation_rule(rule_id) {
+        Ok(Some(rule)) => {
+            let json = serde_json::to_string(&rule).unwrap_or_else(|e| {
+                error!(error = %e, "Failed to serialize automation rule");
+                "{}".to_string()
+            });
+
+            info!(rule_id = %rule_id, "Served automation rule");
+
+            Response::builder()
+                .status(StatusCode::OK)
+                .header("Content-Type", "application/json")
+                .body(Full::new(Bytes::from(json)))
+                .unwrap()
+        }
+        Ok(None) => {
+            warn!(rule_id = %rule_id, "Automation rule not found");
+            Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .body(Full::new(Bytes::from(r#"{"error":"Rule not found"}"#)))
+                .unwrap()
+        }
+        Err(e) => {
+            error!(error = %e, rule_id = %rule_id, "Failed to get automation rule");
+            Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Full::new(Bytes::from(format!(r#"{{"error":"{}"}}"#, e))))
+                .unwrap()
+        }
+    }
+}
+
+/// POST /api/automation/rules - Create a new automation rule
+async fn create_automation_rule(
+    req: Request<hyper::body::Incoming>,
+    db: &Database,
+) -> Response<Full<Bytes>> {
+    // Read the request body
+    let body_bytes = match req.collect().await {
+        Ok(collected) => collected.to_bytes(),
+        Err(e) => {
+            error!(error = %e, "Failed to read request body");
+            return Response::builder()
+                .status(StatusCode::BAD_REQUEST)
+                .body(Full::new(Bytes::from(r#"{"error":"Failed to read body"}"#)))
+                .unwrap();
+        }
+    };
+
+    // Parse the request
+    let request: CreateAutomationRuleRequest = match serde_json::from_slice(&body_bytes) {
+        Ok(req) => req,
+        Err(e) => {
+            error!(error = %e, "Failed to parse automation rule request");
+            return Response::builder()
+                .status(StatusCode::BAD_REQUEST)
+                .body(Full::new(Bytes::from(format!(
+                    r#"{{"error":"Invalid JSON: {}"}}"#,
+                    e
+                ))))
+                .unwrap();
+        }
+    };
+
+    // Validate request
+    if request.name.trim().is_empty() {
+        return Response::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .body(Full::new(Bytes::from(
+                r#"{"error":"Rule name cannot be empty"}"#,
+            )))
+            .unwrap();
+    }
+
+    if request.conditions.is_empty() {
+        return Response::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .body(Full::new(Bytes::from(
+                r#"{"error":"At least one condition is required"}"#,
+            )))
+            .unwrap();
+    }
+
+    if request.actions.is_empty() {
+        return Response::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .body(Full::new(Bytes::from(
+                r#"{"error":"At least one action is required"}"#,
+            )))
+            .unwrap();
+    }
+
+    // Build the automation rule
+    let conditions: Vec<AutomationCondition> = request
+        .conditions
+        .into_iter()
+        .map(|c| AutomationCondition::new(c.device_id, c.field, c.operator, c.value))
+        .collect();
+
+    let actions: Vec<AutomationAction> = request
+        .actions
+        .into_iter()
+        .map(|a| AutomationAction::new(a.device_id, a.action))
+        .collect();
+
+    let mut rule = AutomationRule::new(
+        request.name,
+        request.description,
+        request.condition_operator,
+        conditions,
+        actions,
+    );
+
+    if let Some(enabled) = request.enabled {
+        rule.enabled = enabled;
+    }
+
+    // Insert into database
+    match db.insert_automation_rule(&rule) {
+        Ok(_) => {
+            info!(rule_id = %rule.id, rule_name = %rule.name, "Created automation rule");
+
+            let json = serde_json::to_string(&rule).unwrap_or_else(|e| {
+                error!(error = %e, "Failed to serialize created rule");
+                "{}".to_string()
+            });
+
+            Response::builder()
+                .status(StatusCode::CREATED)
+                .header("Content-Type", "application/json")
+                .body(Full::new(Bytes::from(json)))
+                .unwrap()
+        }
+        Err(e) => {
+            error!(error = %e, "Failed to insert automation rule");
+            Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Full::new(Bytes::from(format!(r#"{{"error":"{}"}}"#, e))))
+                .unwrap()
+        }
+    }
+}
+
+/// PUT /api/automation/rules/:id - Update an automation rule
+async fn update_automation_rule(
+    req: Request<hyper::body::Incoming>,
+    db: &Database,
+    rule_id: &str,
+) -> Response<Full<Bytes>> {
+    // Get existing rule
+    let mut rule = match db.get_automation_rule(rule_id) {
+        Ok(Some(r)) => r,
+        Ok(None) => {
+            warn!(rule_id = %rule_id, "Automation rule not found for update");
+            return Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .body(Full::new(Bytes::from(r#"{"error":"Rule not found"}"#)))
+                .unwrap();
+        }
+        Err(e) => {
+            error!(error = %e, rule_id = %rule_id, "Failed to fetch rule for update");
+            return Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Full::new(Bytes::from(format!(r#"{{"error":"{}"}}"#, e))))
+                .unwrap();
+        }
+    };
+
+    // Read the request body
+    let body_bytes = match req.collect().await {
+        Ok(collected) => collected.to_bytes(),
+        Err(e) => {
+            error!(error = %e, "Failed to read request body");
+            return Response::builder()
+                .status(StatusCode::BAD_REQUEST)
+                .body(Full::new(Bytes::from(r#"{"error":"Failed to read body"}"#)))
+                .unwrap();
+        }
+    };
+
+    // Parse the update request
+    let update: UpdateAutomationRuleRequest = match serde_json::from_slice(&body_bytes) {
+        Ok(req) => req,
+        Err(e) => {
+            error!(error = %e, "Failed to parse automation rule update");
+            return Response::builder()
+                .status(StatusCode::BAD_REQUEST)
+                .body(Full::new(Bytes::from(format!(
+                    r#"{{"error":"Invalid JSON: {}"}}"#,
+                    e
+                ))))
+                .unwrap();
+        }
+    };
+
+    // Apply updates
+    if let Some(name) = update.name {
+        if name.trim().is_empty() {
+            return Response::builder()
+                .status(StatusCode::BAD_REQUEST)
+                .body(Full::new(Bytes::from(
+                    r#"{"error":"Rule name cannot be empty"}"#,
+                )))
+                .unwrap();
+        }
+        rule.name = name;
+    }
+
+    if let Some(description) = update.description {
+        rule.description = Some(description);
+    }
+
+    if let Some(enabled) = update.enabled {
+        rule.enabled = enabled;
+    }
+
+    if let Some(condition_operator) = update.condition_operator {
+        rule.condition_operator = condition_operator;
+    }
+
+    if let Some(conditions) = update.conditions {
+        if conditions.is_empty() {
+            return Response::builder()
+                .status(StatusCode::BAD_REQUEST)
+                .body(Full::new(Bytes::from(
+                    r#"{"error":"At least one condition is required"}"#,
+                )))
+                .unwrap();
+        }
+        rule.conditions = conditions
+            .into_iter()
+            .map(|c| AutomationCondition::new(c.device_id, c.field, c.operator, c.value))
+            .collect();
+    }
+
+    if let Some(actions) = update.actions {
+        if actions.is_empty() {
+            return Response::builder()
+                .status(StatusCode::BAD_REQUEST)
+                .body(Full::new(Bytes::from(
+                    r#"{"error":"At least one action is required"}"#,
+                )))
+                .unwrap();
+        }
+        rule.actions = actions
+            .into_iter()
+            .map(|a| AutomationAction::new(a.device_id, a.action))
+            .collect();
+    }
+
+    // Update timestamp
+    rule.updated_at = chrono::Utc::now();
+
+    // Save to database
+    match db.update_automation_rule(&rule) {
+        Ok(_) => {
+            info!(rule_id = %rule.id, rule_name = %rule.name, "Updated automation rule");
+
+            let json = serde_json::to_string(&rule).unwrap_or_else(|e| {
+                error!(error = %e, "Failed to serialize updated rule");
+                "{}".to_string()
+            });
+
+            Response::builder()
+                .status(StatusCode::OK)
+                .header("Content-Type", "application/json")
+                .body(Full::new(Bytes::from(json)))
+                .unwrap()
+        }
+        Err(e) => {
+            error!(error = %e, rule_id = %rule_id, "Failed to update automation rule");
+            Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Full::new(Bytes::from(format!(r#"{{"error":"{}"}}"#, e))))
+                .unwrap()
+        }
+    }
+}
+
+/// DELETE /api/automation/rules/:id - Delete an automation rule
+fn delete_automation_rule(db: &Database, rule_id: &str) -> Response<Full<Bytes>> {
+    match db.delete_automation_rule(rule_id) {
+        Ok(_) => {
+            info!(rule_id = %rule_id, "Deleted automation rule");
+            Response::builder()
+                .status(StatusCode::NO_CONTENT)
+                .body(Full::new(Bytes::new()))
+                .unwrap()
+        }
+        Err(e) => {
+            error!(error = %e, rule_id = %rule_id, "Failed to delete automation rule");
+            Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Full::new(Bytes::from(format!(r#"{{"error":"{}"}}"#, e))))
+                .unwrap()
+        }
+    }
+}
+
+/// GET /api/automation/logs - Get automation execution logs
+fn serve_execution_logs(db: &Database, query: Option<&str>) -> Response<Full<Bytes>> {
+    // Parse limit from query string (default: 100)
+    let limit = query
+        .and_then(|q| {
+            q.split('&')
+                .find(|p| p.starts_with("limit="))
+                .and_then(|p| p.strip_prefix("limit="))
+                .and_then(|v| v.parse::<i64>().ok())
+        })
+        .unwrap_or(100);
+
+    match db.get_execution_logs(limit) {
+        Ok(logs) => {
+            let json = serde_json::to_string(&logs).unwrap_or_else(|e| {
+                error!(error = %e, "Failed to serialize execution logs");
+                "[]".to_string()
+            });
+
+            info!(log_count = logs.len(), limit = %limit, "Served automation execution logs");
+
+            Response::builder()
+                .status(StatusCode::OK)
+                .header("Content-Type", "application/json")
+                .body(Full::new(Bytes::from(json)))
+                .unwrap()
+        }
+        Err(e) => {
+            error!(error = %e, "Failed to get execution logs");
+            Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(Full::new(Bytes::from(format!(r#"{{"error":"{}"}}"#, e))))
+                .unwrap()
+        }
+    }
 }

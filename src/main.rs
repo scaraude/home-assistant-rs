@@ -1,3 +1,4 @@
+mod automation;
 mod cache;
 mod db;
 mod device_state;
@@ -7,6 +8,7 @@ mod models;
 mod mqtt;
 mod switch_state;
 
+use automation::AutomationEngine;
 use cache::ResponseCache;
 use db::Database;
 use device_state::DeviceStateStore;
@@ -78,8 +80,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     mqtt_listener.subscribe().await?;
     info!("Successfully subscribed to zigbee2mqtt topics");
 
-    // Spawn database writer task
+    // Initialize automation engine
+    let automation_engine = Arc::new(AutomationEngine::new(
+        db.clone(),
+        mqtt_listener.get_client(),
+        device_state.clone(),
+        (*switch_state).clone(),
+    ));
+    info!("Automation engine initialized");
+
+    // Spawn database writer task with automation engine
     let db_clone = db.clone();
+    let automation_clone = automation_engine.clone();
     tokio::spawn(async move {
         info!("Database writer task started");
         let mut reading_count = 0u64;
@@ -109,6 +121,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "Successfully inserted reading"
                 );
             }
+
+            // Evaluate automation rules after inserting reading
+            automation_clone.evaluate_reading(&reading).await;
         }
 
         warn!("Database writer task channel closed - no more readings will be processed");
