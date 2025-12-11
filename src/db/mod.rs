@@ -3,7 +3,7 @@ use crate::models::{
     ComparisonOperator, Device, DeviceInfo, DeviceType, LogicalOperator, PowerSource, SensorField,
     SwitchAction, TemperatureReading,
 };
-use rusqlite::{params, Connection, Result};
+use rusqlite::{Connection, Result, params};
 use std::fs;
 use std::path::Path;
 use std::sync::Mutex;

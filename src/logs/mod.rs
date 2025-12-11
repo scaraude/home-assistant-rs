@@ -240,7 +240,10 @@ pub fn read_process_history(
 
     eprintln!(
         "[DEBUG] read_process_history: total_lines_read={}, parsed_entries={}, filtering for process='{}' pid='{}'",
-        count, all_entries.len(), process_name, pid
+        count,
+        all_entries.len(),
+        process_name,
+        pid
     );
 
     let filtered_entries: Vec<LogEntry> = all_entries
