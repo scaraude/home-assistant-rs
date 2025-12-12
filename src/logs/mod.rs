@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
+use tracing::debug;
 
 /// Allowed log files (whitelist for security)
 const ALLOWED_LOG_FILES: &[&str] = &[
@@ -238,12 +239,12 @@ pub fn read_process_history(
     // Parse and filter for specific process/PID
     let all_entries = parse_process_monitor_log(&lines)?;
 
-    eprintln!(
-        "[DEBUG] read_process_history: total_lines_read={}, parsed_entries={}, filtering for process='{}' pid='{}'",
-        count,
-        all_entries.len(),
-        process_name,
-        pid
+    debug!(
+        total_lines_read = count,
+        parsed_entries = all_entries.len(),
+        process = %process_name,
+        pid = %pid,
+        "read_process_history: filtering entries"
     );
 
     let filtered_entries: Vec<LogEntry> = all_entries
@@ -259,9 +260,9 @@ pub fn read_process_history(
         })
         .collect();
 
-    eprintln!(
-        "[DEBUG] read_process_history: filtered_entries={} (filter by process name only)",
-        filtered_entries.len()
+    debug!(
+        filtered_entries = filtered_entries.len(),
+        "read_process_history: completed filtering (by process name only)"
     );
 
     Ok(filtered_entries)

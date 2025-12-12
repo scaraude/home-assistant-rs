@@ -2,11 +2,30 @@ use hyper::body::Bytes;
 use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, SystemTime};
+use tracing::error;
 
 /// Maximum number of entries in cache (prevents memory leak on Pi Zero)
 const MAX_CACHE_ENTRIES: usize = 100;
+
+/// Extension trait for Mutex to handle poisoned mutexes gracefully.
+/// Same pattern as in db/mod.rs for consistency.
+trait MutexExt<T> {
+    fn lock_or_recover(&self) -> MutexGuard<'_, T>;
+}
+
+impl<T> MutexExt<T> for Mutex<T> {
+    fn lock_or_recover(&self) -> MutexGuard<'_, T> {
+        match self.lock() {
+            Ok(guard) => guard,
+            Err(poison_error) => {
+                error!("Cache mutex was poisoned (recovered from panic)");
+                poison_error.into_inner()
+            }
+        }
+    }
+}
 
 /// Cache key based on request path and query string
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -51,7 +70,7 @@ impl ResponseCache {
     /// Get cached response if valid
     pub fn get(&self, path: &str, query: Option<&str>) -> Option<CachedResponse> {
         let key = CacheKey::new(path, query);
-        let mut cache = self.cache.lock().unwrap();
+        let mut cache = self.cache.lock_or_recover();
 
         if let Some(entry) = cache.get_mut(&key) {
             // Check if entry is still valid (not expired)
@@ -78,7 +97,7 @@ impl ResponseCache {
             last_accessed: now,
         };
 
-        let mut cache = self.cache.lock().unwrap();
+        let mut cache = self.cache.lock_or_recover();
         cache.insert(key, entry);
 
         // LRU eviction: if cache exceeds limit, remove least recently accessed entry
@@ -105,13 +124,13 @@ impl ResponseCache {
     /// Clear all cached entries (useful for testing)
     #[allow(dead_code)]
     pub fn clear(&self) {
-        let mut cache = self.cache.lock().unwrap();
+        let mut cache = self.cache.lock_or_recover();
         cache.clear();
     }
 
     /// Remove expired entries from cache (prevents memory accumulation)
     pub fn cleanup_expired(&self) -> usize {
-        let mut cache = self.cache.lock().unwrap();
+        let mut cache = self.cache.lock_or_recover();
         let initial_size = cache.len();
 
         cache.retain(|_, entry| entry.timestamp.elapsed().unwrap_or(self.ttl) < self.ttl);
@@ -123,7 +142,7 @@ impl ResponseCache {
     /// Get cache statistics (useful for monitoring)
     #[allow(dead_code)]
     pub fn stats(&self) -> (usize, usize) {
-        let cache = self.cache.lock().unwrap();
+        let cache = self.cache.lock_or_recover();
         let total_entries = cache.len();
         let valid_entries = cache
             .values()

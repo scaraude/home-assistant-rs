@@ -8,7 +8,7 @@ use chrono::{DateTime, Utc};
 use rusqlite::{Connection, Result, params};
 use std::fs;
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 use tracing::{debug, error, info, warn};
 
 /// Convert a Unix timestamp to a DateTime, with logging for invalid timestamps.
@@ -51,6 +51,82 @@ fn invalid_column_error(column_index: usize, column_name: &str) -> rusqlite::Err
         column_name.to_string(),
         rusqlite::types::Type::Text,
     )
+}
+
+/// Extension trait for Mutex to handle poisoned mutexes gracefully.
+///
+/// Instead of panicking on poisoned mutex (which happens when a thread panics while holding
+/// the lock), this trait provides a method that recovers the data and logs an error.
+/// This is acceptable for our use case because:
+/// 1. The mutex protects SQLite connection which has its own consistency guarantees
+/// 2. Partial writes are prevented by transactions
+/// 3. Better to continue serving requests than to panic the entire service
+trait MutexExt<T> {
+    /// Lock the mutex, recovering from poison if necessary
+    fn lock_or_recover(&self) -> MutexGuard<'_, T>;
+}
+
+impl<T> MutexExt<T> for Mutex<T> {
+    fn lock_or_recover(&self) -> MutexGuard<'_, T> {
+        match self.lock() {
+            Ok(guard) => guard,
+            Err(poison_error) => {
+                error!("Mutex was poisoned (recovered from panic) - recovering data anyway");
+                poison_error.into_inner()
+            }
+        }
+    }
+}
+
+/// RAII transaction guard that automatically rolls back on drop unless explicitly committed.
+///
+/// This prevents partial writes when errors occur and ensures database consistency.
+/// The transaction is rolled back automatically when the guard is dropped, unless
+/// commit() is called first.
+///
+/// # Example
+/// ```
+/// let tx = Transaction::begin(&conn)?;
+/// // ... perform operations ...
+/// tx.commit()?; // Explicit commit
+/// // If commit() is not called, transaction is automatically rolled back on drop
+/// ```
+struct Transaction<'a> {
+    conn: &'a Connection,
+    committed: bool,
+}
+
+impl<'a> Transaction<'a> {
+    /// Begin a new transaction
+    fn begin(conn: &'a Connection) -> Result<Self> {
+        conn.execute("BEGIN TRANSACTION", [])?;
+        debug!("Transaction started");
+        Ok(Transaction {
+            conn,
+            committed: false,
+        })
+    }
+
+    /// Commit the transaction
+    fn commit(mut self) -> Result<()> {
+        self.conn.execute("COMMIT", [])?;
+        self.committed = true;
+        debug!("Transaction committed");
+        Ok(())
+    }
+}
+
+impl<'a> Drop for Transaction<'a> {
+    fn drop(&mut self) {
+        if !self.committed {
+            // Rollback on drop (error or panic)
+            if let Err(e) = self.conn.execute("ROLLBACK", []) {
+                error!(error = %e, "Failed to rollback transaction on drop");
+            } else {
+                warn!("Transaction rolled back (not committed)");
+            }
+        }
+    }
 }
 
 pub struct Database {
@@ -103,7 +179,7 @@ impl Database {
     /// Initialize the database schema
     fn init_schema(&self) -> Result<()> {
         debug!("Acquiring database lock for schema initialization");
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock_or_recover();
 
         debug!("Creating temperature_readings table if not exists");
         match conn.execute(
@@ -295,7 +371,7 @@ impl Database {
         );
 
         let start = std::time::Instant::now();
-        let result = self.conn.lock().unwrap().execute(
+        let result = self.conn.lock_or_recover().execute(
             "INSERT INTO temperature_readings
              (device_id, temperature, humidity, battery, link_quality, timestamp)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
@@ -336,7 +412,7 @@ impl Database {
         debug!("Querying all distinct sensors with device info");
         let start = std::time::Instant::now();
 
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock_or_recover();
         let mut stmt = conn.prepare(
             "SELECT DISTINCT tr.device_id, COALESCE(d.name, tr.device_id) as name
              FROM temperature_readings tr
@@ -372,7 +448,7 @@ impl Database {
         );
         let start = std::time::Instant::now();
 
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock_or_recover();
         let mut stmt = conn.prepare(
             "SELECT device_id, temperature, humidity, battery, link_quality, timestamp
              FROM temperature_readings
@@ -415,7 +491,7 @@ impl Database {
         );
         let start = std::time::Instant::now();
 
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock_or_recover();
         let mut stmt = conn.prepare(
             "SELECT device_id, temperature, humidity, battery, link_quality, timestamp
              FROM temperature_readings
@@ -461,7 +537,7 @@ impl Database {
         &self,
         device_id: &str,
     ) -> Result<Option<TemperatureReading>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock_or_recover();
         let mut stmt = conn.prepare(
             "SELECT device_id, temperature, humidity, battery, link_quality, timestamp
              FROM temperature_readings
@@ -489,7 +565,7 @@ impl Database {
         );
 
         let start = std::time::Instant::now();
-        let result = self.conn.lock().unwrap().execute(
+        let result = self.conn.lock_or_recover().execute(
             "INSERT INTO devices (id, mqtt_topic, name, device_type, power_source, added_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
@@ -562,7 +638,7 @@ impl Database {
         debug!(device_id = %device_id, "Querying device by ID");
         let start = std::time::Instant::now();
 
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock_or_recover();
         let mut stmt = conn.prepare(
             "SELECT id, mqtt_topic, name, device_type, power_source, added_at
              FROM devices
@@ -597,7 +673,7 @@ impl Database {
         debug!(mqtt_topic = %mqtt_topic, "Querying device by MQTT topic");
         let start = std::time::Instant::now();
 
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock_or_recover();
         let mut stmt = conn.prepare(
             "SELECT id, mqtt_topic, name, device_type, power_source, added_at
              FROM devices
@@ -633,7 +709,7 @@ impl Database {
         debug!("Querying all devices");
         let start = std::time::Instant::now();
 
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock_or_recover();
         let mut stmt = conn.prepare(
             "SELECT id, mqtt_topic, name, device_type, power_source, added_at
              FROM devices
@@ -663,7 +739,7 @@ impl Database {
         );
 
         let start = std::time::Instant::now();
-        let result = self.conn.lock().unwrap().execute(
+        let result = self.conn.lock_or_recover().execute(
             "UPDATE devices SET name = ?1 WHERE id = ?2",
             params![new_name, device_id],
         );
@@ -728,7 +804,7 @@ impl Database {
         debug!(device_id = %device_id, "Looking up MQTT topic for device ID");
         let start = std::time::Instant::now();
 
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock_or_recover();
         let result = conn.query_row(
             "SELECT mqtt_topic FROM devices WHERE id = ?1",
             params![device_id],
@@ -767,14 +843,14 @@ impl Database {
             "Inserting automation rule"
         );
 
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock_or_recover();
         let start = std::time::Instant::now();
 
-        // Begin transaction
-        conn.execute("BEGIN TRANSACTION", [])?;
+        // Begin transaction (auto-rollback on error or panic)
+        let tx = Transaction::begin(&conn)?;
 
         // Insert the rule
-        let rule_result = conn.execute(
+        conn.execute(
             "INSERT INTO automation_rules (id, name, description, enabled, condition_operator, created_at, updated_at, last_triggered_at, trigger_count)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![
@@ -788,17 +864,11 @@ impl Database {
                 rule.last_triggered_at.map(|dt| dt.timestamp()),
                 rule.trigger_count
             ],
-        );
-
-        if let Err(e) = rule_result {
-            conn.execute("ROLLBACK", [])?;
-            error!(error = %e, rule_id = %rule.id, "Failed to insert rule");
-            return Err(e);
-        }
+        )?;
 
         // Insert conditions
         for condition in &rule.conditions {
-            let cond_result = conn.execute(
+            conn.execute(
                 "INSERT INTO automation_conditions (id, rule_id, device_id, field, operator, value)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                 params![
@@ -809,18 +879,12 @@ impl Database {
                     condition.operator.to_db_string(),
                     condition.value
                 ],
-            );
-
-            if let Err(e) = cond_result {
-                conn.execute("ROLLBACK", [])?;
-                error!(error = %e, rule_id = %rule.id, "Failed to insert condition");
-                return Err(e);
-            }
+            )?;
         }
 
         // Insert actions
         for action in &rule.actions {
-            let action_result = conn.execute(
+            conn.execute(
                 "INSERT INTO automation_actions (id, rule_id, device_id, action)
                  VALUES (?1, ?2, ?3, ?4)",
                 params![
@@ -829,17 +893,11 @@ impl Database {
                     action.device_id,
                     action.action.to_db_string()
                 ],
-            );
-
-            if let Err(e) = action_result {
-                conn.execute("ROLLBACK", [])?;
-                error!(error = %e, rule_id = %rule.id, "Failed to insert action");
-                return Err(e);
-            }
+            )?;
         }
 
         // Commit transaction
-        conn.execute("COMMIT", [])?;
+        tx.commit()?;
 
         let elapsed = start.elapsed();
         info!(
@@ -856,7 +914,7 @@ impl Database {
         debug!("Querying all automation rules");
         let start = std::time::Instant::now();
 
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock_or_recover();
 
         // Get all rules
         let mut stmt = conn.prepare(
@@ -982,13 +1040,14 @@ impl Database {
     pub fn update_automation_rule(&self, rule: &AutomationRule) -> Result<()> {
         debug!(rule_id = %rule.id, "Updating automation rule");
 
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock_or_recover();
         let start = std::time::Instant::now();
 
-        conn.execute("BEGIN TRANSACTION", [])?;
+        // Begin transaction (auto-rollback on error or panic)
+        let tx = Transaction::begin(&conn)?;
 
         // Update the rule metadata
-        let result = conn.execute(
+        conn.execute(
             "UPDATE automation_rules
              SET name = ?1, description = ?2, enabled = ?3, condition_operator = ?4, updated_at = ?5
              WHERE id = ?6",
@@ -1000,12 +1059,7 @@ impl Database {
                 rule.updated_at.timestamp(),
                 rule.id
             ],
-        );
-
-        if let Err(e) = result {
-            conn.execute("ROLLBACK", [])?;
-            return Err(e);
-        }
+        )?;
 
         // Delete existing conditions and actions
         conn.execute(
@@ -1047,7 +1101,8 @@ impl Database {
             )?;
         }
 
-        conn.execute("COMMIT", [])?;
+        // Commit transaction
+        tx.commit()?;
 
         let elapsed = start.elapsed();
         info!(
@@ -1064,7 +1119,7 @@ impl Database {
         debug!(rule_id = %rule_id, "Deleting automation rule");
 
         let start = std::time::Instant::now();
-        let result = self.conn.lock().unwrap().execute(
+        let result = self.conn.lock_or_recover().execute(
             "DELETE FROM automation_rules WHERE id = ?1",
             params![rule_id],
         );
@@ -1092,7 +1147,7 @@ impl Database {
         debug!(rule_id = %rule_id, "Recording rule trigger");
 
         let now = chrono::Utc::now().timestamp();
-        let result = self.conn.lock().unwrap().execute(
+        let result = self.conn.lock_or_recover().execute(
             "UPDATE automation_rules
              SET last_triggered_at = ?1, trigger_count = trigger_count + 1
              WHERE id = ?2",
@@ -1120,7 +1175,7 @@ impl Database {
             "Inserting execution log"
         );
 
-        let result = self.conn.lock().unwrap().execute(
+        let result = self.conn.lock_or_recover().execute(
             "INSERT INTO automation_execution_log (id, rule_id, rule_name, success, error_message, executed_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
@@ -1149,7 +1204,7 @@ impl Database {
     pub fn get_execution_logs(&self, limit: i64) -> Result<Vec<AutomationExecutionLog>> {
         debug!(limit = %limit, "Querying execution logs");
 
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock_or_recover();
         let mut stmt = conn.prepare(
             "SELECT id, rule_id, rule_name, success, error_message, executed_at
              FROM automation_execution_log
