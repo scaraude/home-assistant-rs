@@ -381,16 +381,7 @@ impl Database {
         )?;
 
         let readings = stmt
-            .query_map(params![since_timestamp], |row| {
-                Ok(TemperatureReading {
-                    device_id: row.get(0)?,
-                    temperature: row.get(1)?,
-                    humidity: row.get(2)?,
-                    battery: row.get(3)?,
-                    link_quality: row.get(4)?,
-                    timestamp: timestamp_to_datetime(row.get(5)?, "temperature_reading.timestamp"),
-                })
-            })?
+            .query_map(params![since_timestamp], Self::map_temperature_reading_row)?
             .collect::<Result<Vec<_>>>()?;
 
         let elapsed = start.elapsed();
@@ -480,16 +471,7 @@ impl Database {
         )?;
 
         let mut readings = stmt
-            .query_map(params![device_id], |row| {
-                Ok(TemperatureReading {
-                    device_id: row.get(0)?,
-                    temperature: row.get(1)?,
-                    humidity: row.get(2)?,
-                    battery: row.get(3)?,
-                    link_quality: row.get(4)?,
-                    timestamp: timestamp_to_datetime(row.get(5)?, "temperature_reading.timestamp"),
-                })
-            })?
+            .query_map(params![device_id], Self::map_temperature_reading_row)?
             .collect::<Result<Vec<_>>>()?;
 
         Ok(readings.pop())
@@ -542,6 +524,39 @@ impl Database {
         }
     }
 
+    /// Helper to map a database row to a TemperatureReading struct
+    ///
+    /// Eliminates duplication across get_readings_since, get_readings_for_sensor_since, and get_latest_reading_for_sensor
+    fn map_temperature_reading_row(row: &rusqlite::Row) -> Result<TemperatureReading> {
+        Ok(TemperatureReading {
+            device_id: row.get(0)?,
+            temperature: row.get(1)?,
+            humidity: row.get(2)?,
+            battery: row.get(3)?,
+            link_quality: row.get(4)?,
+            timestamp: timestamp_to_datetime(row.get(5)?, "temperature_reading.timestamp"),
+        })
+    }
+
+    /// Helper to map a database row to a Device struct
+    ///
+    /// Eliminates duplication across get_device_by_id, get_device_by_mqtt_topic, and get_all_devices
+    fn map_device_row(row: &rusqlite::Row) -> Result<Device> {
+        let device_type_str: String = row.get(3)?;
+        let power_source_str: String = row.get(4)?;
+
+        Ok(Device {
+            id: row.get(0)?,
+            mqtt_topic: row.get(1)?,
+            name: row.get(2)?,
+            device_type: DeviceType::from_db_string(&device_type_str)
+                .ok_or_else(|| invalid_column_error(3, "device_type"))?,
+            power_source: PowerSource::from_db_string(&power_source_str)
+                .ok_or_else(|| invalid_column_error(4, "power_source"))?,
+            added_at: timestamp_to_datetime(row.get(5)?, "device.added_at"),
+        })
+    }
+
     /// Get a device by its ID
     pub fn get_device_by_id(&self, device_id: &str) -> Result<Option<Device>> {
         debug!(device_id = %device_id, "Querying device by ID");
@@ -554,21 +569,7 @@ impl Database {
              WHERE id = ?1",
         )?;
 
-        let result = stmt.query_row(params![device_id], |row| {
-            let device_type_str: String = row.get(3)?;
-            let power_source_str: String = row.get(4)?;
-
-            Ok(Device {
-                id: row.get(0)?,
-                mqtt_topic: row.get(1)?,
-                name: row.get(2)?,
-                device_type: DeviceType::from_db_string(&device_type_str)
-                    .ok_or_else(|| invalid_column_error(3, "device_type"))?,
-                power_source: PowerSource::from_db_string(&power_source_str)
-                    .ok_or_else(|| invalid_column_error(4, "power_source"))?,
-                added_at: timestamp_to_datetime(row.get(5)?, "device.added_at"),
-            })
-        });
+        let result = stmt.query_row(params![device_id], Self::map_device_row);
 
         let elapsed = start.elapsed();
         match result {
@@ -603,21 +604,7 @@ impl Database {
              WHERE mqtt_topic = ?1",
         )?;
 
-        let result = stmt.query_row(params![mqtt_topic], |row| {
-            let device_type_str: String = row.get(3)?;
-            let power_source_str: String = row.get(4)?;
-
-            Ok(Device {
-                id: row.get(0)?,
-                mqtt_topic: row.get(1)?,
-                name: row.get(2)?,
-                device_type: DeviceType::from_db_string(&device_type_str)
-                    .ok_or_else(|| invalid_column_error(3, "device_type"))?,
-                power_source: PowerSource::from_db_string(&power_source_str)
-                    .ok_or_else(|| invalid_column_error(4, "power_source"))?,
-                added_at: timestamp_to_datetime(row.get(5)?, "device.added_at"),
-            })
-        });
+        let result = stmt.query_row(params![mqtt_topic], Self::map_device_row);
 
         let elapsed = start.elapsed();
         match result {
@@ -654,21 +641,7 @@ impl Database {
         )?;
 
         let devices = stmt
-            .query_map([], |row| {
-                let device_type_str: String = row.get(3)?;
-                let power_source_str: String = row.get(4)?;
-
-                Ok(Device {
-                    id: row.get(0)?,
-                    mqtt_topic: row.get(1)?,
-                    name: row.get(2)?,
-                    device_type: DeviceType::from_db_string(&device_type_str)
-                        .ok_or_else(|| invalid_column_error(3, "device_type"))?,
-                    power_source: PowerSource::from_db_string(&power_source_str)
-                        .ok_or_else(|| invalid_column_error(4, "power_source"))?,
-                    added_at: timestamp_to_datetime(row.get(5)?, "device.added_at"),
-                })
-            })?
+            .query_map([], Self::map_device_row)?
             .collect::<Result<Vec<_>>>()?;
 
         let elapsed = start.elapsed();

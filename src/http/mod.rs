@@ -122,6 +122,56 @@ impl HttpServer {
 }
 
 // ============================================================================
+// Query Parameter Parser
+// ============================================================================
+//
+// Simple zero-dependency parser to eliminate duplicate query string parsing
+// logic across endpoints. Keeps binary size minimal while reducing duplication.
+
+struct QueryParams<'a> {
+    query: Option<&'a str>,
+}
+
+impl<'a> QueryParams<'a> {
+    fn new(query: Option<&'a str>) -> Self {
+        Self { query }
+    }
+
+    fn get(&self, key: &str) -> Option<&'a str> {
+        self.query.and_then(|q| {
+            for param in q.split('&') {
+                if let Some((k, v)) = param.split_once('=') {
+                    if k == key {
+                        return Some(v);
+                    }
+                }
+            }
+            None
+        })
+    }
+
+    fn get_i64(&self, key: &str, default: i64) -> i64 {
+        self.get(key)
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(default)
+    }
+
+    fn get_usize(&self, key: &str, default: usize) -> usize {
+        self.get(key)
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(default)
+    }
+
+    fn get_optional_i64(&self, key: &str) -> Option<i64> {
+        self.get(key).and_then(|v| v.parse().ok())
+    }
+
+    fn get_optional_usize(&self, key: &str) -> Option<usize> {
+        self.get(key).and_then(|v| v.parse().ok())
+    }
+}
+
+// ============================================================================
 // HTTP Response Helper Functions
 // ============================================================================
 //
@@ -517,52 +567,15 @@ fn serve_readings(
     debug!(query = ?query, "Parsing query parameters");
 
     // Parse query parameters for device_id, hours, and since
-    let mut device_id: Option<&str> = None;
-    let mut hours: Option<i64> = None;
-    let mut since_param: Option<i64> = None;
-
-    if let Some(q) = query {
-        for param in q.split('&') {
-            if let Some((key, value)) = param.split_once('=') {
-                match key {
-                    "device_id" => {
-                        device_id = Some(value);
-                        debug!(device_id = %value, "Parsed device_id parameter");
-                    }
-                    "hours" => {
-                        hours = Some(value.parse().unwrap_or_else(|e| {
-                            warn!(
-                                value = %value,
-                                error = %e,
-                                "Failed to parse hours parameter, using default (24)"
-                            );
-                            24
-                        }));
-                        debug!(hours = ?hours, "Parsed hours parameter");
-                    }
-                    "since" => {
-                        since_param = value.parse().ok();
-                        if since_param.is_none() {
-                            warn!(value = %value, "Failed to parse since parameter (must be Unix timestamp)");
-                        } else {
-                            debug!(since = ?since_param, "Parsed since parameter");
-                        }
-                    }
-                    _ => {
-                        debug!(key = %key, value = %value, "Ignoring unknown query parameter");
-                    }
-                }
-            }
-        }
-    }
+    let params = QueryParams::new(query);
+    let device_id = params.get("device_id");
+    let since_param = params.get_optional_i64("since");
 
     // Determine timestamp: use 'since' if provided, otherwise calculate from 'hours'
-    let since = if let Some(ts) = since_param {
-        ts
-    } else {
-        let h = hours.unwrap_or(24);
-        chrono::Utc::now().timestamp() - (h * 3600)
-    };
+    let since = since_param.unwrap_or_else(|| {
+        let hours = params.get_i64("hours", 24);
+        chrono::Utc::now().timestamp() - (hours * 3600)
+    });
 
     info!(
         device_id = ?device_id,
@@ -618,7 +631,7 @@ fn serve_readings(
             }
         }
         Err(e) => {
-            error!(error = %e, device_id = ?device_id, hours = hours, "Database error while fetching readings");
+            error!(error = %e, device_id = ?device_id, since = since, "Database error while fetching readings");
             internal_error_response("Database error")
         }
     }
@@ -646,47 +659,17 @@ fn serve_logs_list() -> Response<Full<Bytes>> {
 }
 
 fn serve_log_view(cache: &ResponseCache, path: &str, query: Option<&str>) -> Response<Full<Bytes>> {
-    debug!(query = ?query, "Parsing query parameters for log view");
+    let params = QueryParams::new(query);
+    let filename = params.get("file");
+    let max_lines = params.get_usize("lines", 1000);
+    let since_line = params.get_optional_usize("since_line");
 
-    // Parse query parameters for file, lines, and since_line
-    let mut filename: Option<&str> = None;
-    let mut max_lines: usize = 1000; // Default to last 1000 lines
-    let mut since_line: Option<usize> = None;
-
-    if let Some(q) = query {
-        for param in q.split('&') {
-            if let Some((key, value)) = param.split_once('=') {
-                match key {
-                    "file" => {
-                        filename = Some(value);
-                        debug!(filename = %value, "Parsed file parameter");
-                    }
-                    "lines" => {
-                        max_lines = value.parse().unwrap_or_else(|e| {
-                            warn!(
-                                value = %value,
-                                error = %e,
-                                "Failed to parse lines parameter, using default (1000)"
-                            );
-                            1000
-                        });
-                        debug!(max_lines = max_lines, "Parsed lines parameter");
-                    }
-                    "since_line" => {
-                        since_line = value.parse().ok();
-                        if since_line.is_none() {
-                            warn!(value = %value, "Failed to parse since_line parameter (must be integer)");
-                        } else {
-                            debug!(since_line = ?since_line, "Parsed since_line parameter (delta mode)");
-                        }
-                    }
-                    _ => {
-                        debug!(key = %key, value = %value, "Ignoring unknown query parameter");
-                    }
-                }
-            }
-        }
-    }
+    debug!(
+        filename = ?filename,
+        max_lines = max_lines,
+        since_line = ?since_line,
+        "Parsed query parameters for log view"
+    );
 
     // Require filename parameter
     let Some(file) = filename else {
@@ -758,43 +741,17 @@ fn serve_process_history(
     path: &str,
     query: Option<&str>,
 ) -> Response<Full<Bytes>> {
-    debug!(query = ?query, "Parsing query parameters for process history");
+    let params = QueryParams::new(query);
+    let process_name = params.get("process");
+    let pid = params.get("pid");
+    let max_lines = params.get_usize("lines", 10000);
 
-    // Parse query parameters for process, pid, and lines
-    let mut process_name: Option<&str> = None;
-    let mut pid: Option<&str> = None;
-    let mut max_lines: usize = 10000; // Default to large number for full history
-
-    if let Some(q) = query {
-        for param in q.split('&') {
-            if let Some((key, value)) = param.split_once('=') {
-                match key {
-                    "process" => {
-                        process_name = Some(value);
-                        debug!(process = %value, "Parsed process parameter");
-                    }
-                    "pid" => {
-                        pid = Some(value);
-                        debug!(pid = %value, "Parsed pid parameter");
-                    }
-                    "lines" => {
-                        max_lines = value.parse().unwrap_or_else(|e| {
-                            warn!(
-                                value = %value,
-                                error = %e,
-                                "Failed to parse lines parameter, using default (10000)"
-                            );
-                            10000
-                        });
-                        debug!(max_lines = max_lines, "Parsed lines parameter");
-                    }
-                    _ => {
-                        debug!(key = %key, value = %value, "Ignoring unknown query parameter");
-                    }
-                }
-            }
-        }
-    }
+    debug!(
+        process = ?process_name,
+        pid = ?pid,
+        max_lines = max_lines,
+        "Parsed query parameters for process history"
+    );
 
     // Require process and pid parameters
     let (Some(process), Some(process_pid)) = (process_name, pid) else {
