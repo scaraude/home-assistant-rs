@@ -1,3 +1,4 @@
+use crate::impl_db_enum;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -10,24 +11,11 @@ pub enum DeviceType {
     Commander,
 }
 
-impl DeviceType {
-    /// Convert to database string representation
-    pub fn to_db_string(&self) -> &'static str {
-        match self {
-            DeviceType::TempHumiditySensor => "temphumiditysensor",
-            DeviceType::Commander => "commander",
-        }
-    }
-
-    /// Parse from database string representation
-    pub fn from_db_string(s: &str) -> Option<Self> {
-        match s {
-            "temphumiditysensor" => Some(DeviceType::TempHumiditySensor),
-            "commander" => Some(DeviceType::Commander),
-            _ => None,
-        }
-    }
-}
+// Implement database string conversion using the DbEnum trait
+impl_db_enum!(DeviceType {
+    TempHumiditySensor => "temphumiditysensor",
+    Commander => "commander"
+});
 
 /// Power source for a device
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -37,24 +25,11 @@ pub enum PowerSource {
     Plugged,
 }
 
-impl PowerSource {
-    /// Convert to database string representation
-    pub fn to_db_string(&self) -> &'static str {
-        match self {
-            PowerSource::Battery => "battery",
-            PowerSource::Plugged => "plugged",
-        }
-    }
-
-    /// Parse from database string representation
-    pub fn from_db_string(s: &str) -> Option<Self> {
-        match s {
-            "battery" => Some(PowerSource::Battery),
-            "plugged" => Some(PowerSource::Plugged),
-            _ => None,
-        }
-    }
-}
+// Implement database string conversion using the DbEnum trait
+impl_db_enum!(PowerSource {
+    Battery => "battery",
+    Plugged => "plugged"
+});
 
 /// Static device metadata stored in database
 /// This represents the fixed properties of a device that rarely change
@@ -159,5 +134,72 @@ impl DeviceState {
     /// Mark the device as seen (updates last_seen timestamp)
     pub fn mark_seen(&mut self) {
         self.last_seen = Utc::now();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::db_enum::DbEnum;
+
+    #[test]
+    fn test_device_type_to_db_string() {
+        assert_eq!(
+            DeviceType::TempHumiditySensor.to_db_string(),
+            "temphumiditysensor"
+        );
+        assert_eq!(DeviceType::Commander.to_db_string(), "commander");
+    }
+
+    #[test]
+    fn test_device_type_from_db_string() {
+        assert_eq!(
+            DeviceType::from_db_string("temphumiditysensor"),
+            Some(DeviceType::TempHumiditySensor)
+        );
+        assert_eq!(
+            DeviceType::from_db_string("commander"),
+            Some(DeviceType::Commander)
+        );
+        assert_eq!(DeviceType::from_db_string("invalid"), None);
+    }
+
+    #[test]
+    fn test_device_type_roundtrip() {
+        let types = vec![DeviceType::TempHumiditySensor, DeviceType::Commander];
+        for device_type in types {
+            let db_string = device_type.to_db_string();
+            let parsed = DeviceType::from_db_string(db_string);
+            assert_eq!(Some(device_type), parsed);
+        }
+    }
+
+    #[test]
+    fn test_power_source_to_db_string() {
+        assert_eq!(PowerSource::Battery.to_db_string(), "battery");
+        assert_eq!(PowerSource::Plugged.to_db_string(), "plugged");
+    }
+
+    #[test]
+    fn test_power_source_from_db_string() {
+        assert_eq!(
+            PowerSource::from_db_string("battery"),
+            Some(PowerSource::Battery)
+        );
+        assert_eq!(
+            PowerSource::from_db_string("plugged"),
+            Some(PowerSource::Plugged)
+        );
+        assert_eq!(PowerSource::from_db_string("invalid"), None);
+    }
+
+    #[test]
+    fn test_power_source_roundtrip() {
+        let sources = vec![PowerSource::Battery, PowerSource::Plugged];
+        for source in sources {
+            let db_string = source.to_db_string();
+            let parsed = PowerSource::from_db_string(db_string);
+            assert_eq!(Some(source), parsed);
+        }
     }
 }

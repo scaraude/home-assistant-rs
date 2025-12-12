@@ -1,3 +1,4 @@
+use crate::impl_db_enum;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -19,30 +20,17 @@ pub enum ComparisonOperator {
     LessThanOrEqual,
 }
 
+// Implement database string conversion using the DbEnum trait
+impl_db_enum!(ComparisonOperator {
+    Equal => "eq",
+    NotEqual => "neq",
+    GreaterThan => "gt",
+    GreaterThanOrEqual => "gte",
+    LessThan => "lt",
+    LessThanOrEqual => "lte"
+});
+
 impl ComparisonOperator {
-    pub fn to_db_string(&self) -> &'static str {
-        match self {
-            ComparisonOperator::Equal => "eq",
-            ComparisonOperator::NotEqual => "neq",
-            ComparisonOperator::GreaterThan => "gt",
-            ComparisonOperator::GreaterThanOrEqual => "gte",
-            ComparisonOperator::LessThan => "lt",
-            ComparisonOperator::LessThanOrEqual => "lte",
-        }
-    }
-
-    pub fn from_db_string(s: &str) -> Option<Self> {
-        match s {
-            "eq" => Some(ComparisonOperator::Equal),
-            "neq" => Some(ComparisonOperator::NotEqual),
-            "gt" => Some(ComparisonOperator::GreaterThan),
-            "gte" => Some(ComparisonOperator::GreaterThanOrEqual),
-            "lt" => Some(ComparisonOperator::LessThan),
-            "lte" => Some(ComparisonOperator::LessThanOrEqual),
-            _ => None,
-        }
-    }
-
     /// Evaluate the comparison
     pub fn evaluate(&self, left: f64, right: f64) -> bool {
         match self {
@@ -66,26 +54,13 @@ pub enum SensorField {
     LinkQuality,
 }
 
-impl SensorField {
-    pub fn to_db_string(&self) -> &'static str {
-        match self {
-            SensorField::Temperature => "temperature",
-            SensorField::Humidity => "humidity",
-            SensorField::Battery => "battery",
-            SensorField::LinkQuality => "link_quality",
-        }
-    }
-
-    pub fn from_db_string(s: &str) -> Option<Self> {
-        match s {
-            "temperature" => Some(SensorField::Temperature),
-            "humidity" => Some(SensorField::Humidity),
-            "battery" => Some(SensorField::Battery),
-            "link_quality" => Some(SensorField::LinkQuality),
-            _ => None,
-        }
-    }
-}
+// Implement database string conversion using the DbEnum trait
+impl_db_enum!(SensorField {
+    Temperature => "temperature",
+    Humidity => "humidity",
+    Battery => "battery",
+    LinkQuality => "link_quality"
+});
 
 /// A single condition in an automation rule
 /// Example: "temperature > 25" or "humidity < 40"
@@ -134,22 +109,11 @@ pub enum LogicalOperator {
     Or,
 }
 
-impl LogicalOperator {
-    pub fn to_db_string(&self) -> &'static str {
-        match self {
-            LogicalOperator::And => "and",
-            LogicalOperator::Or => "or",
-        }
-    }
-
-    pub fn from_db_string(s: &str) -> Option<Self> {
-        match s {
-            "and" => Some(LogicalOperator::And),
-            "or" => Some(LogicalOperator::Or),
-            _ => None,
-        }
-    }
-}
+// Implement database string conversion using the DbEnum trait
+impl_db_enum!(LogicalOperator {
+    And => "and",
+    Or => "or"
+});
 
 /// Action to perform when conditions are met
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -163,24 +127,12 @@ pub enum SwitchAction {
     Toggle,
 }
 
-impl SwitchAction {
-    pub fn to_db_string(&self) -> &'static str {
-        match self {
-            SwitchAction::On => "on",
-            SwitchAction::Off => "off",
-            SwitchAction::Toggle => "toggle",
-        }
-    }
-
-    pub fn from_db_string(s: &str) -> Option<Self> {
-        match s {
-            "on" => Some(SwitchAction::On),
-            "off" => Some(SwitchAction::Off),
-            "toggle" => Some(SwitchAction::Toggle),
-            _ => None,
-        }
-    }
-}
+// Implement database string conversion using the DbEnum trait
+impl_db_enum!(SwitchAction {
+    On => "on",
+    Off => "off",
+    Toggle => "toggle"
+});
 
 /// An action to execute when rule conditions are met
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -333,5 +285,96 @@ impl AutomationExecutionLog {
             error_message,
             executed_at: Utc::now(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::db_enum::DbEnum;
+
+    #[test]
+    fn test_comparison_operator_conversions() {
+        let operators = vec![
+            (ComparisonOperator::Equal, "eq"),
+            (ComparisonOperator::NotEqual, "neq"),
+            (ComparisonOperator::GreaterThan, "gt"),
+            (ComparisonOperator::GreaterThanOrEqual, "gte"),
+            (ComparisonOperator::LessThan, "lt"),
+            (ComparisonOperator::LessThanOrEqual, "lte"),
+        ];
+
+        for (op, expected_str) in operators {
+            assert_eq!(op.to_db_string(), expected_str);
+            assert_eq!(ComparisonOperator::from_db_string(expected_str), Some(op));
+        }
+
+        assert_eq!(ComparisonOperator::from_db_string("invalid"), None);
+    }
+
+    #[test]
+    fn test_comparison_operator_evaluate() {
+        assert!(ComparisonOperator::Equal.evaluate(5.0, 5.0));
+        assert!(!ComparisonOperator::Equal.evaluate(5.0, 6.0));
+
+        assert!(ComparisonOperator::NotEqual.evaluate(5.0, 6.0));
+        assert!(!ComparisonOperator::NotEqual.evaluate(5.0, 5.0));
+
+        assert!(ComparisonOperator::GreaterThan.evaluate(6.0, 5.0));
+        assert!(!ComparisonOperator::GreaterThan.evaluate(5.0, 5.0));
+
+        assert!(ComparisonOperator::GreaterThanOrEqual.evaluate(5.0, 5.0));
+        assert!(ComparisonOperator::GreaterThanOrEqual.evaluate(6.0, 5.0));
+
+        assert!(ComparisonOperator::LessThan.evaluate(5.0, 6.0));
+        assert!(!ComparisonOperator::LessThan.evaluate(5.0, 5.0));
+
+        assert!(ComparisonOperator::LessThanOrEqual.evaluate(5.0, 5.0));
+        assert!(ComparisonOperator::LessThanOrEqual.evaluate(4.0, 5.0));
+    }
+
+    #[test]
+    fn test_sensor_field_conversions() {
+        let fields = vec![
+            (SensorField::Temperature, "temperature"),
+            (SensorField::Humidity, "humidity"),
+            (SensorField::Battery, "battery"),
+            (SensorField::LinkQuality, "link_quality"),
+        ];
+
+        for (field, expected_str) in fields {
+            assert_eq!(field.to_db_string(), expected_str);
+            assert_eq!(SensorField::from_db_string(expected_str), Some(field));
+        }
+
+        assert_eq!(SensorField::from_db_string("invalid"), None);
+    }
+
+    #[test]
+    fn test_logical_operator_conversions() {
+        let operators = vec![(LogicalOperator::And, "and"), (LogicalOperator::Or, "or")];
+
+        for (op, expected_str) in operators {
+            assert_eq!(op.to_db_string(), expected_str);
+            assert_eq!(LogicalOperator::from_db_string(expected_str), Some(op));
+        }
+
+        assert_eq!(LogicalOperator::from_db_string("invalid"), None);
+    }
+
+    #[test]
+    fn test_switch_action_conversions() {
+        let actions = vec![
+            (SwitchAction::On, "on"),
+            (SwitchAction::Off, "off"),
+            (SwitchAction::Toggle, "toggle"),
+        ];
+
+        for (action, expected_str) in actions {
+            assert_eq!(action.to_db_string(), expected_str);
+            assert_eq!(SwitchAction::from_db_string(expected_str), Some(action));
+        }
+
+        assert_eq!(SwitchAction::from_db_string("invalid"), None);
     }
 }

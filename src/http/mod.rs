@@ -121,6 +121,131 @@ impl HttpServer {
     }
 }
 
+// ============================================================================
+// HTTP Response Helper Functions
+// ============================================================================
+//
+// These helpers eliminate the need for `.unwrap()` calls when building
+// HTTP responses. They use `.expect()` with clear error messages for
+// cases that should never fail (e.g., building a response with valid headers).
+//
+// This approach is safer than `.unwrap()` because:
+// 1. It documents invariants with descriptive messages
+// 2. Makes failures observable in production logs
+// 3. Centralizes response building logic
+
+/// Create a successful JSON response (200 OK)
+fn json_response(json: String) -> Response<Full<Bytes>> {
+    Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", "application/json")
+        .body(Full::new(Bytes::from(json)))
+        .expect("Failed to build JSON response - this should never happen with valid headers")
+}
+
+// /// Create a JSON response with custom status code
+// fn json_response_with_status(json: String, status: StatusCode) -> Response<Full<Bytes>> {
+//     Response::builder()
+//         .status(status)
+//         .header("Content-Type", "application/json")
+//         .body(Full::new(Bytes::from(json)))
+//         .expect("Failed to build JSON response - this should never happen with valid headers")
+// }
+
+/// Create a JSON response with ETag header
+fn json_response_with_etag(json: String, etag: String) -> Response<Full<Bytes>> {
+    Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", "application/json")
+        .header("ETag", etag)
+        .header("Cache-Control", "private, must-revalidate")
+        .body(Full::new(Bytes::from(json)))
+        .expect("Failed to build cached JSON response - this should never happen")
+}
+
+/// Create a JSON response with ETag and custom timestamp header
+fn json_response_with_cache_headers(
+    json: String,
+    etag: String,
+    latest_timestamp: i64,
+) -> Response<Full<Bytes>> {
+    Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", "application/json")
+        .header("ETag", etag)
+        .header("Cache-Control", "private, must-revalidate")
+        .header("X-Latest-Timestamp", latest_timestamp.to_string())
+        .body(Full::new(Bytes::from(json)))
+        .expect("Failed to build cached JSON response with timestamp header")
+}
+
+// /// Create a JSON response with ETag and total lines header (for log pagination)
+// fn json_response_with_lines_header(
+//     json: String,
+//     etag: String,
+//     total_lines: usize,
+// ) -> Response<Full<Bytes>> {
+//     Response::builder()
+//         .status(StatusCode::OK)
+//         .header("Content-Type", "application/json")
+//         .header("ETag", etag)
+//         .header("Cache-Control", "private, must-revalidate")
+//         .header("X-Total-Lines", total_lines.to_string())
+//         .body(Full::new(Bytes::from(json)))
+//         .expect("Failed to build cached JSON response with total lines header")
+// }
+
+/// Create a 304 Not Modified response with ETag
+fn not_modified_response(etag: String) -> Response<Full<Bytes>> {
+    Response::builder()
+        .status(StatusCode::NOT_MODIFIED)
+        .header("ETag", etag)
+        .body(Full::new(Bytes::new()))
+        .expect("Failed to build 304 Not Modified response")
+}
+
+/// Create an error response with JSON error message
+fn error_response(message: &str, status: StatusCode) -> Response<Full<Bytes>> {
+    let json = format!(r#"{{"error":"{}"}}"#, message);
+    Response::builder()
+        .status(status)
+        .header("Content-Type", "application/json")
+        .body(Full::new(Bytes::from(json)))
+        .expect("Failed to build error response")
+}
+
+/// Create a simple success response
+fn success_response() -> Response<Full<Bytes>> {
+    json_response(r#"{"status":"ok"}"#.to_string())
+}
+
+// /// Create an empty response with custom status code
+// fn empty_response(status: StatusCode) -> Response<Full<Bytes>> {
+//     Response::builder()
+//         .status(status)
+//         .body(Full::new(Bytes::new()))
+//         .expect("Failed to build empty response")
+// }
+
+/// Create a 404 Not Found response
+fn not_found_response(message: &str) -> Response<Full<Bytes>> {
+    error_response(message, StatusCode::NOT_FOUND)
+}
+
+/// Create a 500 Internal Server Error response
+fn internal_error_response(message: &str) -> Response<Full<Bytes>> {
+    error_response(message, StatusCode::INTERNAL_SERVER_ERROR)
+}
+
+/// Create a 400 Bad Request response
+fn bad_request_response(message: &str) -> Response<Full<Bytes>> {
+    error_response(message, StatusCode::BAD_REQUEST)
+}
+
+// ============================================================================
+// End of Helper Functions
+// ============================================================================
+
 async fn handle_request(
     req: Request<hyper::body::Incoming>,
     db: Arc<Database>,
@@ -161,11 +286,7 @@ async fn handle_request(
                         cached_etag = %cached.etag,
                         "Cache hit - returning 304 Not Modified"
                     );
-                    return Ok(Response::builder()
-                        .status(StatusCode::NOT_MODIFIED)
-                        .header("ETag", &cached.etag)
-                        .body(Full::new(Bytes::new()))
-                        .unwrap());
+                    return Ok(not_modified_response(cached.etag.clone()));
                 }
             }
 
@@ -177,7 +298,7 @@ async fn handle_request(
                 .header("ETag", cached.etag)
                 .header("Cache-Control", "private, must-revalidate")
                 .body(Full::new(cached.body))
-                .unwrap());
+                .expect("Failed to build cached response"));
         }
     }
 
@@ -298,26 +419,16 @@ fn json_response_with_cache(
     path: &str,
     query: Option<&str>,
 ) -> Response<Full<Bytes>> {
-    let bytes = Bytes::from(json);
+    let bytes = Bytes::from(json.clone());
     let etag = cache.put(path, query, bytes.clone());
 
     debug!(path = %path, etag = %etag, "Created cached response");
 
-    Response::builder()
-        .status(StatusCode::OK)
-        .header("Content-Type", "application/json")
-        .header("ETag", etag)
-        .header("Cache-Control", "private, must-revalidate")
-        .body(Full::new(bytes))
-        .unwrap()
+    json_response_with_etag(json, etag)
 }
 
 fn health_check() -> Response<Full<Bytes>> {
-    Response::builder()
-        .status(StatusCode::OK)
-        .header("Content-Type", "application/json")
-        .body(Full::new(Bytes::from(r#"{"status":"ok"}"#)))
-        .unwrap()
+    success_response()
 }
 
 fn serve_static_file(file_path: &str, content_type: &str) -> Response<Full<Bytes>> {
@@ -329,14 +440,11 @@ fn serve_static_file(file_path: &str, content_type: &str) -> Response<Full<Bytes
                 .header("Content-Type", content_type)
                 .header("Cache-Control", "public, max-age=3600")
                 .body(Full::new(Bytes::from(contents)))
-                .unwrap()
+                .expect("Failed to build static file response")
         }
         Err(e) => {
             error!(error = %e, file_path = %file_path, "Failed to read static file");
-            Response::builder()
-                .status(StatusCode::NOT_FOUND)
-                .body(Full::new(Bytes::from("File not found")))
-                .unwrap()
+            not_found_response("File not found")
         }
     }
 }
@@ -389,19 +497,13 @@ fn serve_sensors(
                 }
                 Err(e) => {
                     error!(error = %e, "Failed to serialize sensors to JSON");
-                    Response::builder()
-                        .status(StatusCode::INTERNAL_SERVER_ERROR)
-                        .body(Full::new(Bytes::from("[]")))
-                        .unwrap()
+                    internal_error_response("Failed to serialize response")
                 }
             }
         }
         Err(e) => {
             error!(error = %e, "Database error while fetching sensors");
-            Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(Full::new(Bytes::from("Database error")))
-                .unwrap()
+            internal_error_response("Database error")
         }
     }
 }
@@ -504,33 +606,20 @@ fn serve_readings(
                     );
 
                     // Create cached response with custom header for delta tracking
-                    let bytes = Bytes::from(json);
+                    let bytes = Bytes::from(json.clone());
                     let etag = cache.put(path, query, bytes.clone());
 
-                    Response::builder()
-                        .status(StatusCode::OK)
-                        .header("Content-Type", "application/json")
-                        .header("ETag", etag)
-                        .header("Cache-Control", "private, must-revalidate")
-                        .header("X-Latest-Timestamp", latest_timestamp.to_string())
-                        .body(Full::new(bytes))
-                        .unwrap()
+                    json_response_with_cache_headers(json, etag, latest_timestamp)
                 }
                 Err(e) => {
                     error!(error = %e, "Failed to serialize readings to JSON");
-                    Response::builder()
-                        .status(StatusCode::INTERNAL_SERVER_ERROR)
-                        .body(Full::new(Bytes::from("[]")))
-                        .unwrap()
+                    internal_error_response("Failed to serialize response")
                 }
             }
         }
         Err(e) => {
             error!(error = %e, device_id = ?device_id, hours = hours, "Database error while fetching readings");
-            Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(Full::new(Bytes::from("Database error")))
-                .unwrap()
+            internal_error_response("Database error")
         }
     }
 }
@@ -547,18 +636,11 @@ fn serve_logs_list() -> Response<Full<Bytes>> {
                 response_size = json.len(),
                 "Successfully serialized log files list to JSON"
             );
-            Response::builder()
-                .status(StatusCode::OK)
-                .header("Content-Type", "application/json")
-                .body(Full::new(Bytes::from(json)))
-                .unwrap()
+            json_response(json)
         }
         Err(e) => {
             error!(error = %e, "Failed to serialize log files to JSON");
-            Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(Full::new(Bytes::from("[]")))
-                .unwrap()
+            internal_error_response("Failed to serialize response")
         }
     }
 }
@@ -609,12 +691,7 @@ fn serve_log_view(cache: &ResponseCache, path: &str, query: Option<&str>) -> Res
     // Require filename parameter
     let Some(file) = filename else {
         warn!("Missing required 'file' parameter");
-        return Response::builder()
-            .status(StatusCode::BAD_REQUEST)
-            .body(Full::new(Bytes::from(
-                r#"{"error":"Missing 'file' parameter"}"#,
-            )))
-            .unwrap();
+        return bad_request_response("Missing 'file' parameter");
     };
 
     info!(
@@ -722,12 +799,7 @@ fn serve_process_history(
     // Require process and pid parameters
     let (Some(process), Some(process_pid)) = (process_name, pid) else {
         warn!("Missing required 'process' or 'pid' parameter");
-        return Response::builder()
-            .status(StatusCode::BAD_REQUEST)
-            .body(Full::new(Bytes::from(
-                r#"{"error":"Missing required 'process' and 'pid' parameters"}"#,
-            )))
-            .unwrap();
+        return bad_request_response("Missing required 'process' and 'pid' parameters");
     };
 
     info!(
@@ -984,10 +1056,7 @@ async fn update_device(
 
     if device_id.is_empty() {
         warn!("Missing device ID in path");
-        return Response::builder()
-            .status(StatusCode::BAD_REQUEST)
-            .body(Full::new(Bytes::from(r#"{"error":"Missing device ID"}"#)))
-            .unwrap();
+        return bad_request_response("Missing device ID");
     }
 
     // Read the request body

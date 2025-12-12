@@ -1,13 +1,57 @@
+use crate::models::db_enum::DbEnum;
 use crate::models::{
     AutomationAction, AutomationCondition, AutomationExecutionLog, AutomationRule,
     ComparisonOperator, Device, DeviceInfo, DeviceType, LogicalOperator, PowerSource, SensorField,
     SwitchAction, TemperatureReading,
 };
+use chrono::{DateTime, Utc};
 use rusqlite::{Connection, Result, params};
 use std::fs;
 use std::path::Path;
 use std::sync::Mutex;
 use tracing::{debug, error, info, warn};
+
+/// Convert a Unix timestamp to a DateTime, with logging for invalid timestamps.
+///
+/// This helper makes data corruption visible by logging when timestamps are invalid,
+/// instead of silently defaulting to epoch. This helps detect database corruption
+/// or bugs in timestamp handling.
+///
+/// # Arguments
+/// * `ts` - Unix timestamp (seconds since epoch)
+/// * `context` - Description of where this timestamp came from (e.g., "temperature_reading.timestamp")
+///
+/// # Returns
+/// Valid DateTime, or Unix epoch (1970-01-01) with error logged if timestamp is invalid
+fn timestamp_to_datetime(ts: i64, context: &str) -> DateTime<Utc> {
+    chrono::DateTime::from_timestamp(ts, 0).unwrap_or_else(|| {
+        error!(
+            timestamp = ts,
+            context = context,
+            "Invalid timestamp in database - using Unix epoch as fallback"
+        );
+        DateTime::UNIX_EPOCH
+    })
+}
+
+/// Create an InvalidColumnType error for enum deserialization failures.
+///
+/// This helper eliminates duplicate error construction code and ensures consistent
+/// error reporting when database string values can't be converted to enums.
+///
+/// # Arguments
+/// * `column_index` - Zero-based column index in the query result
+/// * `column_name` - Name of the column (for error messages)
+///
+/// # Returns
+/// rusqlite::Error::InvalidColumnType with consistent formatting
+fn invalid_column_error(column_index: usize, column_name: &str) -> rusqlite::Error {
+    rusqlite::Error::InvalidColumnType(
+        column_index,
+        column_name.to_string(),
+        rusqlite::types::Type::Text,
+    )
+}
 
 pub struct Database {
     conn: Mutex<Connection>,
@@ -344,7 +388,7 @@ impl Database {
                     humidity: row.get(2)?,
                     battery: row.get(3)?,
                     link_quality: row.get(4)?,
-                    timestamp: chrono::DateTime::from_timestamp(row.get(5)?, 0).unwrap_or_default(),
+                    timestamp: timestamp_to_datetime(row.get(5)?, "temperature_reading.timestamp"),
                 })
             })?
             .collect::<Result<Vec<_>>>()?;
@@ -396,7 +440,7 @@ impl Database {
                     humidity: row.get(2)?,
                     battery: row.get(3)?,
                     link_quality: row.get(4)?,
-                    timestamp: chrono::DateTime::from_timestamp(row.get(5)?, 0).unwrap_or_default(),
+                    timestamp: timestamp_to_datetime(row.get(5)?, "temperature_reading.timestamp"),
                 })
             })?
             .collect::<Result<Vec<_>>>()?;
@@ -443,7 +487,7 @@ impl Database {
                     humidity: row.get(2)?,
                     battery: row.get(3)?,
                     link_quality: row.get(4)?,
-                    timestamp: chrono::DateTime::from_timestamp(row.get(5)?, 0).unwrap_or_default(),
+                    timestamp: timestamp_to_datetime(row.get(5)?, "temperature_reading.timestamp"),
                 })
             })?
             .collect::<Result<Vec<_>>>()?;
@@ -518,21 +562,11 @@ impl Database {
                 id: row.get(0)?,
                 mqtt_topic: row.get(1)?,
                 name: row.get(2)?,
-                device_type: DeviceType::from_db_string(&device_type_str).ok_or_else(|| {
-                    rusqlite::Error::InvalidColumnType(
-                        3,
-                        "device_type".to_string(),
-                        rusqlite::types::Type::Text,
-                    )
-                })?,
-                power_source: PowerSource::from_db_string(&power_source_str).ok_or_else(|| {
-                    rusqlite::Error::InvalidColumnType(
-                        4,
-                        "power_source".to_string(),
-                        rusqlite::types::Type::Text,
-                    )
-                })?,
-                added_at: chrono::DateTime::from_timestamp(row.get(5)?, 0).unwrap_or_default(),
+                device_type: DeviceType::from_db_string(&device_type_str)
+                    .ok_or_else(|| invalid_column_error(3, "device_type"))?,
+                power_source: PowerSource::from_db_string(&power_source_str)
+                    .ok_or_else(|| invalid_column_error(4, "power_source"))?,
+                added_at: timestamp_to_datetime(row.get(5)?, "device.added_at"),
             })
         });
 
@@ -577,21 +611,11 @@ impl Database {
                 id: row.get(0)?,
                 mqtt_topic: row.get(1)?,
                 name: row.get(2)?,
-                device_type: DeviceType::from_db_string(&device_type_str).ok_or_else(|| {
-                    rusqlite::Error::InvalidColumnType(
-                        3,
-                        "device_type".to_string(),
-                        rusqlite::types::Type::Text,
-                    )
-                })?,
-                power_source: PowerSource::from_db_string(&power_source_str).ok_or_else(|| {
-                    rusqlite::Error::InvalidColumnType(
-                        4,
-                        "power_source".to_string(),
-                        rusqlite::types::Type::Text,
-                    )
-                })?,
-                added_at: chrono::DateTime::from_timestamp(row.get(5)?, 0).unwrap_or_default(),
+                device_type: DeviceType::from_db_string(&device_type_str)
+                    .ok_or_else(|| invalid_column_error(3, "device_type"))?,
+                power_source: PowerSource::from_db_string(&power_source_str)
+                    .ok_or_else(|| invalid_column_error(4, "power_source"))?,
+                added_at: timestamp_to_datetime(row.get(5)?, "device.added_at"),
             })
         });
 
@@ -638,23 +662,11 @@ impl Database {
                     id: row.get(0)?,
                     mqtt_topic: row.get(1)?,
                     name: row.get(2)?,
-                    device_type: DeviceType::from_db_string(&device_type_str).ok_or_else(|| {
-                        rusqlite::Error::InvalidColumnType(
-                            3,
-                            "device_type".to_string(),
-                            rusqlite::types::Type::Text,
-                        )
-                    })?,
-                    power_source: PowerSource::from_db_string(&power_source_str).ok_or_else(
-                        || {
-                            rusqlite::Error::InvalidColumnType(
-                                4,
-                                "power_source".to_string(),
-                                rusqlite::types::Type::Text,
-                            )
-                        },
-                    )?,
-                    added_at: chrono::DateTime::from_timestamp(row.get(5)?, 0).unwrap_or_default(),
+                    device_type: DeviceType::from_db_string(&device_type_str)
+                        .ok_or_else(|| invalid_column_error(3, "device_type"))?,
+                    power_source: PowerSource::from_db_string(&power_source_str)
+                        .ok_or_else(|| invalid_column_error(4, "power_source"))?,
+                    added_at: timestamp_to_datetime(row.get(5)?, "device.added_at"),
                 })
             })?
             .collect::<Result<Vec<_>>>()?;
@@ -913,13 +925,7 @@ impl Database {
             ) = rule_row_result?;
 
             let condition_operator = LogicalOperator::from_db_string(&condition_operator_str)
-                .ok_or_else(|| {
-                    rusqlite::Error::InvalidColumnType(
-                        4,
-                        "condition_operator".to_string(),
-                        rusqlite::types::Type::Text,
-                    )
-                })?;
+                .ok_or_else(|| invalid_column_error(4, "condition_operator"))?;
 
             // Get conditions for this rule
             let mut cond_stmt = conn.prepare(
@@ -936,22 +942,10 @@ impl Database {
                     Ok(AutomationCondition {
                         id: row.get(0)?,
                         device_id: row.get(1)?,
-                        field: SensorField::from_db_string(&field_str).ok_or_else(|| {
-                            rusqlite::Error::InvalidColumnType(
-                                2,
-                                "field".to_string(),
-                                rusqlite::types::Type::Text,
-                            )
-                        })?,
-                        operator: ComparisonOperator::from_db_string(&operator_str).ok_or_else(
-                            || {
-                                rusqlite::Error::InvalidColumnType(
-                                    3,
-                                    "operator".to_string(),
-                                    rusqlite::types::Type::Text,
-                                )
-                            },
-                        )?,
+                        field: SensorField::from_db_string(&field_str)
+                            .ok_or_else(|| invalid_column_error(2, "field"))?,
+                        operator: ComparisonOperator::from_db_string(&operator_str)
+                            .ok_or_else(|| invalid_column_error(3, "operator"))?,
                         value: row.get(4)?,
                     })
                 })?
@@ -971,13 +965,8 @@ impl Database {
                     Ok(AutomationAction {
                         id: row.get(0)?,
                         device_id: row.get(1)?,
-                        action: SwitchAction::from_db_string(&action_str).ok_or_else(|| {
-                            rusqlite::Error::InvalidColumnType(
-                                2,
-                                "action".to_string(),
-                                rusqlite::types::Type::Text,
-                            )
-                        })?,
+                        action: SwitchAction::from_db_string(&action_str)
+                            .ok_or_else(|| invalid_column_error(2, "action"))?,
                     })
                 })?
                 .collect::<Result<Vec<_>>>()?;
@@ -990,8 +979,8 @@ impl Database {
                 condition_operator,
                 conditions,
                 actions,
-                created_at: chrono::DateTime::from_timestamp(created_at, 0).unwrap_or_default(),
-                updated_at: chrono::DateTime::from_timestamp(updated_at, 0).unwrap_or_default(),
+                created_at: timestamp_to_datetime(created_at, "automation_rule.created_at"),
+                updated_at: timestamp_to_datetime(updated_at, "automation_rule.updated_at"),
                 last_triggered_at: last_triggered_at
                     .and_then(|ts| chrono::DateTime::from_timestamp(ts, 0)),
                 trigger_count,

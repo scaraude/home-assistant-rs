@@ -1,4 +1,5 @@
 mod automation;
+pub mod db_enum;
 mod device;
 mod switch;
 mod temperature;
