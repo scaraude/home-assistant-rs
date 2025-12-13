@@ -1,7 +1,7 @@
 use crate::db::Database;
 use crate::models::{
-    AutomationAction, AutomationExecutionLog, AutomationRule, SensorField, SwitchAction,
-    TemperatureReading,
+    AutomationAction, AutomationExecutionLog, AutomationRule, SensorField, SensorReading,
+    SwitchAction,
 };
 use crate::mqtt::MqttClient;
 use crate::state::{DeviceStateStore, SwitchStateStore};
@@ -40,9 +40,9 @@ impl AutomationEngine {
     }
 
     /// Evaluate all automation rules against a new sensor reading
-    pub async fn evaluate_reading(&self, reading: &TemperatureReading) {
+    pub async fn evaluate_reading(&self, reading: &SensorReading) {
         debug!(
-            device_id = %reading.device_id,
+            device_id = %reading.device_id(),
             "Evaluating automation rules for new reading"
         );
 
@@ -68,11 +68,11 @@ impl AutomationEngine {
     }
 
     /// Evaluate a single rule against a reading
-    async fn evaluate_rule(&self, rule: &AutomationRule, reading: &TemperatureReading) {
+    async fn evaluate_rule(&self, rule: &AutomationRule, reading: &SensorReading) {
         debug!(
             rule_id = %rule.id,
             rule_name = %rule.name,
-            device_id = %reading.device_id,
+            device_id = %reading.device_id(),
             "Evaluating rule"
         );
 
@@ -80,12 +80,12 @@ impl AutomationEngine {
         let affects_this_device = rule
             .conditions
             .iter()
-            .any(|c| c.device_id == reading.device_id);
+            .any(|c| c.device_id == reading.device_id());
 
         if !affects_this_device {
             debug!(
                 rule_id = %rule.id,
-                device_id = %reading.device_id,
+                device_id = %reading.device_id(),
                 "Rule does not reference this device, skipping"
             );
             return;
@@ -187,10 +187,34 @@ impl AutomationEngine {
 
         // Extract the field value
         let field_value: Option<f64> = match condition.field {
-            SensorField::Temperature => Some(latest_reading.temperature.into()),
-            SensorField::Humidity => latest_reading.humidity.map(|h| h as f64),
-            SensorField::Battery => latest_reading.battery.map(|b| b as f64),
-            SensorField::LinkQuality => latest_reading.link_quality.map(|lq| lq as f64),
+            SensorField::Temperature => {
+                // Only temperature/humidity sensors have temperature
+                if let SensorReading::TempHumidity { temperature, .. } = latest_reading {
+                    Some(temperature.into())
+                } else {
+                    None
+                }
+            }
+            SensorField::Humidity => {
+                // Only temperature/humidity sensors have humidity
+                if let SensorReading::TempHumidity { humidity, .. } = latest_reading {
+                    Some(humidity.into())
+                } else {
+                    None
+                }
+            }
+            SensorField::Battery => {
+                // Battery is now stored in DeviceState, not in readings
+                self.device_state
+                    .get_battery(&condition.device_id)
+                    .map(|b| b as f64)
+            }
+            SensorField::LinkQuality => {
+                // Link quality is now stored in DeviceState, not in readings
+                self.device_state
+                    .get_link_quality(&condition.device_id)
+                    .map(|lq| lq as f64)
+            }
         };
 
         let field_value = match field_value {

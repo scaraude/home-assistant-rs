@@ -55,6 +55,18 @@ impl DeviceStateStore {
         self.states.read().ok()?.get(device_id).cloned()
     }
 
+    /// Get battery level for a device
+    pub fn get_battery(&self, device_id: &str) -> Option<u8> {
+        self.get_state(device_id)
+            .and_then(|state| state.battery_level)
+    }
+
+    /// Get link quality for a device
+    pub fn get_link_quality(&self, device_id: &str) -> Option<u8> {
+        self.get_state(device_id)
+            .and_then(|state| state.link_quality)
+    }
+
     /// Get all known device states
     pub fn _get_all_states(&self) -> HashMap<String, DeviceState> {
         self.states

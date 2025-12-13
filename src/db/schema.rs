@@ -29,7 +29,7 @@ impl Database {
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 device_id TEXT NOT NULL,
                 temperature REAL NOT NULL,
-                humidity REAL,
+                humidity REAL NOT NULL,
                 battery INTEGER,
                 link_quality INTEGER,
                 timestamp INTEGER NOT NULL

@@ -1,4 +1,4 @@
-use crate::models::{DeviceInfo, TemperatureReading};
+use crate::models::{DeviceInfo, SensorReading};
 use rusqlite::{Result, params};
 use tracing::{debug, info, warn};
 
@@ -6,51 +6,63 @@ use super::super::connection::{Database, MutexExt};
 use super::utils::timestamp_to_datetime;
 
 impl Database {
-    /// Insert a temperature reading
-    pub fn insert_reading(&self, reading: &TemperatureReading) -> Result<()> {
-        debug!(
-            device_id = %reading.device_id,
-            temperature = %reading.temperature,
-            humidity = ?reading.humidity,
-            battery = ?reading.battery,
-            link_quality = ?reading.link_quality,
-            timestamp = %reading.timestamp,
-            "Inserting temperature reading"
-        );
-
-        let start = std::time::Instant::now();
-        let result = self.conn.lock_or_recover().execute(
-            "INSERT INTO temperature_readings
-             (device_id, temperature, humidity, battery, link_quality, timestamp)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![
-                reading.device_id,
-                reading.temperature,
-                reading.humidity,
-                reading.battery,
-                reading.link_quality,
-                reading.timestamp.timestamp()
-            ],
-        );
-
-        match result {
-            Ok(rows) => {
-                let elapsed = start.elapsed();
+    /// Insert a sensor reading
+    pub fn insert_reading(&self, reading: &SensorReading) -> Result<()> {
+        match reading {
+            SensorReading::TempHumidity {
+                device_id,
+                temperature,
+                humidity,
+                timestamp,
+            } => {
                 debug!(
-                    device_id = %reading.device_id,
-                    rows_affected = rows,
-                    duration_us = elapsed.as_micros(),
-                    "Successfully inserted reading"
+                    device_id = %device_id,
+                    temperature = %temperature,
+                    humidity = %humidity,
+                    timestamp = %timestamp,
+                    "Inserting temperature/humidity reading"
                 );
-                Ok(())
+
+                let start = std::time::Instant::now();
+                let result = self.conn.lock_or_recover().execute(
+                    "INSERT INTO temperature_readings
+                     (device_id, temperature, humidity, battery, link_quality, timestamp)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                    params![
+                        device_id,
+                        temperature,
+                        humidity,
+                        None::<u8>, // battery is now stored in DeviceState, not in readings
+                        None::<u8>, // link_quality is now stored in DeviceState, not in readings
+                        timestamp.timestamp()
+                    ],
+                );
+
+                match result {
+                    Ok(rows) => {
+                        let elapsed = start.elapsed();
+                        debug!(
+                            device_id = %device_id,
+                            rows_affected = rows,
+                            duration_us = elapsed.as_micros(),
+                            "Successfully inserted reading"
+                        );
+                        Ok(())
+                    }
+                    Err(e) => {
+                        tracing::error!(
+                            error = %e,
+                            device_id = %device_id,
+                            "Database insert failed"
+                        );
+                        Err(e)
+                    }
+                }
             }
-            Err(e) => {
-                tracing::error!(
-                    error = %e,
-                    device_id = %reading.device_id,
-                    "Database insert failed"
-                );
-                Err(e)
+            SensorReading::Presence { .. } => {
+                // TODO: Implement presence sensor storage when needed
+                warn!("Presence sensor readings not yet supported in database");
+                Ok(())
             }
         }
     }
@@ -89,7 +101,7 @@ impl Database {
     }
 
     /// Get readings for all sensors within a time range
-    pub fn get_readings_since(&self, since_timestamp: i64) -> Result<Vec<TemperatureReading>> {
+    pub fn get_readings_since(&self, since_timestamp: i64) -> Result<Vec<SensorReading>> {
         debug!(
             since_timestamp = since_timestamp,
             "Querying readings since timestamp"
@@ -98,14 +110,14 @@ impl Database {
 
         let conn = self.conn.lock_or_recover();
         let mut stmt = conn.prepare(
-            "SELECT device_id, temperature, humidity, battery, link_quality, timestamp
+            "SELECT device_id, temperature, humidity, timestamp
              FROM temperature_readings
              WHERE timestamp > ?1
              ORDER BY device_id, timestamp DESC",
         )?;
 
         let readings = stmt
-            .query_map(params![since_timestamp], Self::map_temperature_reading_row)?
+            .query_map(params![since_timestamp], Self::map_sensor_reading_row)?
             .collect::<Result<Vec<_>>>()?;
 
         let elapsed = start.elapsed();
@@ -131,7 +143,7 @@ impl Database {
         &self,
         device_id: &str,
         since_timestamp: i64,
-    ) -> Result<Vec<TemperatureReading>> {
+    ) -> Result<Vec<SensorReading>> {
         debug!(
             device_id = %device_id,
             since_timestamp = since_timestamp,
@@ -141,23 +153,17 @@ impl Database {
 
         let conn = self.conn.lock_or_recover();
         let mut stmt = conn.prepare(
-            "SELECT device_id, temperature, humidity, battery, link_quality, timestamp
+            "SELECT device_id, temperature, humidity, timestamp
              FROM temperature_readings
              WHERE device_id = ?1 AND timestamp > ?2
              ORDER BY timestamp DESC",
         )?;
 
         let readings = stmt
-            .query_map(params![device_id, since_timestamp], |row| {
-                Ok(TemperatureReading {
-                    device_id: row.get(0)?,
-                    temperature: row.get(1)?,
-                    humidity: row.get(2)?,
-                    battery: row.get(3)?,
-                    link_quality: row.get(4)?,
-                    timestamp: timestamp_to_datetime(row.get(5)?, "temperature_reading.timestamp"),
-                })
-            })?
+            .query_map(
+                params![device_id, since_timestamp],
+                Self::map_sensor_reading_row,
+            )?
             .collect::<Result<Vec<_>>>()?;
 
         let elapsed = start.elapsed();
@@ -181,13 +187,10 @@ impl Database {
     }
 
     /// Get the latest reading for a specific device (optimized for automation conditions)
-    pub fn get_latest_reading_for_sensor(
-        &self,
-        device_id: &str,
-    ) -> Result<Option<TemperatureReading>> {
+    pub fn get_latest_reading_for_sensor(&self, device_id: &str) -> Result<Option<SensorReading>> {
         let conn = self.conn.lock_or_recover();
         let mut stmt = conn.prepare(
-            "SELECT device_id, temperature, humidity, battery, link_quality, timestamp
+            "SELECT device_id, temperature, humidity, timestamp
              FROM temperature_readings
              WHERE device_id = ?1
              ORDER BY timestamp DESC
@@ -195,23 +198,21 @@ impl Database {
         )?;
 
         let mut readings = stmt
-            .query_map(params![device_id], Self::map_temperature_reading_row)?
+            .query_map(params![device_id], Self::map_sensor_reading_row)?
             .collect::<Result<Vec<_>>>()?;
 
         Ok(readings.pop())
     }
 
-    /// Helper to map a database row to a TemperatureReading struct
+    /// Helper to map a database row to a SensorReading enum
     ///
     /// Eliminates duplication across get_readings_since, get_readings_for_sensor_since, and get_latest_reading_for_sensor
-    fn map_temperature_reading_row(row: &rusqlite::Row) -> Result<TemperatureReading> {
-        Ok(TemperatureReading {
+    fn map_sensor_reading_row(row: &rusqlite::Row) -> Result<SensorReading> {
+        Ok(SensorReading::TempHumidity {
             device_id: row.get(0)?,
             temperature: row.get(1)?,
             humidity: row.get(2)?,
-            battery: row.get(3)?,
-            link_quality: row.get(4)?,
-            timestamp: timestamp_to_datetime(row.get(5)?, "temperature_reading.timestamp"),
+            timestamp: timestamp_to_datetime(row.get(3)?, "temperature_reading.timestamp"),
         })
     }
 }

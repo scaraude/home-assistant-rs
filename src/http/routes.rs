@@ -107,7 +107,7 @@ pub fn serve_readings(
             // Find latest timestamp for delta tracking
             let latest_timestamp = readings
                 .iter()
-                .map(|r| r.timestamp.timestamp())
+                .map(|r| r.timestamp().timestamp())
                 .max()
                 .unwrap_or(since);
 

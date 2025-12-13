@@ -97,24 +97,45 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         while let Some(reading) = readings_rx.recv().await {
             reading_count += 1;
 
-            info!(
-                device_id = %reading.device_id,
-                temperature = %reading.temperature,
-                humidity = ?reading.humidity,
-                count = reading_count,
-                "Received sensor reading"
-            );
+            match &reading {
+                crate::models::SensorReading::TempHumidity {
+                    device_id,
+                    temperature,
+                    humidity,
+                    ..
+                } => {
+                    info!(
+                        device_id = %device_id,
+                        temperature = %temperature,
+                        humidity = %humidity,
+                        count = reading_count,
+                        "Received temperature/humidity sensor reading"
+                    );
+                }
+                crate::models::SensorReading::Presence {
+                    device_id,
+                    occupied,
+                    ..
+                } => {
+                    info!(
+                        device_id = %device_id,
+                        occupied = %occupied,
+                        count = reading_count,
+                        "Received presence sensor reading"
+                    );
+                }
+            }
 
             if let Err(e) = db_clone.insert_reading(&reading) {
                 error!(
                     error = %e,
-                    device_id = %reading.device_id,
+                    device_id = %reading.device_id(),
                     reading_count = reading_count,
                     "Failed to insert reading into database"
                 );
             } else {
                 debug!(
-                    device_id = %reading.device_id,
+                    device_id = %reading.device_id(),
                     reading_count = reading_count,
                     "Successfully inserted reading"
                 );

@@ -1,6 +1,6 @@
 use super::event_loop::spawn_event_loop;
 use crate::db::Database;
-use crate::models::TemperatureReading;
+use crate::models::SensorReading;
 use crate::state::{DeviceStateStore, SwitchStateStore};
 use rumqttc::{AsyncClient, ClientError, MqttOptions, QoS};
 use std::sync::Arc;
@@ -23,7 +23,7 @@ impl MqttClient {
         db: Arc<Database>,
         device_state: DeviceStateStore,
         switch_state: SwitchStateStore,
-    ) -> (Self, mpsc::Receiver<TemperatureReading>) {
+    ) -> (Self, mpsc::Receiver<SensorReading>) {
         info!(
             broker = %broker_host,
             port = broker_port,

@@ -1,5 +1,5 @@
 use crate::db::Database;
-use crate::models::{DeviceMqttMessage, TemperatureReading};
+use crate::models::{DeviceMqttMessage, SensorReading};
 use crate::mqtt::handlers::handle_device_message;
 use crate::state::{DeviceStateStore, SwitchStateStore};
 use rumqttc::{Event, EventLoop, Packet};
@@ -13,7 +13,7 @@ pub(super) fn spawn_event_loop(
     db: Arc<Database>,
     device_state: DeviceStateStore,
     switch_state: SwitchStateStore,
-    tx: mpsc::Sender<TemperatureReading>,
+    tx: mpsc::Sender<SensorReading>,
 ) {
     tokio::spawn(async move {
         info!("MQTT event loop started");

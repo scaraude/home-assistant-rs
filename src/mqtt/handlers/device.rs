@@ -1,7 +1,6 @@
 use crate::db::Database;
 use crate::models::{
     CommanderType, DeviceCapability, DeviceMqttMessage, SensorReading, SensorType,
-    TemperatureReading,
 };
 use crate::mqtt::device_discovery::get_or_create_device_unified;
 use crate::state::{DeviceStateStore, SwitchStateStore};
@@ -14,7 +13,7 @@ pub async fn handle_device_message(
     db: &Database,
     device_state: &DeviceStateStore,
     switch_state: &SwitchStateStore,
-    tx: &mpsc::Sender<TemperatureReading>,
+    tx: &mpsc::Sender<SensorReading>,
     mqtt_topic: &str,
     msg: DeviceMqttMessage,
     no_temperature: &mut u64,
@@ -95,7 +94,7 @@ async fn handle_sensor_message(
     sensor_type: &SensorType,
     device_id: &str,
     msg: &DeviceMqttMessage,
-    tx: &mpsc::Sender<TemperatureReading>,
+    tx: &mpsc::Sender<SensorReading>,
     no_temperature: &mut u64,
     send_failures: &mut u64,
 ) {
@@ -103,28 +102,28 @@ async fn handle_sensor_message(
     let sensor_reading = SensorReading::from_mqtt(device_id.to_string(), sensor_type, msg);
 
     match sensor_reading {
-        Some(SensorReading::TempHumidity {
-            temperature,
-            humidity,
-            timestamp,
-            ..
-        }) => {
-            // Convert to TemperatureReading for backward compatibility with existing channel
-            let reading = TemperatureReading {
-                device_id: device_id.to_string(),
-                temperature,
-                humidity: Some(humidity),
-                battery: msg.battery,
-                link_quality: msg.linkquality,
-                timestamp,
-            };
-
-            info!(
-                device_id = %device_id,
-                temperature = %temperature,
-                humidity = %humidity,
-                "Created temperature reading from MQTT message"
-            );
+        Some(reading) => {
+            match &reading {
+                SensorReading::TempHumidity {
+                    temperature,
+                    humidity,
+                    ..
+                } => {
+                    info!(
+                        device_id = %device_id,
+                        temperature = %temperature,
+                        humidity = %humidity,
+                        "Created temperature/humidity reading from MQTT message"
+                    );
+                }
+                SensorReading::Presence { occupied, .. } => {
+                    info!(
+                        device_id = %device_id,
+                        occupied = %occupied,
+                        "Created presence reading from MQTT message"
+                    );
+                }
+            }
 
             // Send to channel
             match tx.send(reading).await {
@@ -141,14 +140,6 @@ async fn handle_sensor_message(
                     );
                 }
             }
-        }
-        Some(SensorReading::Presence { occupied, .. }) => {
-            info!(
-                device_id = %device_id,
-                occupied = %occupied,
-                "Received presence sensor update"
-            );
-            // TODO: Store presence readings in database when table is created
         }
         None => {
             *no_temperature += 1;
