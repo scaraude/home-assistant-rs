@@ -9,7 +9,10 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 
-pub struct MqttListener {
+/// Unified MQTT client for both publishing commands and listening to messages.
+/// Handles all MQTT operations including subscribing to topics and publishing commands.
+#[derive(Clone)]
+pub struct MqttClient {
     client: AsyncClient,
 }
 
@@ -18,8 +21,8 @@ enum MqttMessage {
     Switch(SwitchMqttMessage),
 }
 
-impl MqttListener {
-    /// Create a new MQTT listener
+impl MqttClient {
+    /// Create a new MQTT client and start listening to messages
     pub fn new(
         broker_host: &str,
         broker_port: u16,
@@ -32,7 +35,7 @@ impl MqttListener {
             broker = %broker_host,
             port = broker_port,
             client_id = %client_id,
-            "Creating MQTT listener"
+            "Creating MQTT client"
         );
 
         let mut mqtt_options = MqttOptions::new(client_id, broker_host, broker_port);
@@ -45,7 +48,7 @@ impl MqttListener {
             "MQTT options configured"
         );
 
-        let (client, mut eventloop) = AsyncClient::new(mqtt_options, 10);
+        let (async_client, mut eventloop) = AsyncClient::new(mqtt_options, 10);
         let (tx, rx) = mpsc::channel(100);
 
         info!(
@@ -255,11 +258,16 @@ impl MqttListener {
             }
         });
 
-        (Self { client }, rx)
+        (
+            Self {
+                client: async_client,
+            },
+            rx,
+        )
     }
 
     /// Subscribe to zigbee2mqtt topics
-    pub async fn subscribe(&self) -> Result<(), rumqttc::ClientError> {
+    pub async fn subscribe_to_zigbee2mqtt(&self) -> Result<(), rumqttc::ClientError> {
         info!(
             topic = "zigbee2mqtt/#",
             qos = "AtMostOnce",
@@ -283,7 +291,7 @@ impl MqttListener {
     }
 
     /// Publish a command to a device
-    pub async fn publish(
+    pub async fn publish_command(
         &self,
         device_id: &str,
         payload: &str,
@@ -310,11 +318,6 @@ impl MqttListener {
                 Err(e)
             }
         }
-    }
-
-    /// Get a clone of the MQTT client for publishing from other parts of the application
-    pub fn get_client(&self) -> AsyncClient {
-        self.client.clone()
     }
 }
 

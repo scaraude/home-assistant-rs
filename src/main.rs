@@ -13,7 +13,7 @@ use cache::ResponseCache;
 use db::Database;
 use device_state::DeviceStateStore;
 use http::HttpServer;
-use mqtt::MqttListener;
+use mqtt::MqttClient;
 use std::sync::Arc;
 use switch_state::SwitchStateStore;
 use tokio::sync::Mutex;
@@ -62,13 +62,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let switch_state = Arc::new(SwitchStateStore::new());
     info!("Switch state store initialized");
 
-    // Start MQTT listener
+    // Start MQTT client
     info!(
         broker = %mqtt_broker,
         port = mqtt_port,
         "Connecting to MQTT broker"
     );
-    let (mqtt_listener, mut readings_rx) = MqttListener::new(
+    let (mqtt_client, mut readings_rx) = MqttClient::new(
         &mqtt_broker,
         mqtt_port,
         "home-assistant-rs",
@@ -77,13 +77,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         (*switch_state).clone(),
     );
 
-    mqtt_listener.subscribe().await?;
+    mqtt_client.subscribe_to_zigbee2mqtt().await?;
     info!("Successfully subscribed to zigbee2mqtt topics");
 
     // Initialize automation engine
     let automation_engine = Arc::new(AutomationEngine::new(
         db.clone(),
-        mqtt_listener.get_client(),
+        mqtt_client.clone(),
         device_state.clone(),
         (*switch_state).clone(),
     ));
@@ -153,15 +153,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    // Wrap MQTT listener in Arc<Mutex> for sharing with HTTP server
-    let mqtt_listener = Arc::new(Mutex::new(mqtt_listener));
+    // Wrap MQTT client in Arc<Mutex> for sharing with HTTP server
+    let mqtt_client = Arc::new(Mutex::new(mqtt_client));
 
     // Start HTTP server
     info!(addr = %http_addr, "Starting HTTP server");
     let server = HttpServer::new(
         db,
         cache,
-        mqtt_listener,
+        mqtt_client,
         switch_state,
         device_state,
         http_addr,

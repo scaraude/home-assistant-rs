@@ -4,8 +4,8 @@ use crate::models::{
     AutomationAction, AutomationExecutionLog, AutomationRule, SensorField, SwitchAction,
     TemperatureReading,
 };
+use crate::mqtt::MqttClient;
 use crate::switch_state::SwitchStateStore;
-use rumqttc::AsyncClient;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -14,7 +14,7 @@ use tracing::{debug, error, info, warn};
 /// Automation engine that evaluates rules and executes actions
 pub struct AutomationEngine {
     db: Arc<Database>,
-    mqtt_client: AsyncClient,
+    mqtt_client: MqttClient,
     device_state: DeviceStateStore,
     switch_state: SwitchStateStore,
     /// Track which rules were last triggered to implement debouncing
@@ -26,7 +26,7 @@ pub struct AutomationEngine {
 impl AutomationEngine {
     pub fn new(
         db: Arc<Database>,
-        mqtt_client: AsyncClient,
+        mqtt_client: MqttClient,
         device_state: DeviceStateStore,
         switch_state: SwitchStateStore,
     ) -> Self {
@@ -287,20 +287,9 @@ impl AutomationEngine {
         let state_str = if desired_state { "ON" } else { "OFF" };
         let payload = format!(r#"{{"state":"{}"}}"#, state_str);
 
-        info!(
-            device_id = %action.device_id,
-            mqtt_topic = %mqtt_topic,
-            state = %desired_state,
-            "Publishing switch command"
-        );
-
+        // Publish command using MqttClient (eliminates duplication)
         self.mqtt_client
-            .publish(
-                &format!("zigbee2mqtt/{}/set", mqtt_topic),
-                rumqttc::QoS::AtLeastOnce,
-                false,
-                payload,
-            )
+            .publish_command(&mqtt_topic, &payload)
             .await
             .map_err(|e| format!("MQTT publish error: {}", e))?;
 

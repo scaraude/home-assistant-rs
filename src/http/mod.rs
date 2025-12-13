@@ -6,7 +6,7 @@ use crate::models::{
     AutomationAction, AutomationCondition, AutomationRule, CreateAutomationRuleRequest,
     SwitchCommand, UpdateAutomationRuleRequest,
 };
-use crate::mqtt::MqttListener;
+use crate::mqtt::MqttClient;
 use crate::switch_state::SwitchStateStore;
 use http_body_util::{BodyExt, Full};
 use hyper::body::Bytes;
@@ -23,7 +23,7 @@ use tracing::{debug, error, info, warn};
 pub struct HttpServer {
     db: Arc<Database>,
     cache: Arc<ResponseCache>,
-    mqtt: Arc<Mutex<MqttListener>>,
+    mqtt: Arc<Mutex<MqttClient>>,
     switch_state: Arc<SwitchStateStore>,
     device_state: DeviceStateStore,
     addr: SocketAddr,
@@ -33,7 +33,7 @@ impl HttpServer {
     pub fn new(
         db: Arc<Database>,
         cache: Arc<ResponseCache>,
-        mqtt: Arc<Mutex<MqttListener>>,
+        mqtt: Arc<Mutex<MqttClient>>,
         switch_state: Arc<SwitchStateStore>,
         device_state: DeviceStateStore,
         addr: SocketAddr,
@@ -300,7 +300,7 @@ async fn handle_request(
     req: Request<hyper::body::Incoming>,
     db: Arc<Database>,
     cache: Arc<ResponseCache>,
-    mqtt: Arc<Mutex<MqttListener>>,
+    mqtt: Arc<Mutex<MqttClient>>,
     switch_state: Arc<SwitchStateStore>,
     device_state: DeviceStateStore,
 ) -> Result<Response<Full<Bytes>>, hyper::Error> {
@@ -892,7 +892,7 @@ fn serve_switches_list(
 async fn execute_command(
     req: Request<hyper::body::Incoming>,
     db: &Arc<Database>,
-    mqtt: &Arc<Mutex<MqttListener>>,
+    mqtt: &Arc<Mutex<MqttClient>>,
 ) -> Response<Full<Bytes>> {
     debug!("Parsing command request body");
 
@@ -965,7 +965,7 @@ async fn execute_command(
 
     // Publish to MQTT using the actual MQTT topic
     let mqtt_guard = mqtt.lock().await;
-    match mqtt_guard.publish(&mqtt_topic, &payload).await {
+    match mqtt_guard.publish_command(&mqtt_topic, &payload).await {
         Ok(_) => {
             info!(
                 device_id = %command.device_id,
