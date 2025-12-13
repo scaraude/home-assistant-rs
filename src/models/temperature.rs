@@ -28,7 +28,7 @@ pub struct TemperatureReading {
 /// Zigbee2MQTT message format
 /// This matches the JSON structure published by zigbee2mqtt
 #[derive(Debug, Deserialize, Clone)]
-pub struct Zigbee2MqttMessage {
+pub struct TempSensorMqttMessage {
     /// Temperature in Celsius
     pub temperature: Option<f32>,
 
@@ -46,7 +46,7 @@ pub struct Zigbee2MqttMessage {
 impl TemperatureReading {
     /// Create a new temperature reading from a zigbee2mqtt message
     /// Note: device_id should be the UUID from the devices table, not the MQTT topic
-    pub fn from_mqtt(device_id: String, msg: Zigbee2MqttMessage) -> Option<Self> {
+    pub fn from_mqtt(device_id: String, msg: TempSensorMqttMessage) -> Option<Self> {
         debug!(
             device_id = %device_id,
             temperature = ?msg.temperature,

@@ -1,7 +1,7 @@
 use crate::db::Database;
 use crate::device_state::DeviceStateStore;
 use crate::models::{
-    Device, DeviceType, PowerSource, SwitchMqttMessage, TemperatureReading, Zigbee2MqttMessage,
+    Device, DeviceType, PowerSource, SwitchMqttMessage, TempSensorMqttMessage, TemperatureReading,
 };
 use crate::switch_state::SwitchStateStore;
 use rumqttc::{AsyncClient, Event, MqttOptions, Packet, QoS};
@@ -17,7 +17,7 @@ pub struct MqttClient {
 }
 
 enum MqttMessage {
-    TempHumiditySensor(Zigbee2MqttMessage),
+    TempHumiditySensor(TempSensorMqttMessage),
     Switch(SwitchMqttMessage),
 }
 
@@ -139,7 +139,7 @@ impl MqttClient {
                             }
 
                             // Also try parsing as temperature message
-                            match serde_json::from_slice::<Zigbee2MqttMessage>(&p.payload) {
+                            match serde_json::from_slice::<TempSensorMqttMessage>(&p.payload) {
                                 Ok(msg) => {
                                     debug!(
                                         mqtt_topic = %mqtt_topic,
