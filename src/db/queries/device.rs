@@ -1,5 +1,5 @@
 use crate::models::db_enum::DbEnum;
-use crate::models::{Device, DeviceType, PowerSource};
+use crate::models::{Device, PowerSource};
 use rusqlite::{Result, params};
 use tracing::{debug, error, info};
 
@@ -9,24 +9,28 @@ use super::utils::{invalid_column_error, timestamp_to_datetime};
 impl Database {
     /// Insert a new device into the database
     pub fn insert_device(&self, device: &Device) -> Result<()> {
+        let (capability_type, capability_subtype) = device.capability_to_db();
+
         debug!(
             device_id = %device.id,
             mqtt_topic = %device.mqtt_topic,
             name = %device.name,
-            device_type = %device.device_type.to_db_string(),
+            capability_type = %capability_type,
+            capability_subtype = %capability_subtype,
             power_source = %device.power_source.to_db_string(),
             "Inserting device"
         );
 
         let start = std::time::Instant::now();
         let result = self.conn.lock_or_recover().execute(
-            "INSERT INTO devices (id, mqtt_topic, name, device_type, power_source, added_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO devices (id, mqtt_topic, name, capability_type, capability_subtype, power_source, added_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![
                 device.id,
                 device.mqtt_topic,
                 device.name,
-                device.device_type.to_db_string(),
+                capability_type,
+                capability_subtype,
                 device.power_source.to_db_string(),
                 device.added_at.timestamp()
             ],
@@ -61,7 +65,7 @@ impl Database {
 
         let conn = self.conn.lock_or_recover();
         let mut stmt = conn.prepare(
-            "SELECT id, mqtt_topic, name, device_type, power_source, added_at
+            "SELECT id, mqtt_topic, name, capability_type, capability_subtype, power_source, added_at
              FROM devices
              WHERE id = ?1",
         )?;
@@ -96,7 +100,7 @@ impl Database {
 
         let conn = self.conn.lock_or_recover();
         let mut stmt = conn.prepare(
-            "SELECT id, mqtt_topic, name, device_type, power_source, added_at
+            "SELECT id, mqtt_topic, name, capability_type, capability_subtype, power_source, added_at
              FROM devices
              WHERE mqtt_topic = ?1",
         )?;
@@ -132,7 +136,7 @@ impl Database {
 
         let conn = self.conn.lock_or_recover();
         let mut stmt = conn.prepare(
-            "SELECT id, mqtt_topic, name, device_type, power_source, added_at
+            "SELECT id, mqtt_topic, name, capability_type, capability_subtype, power_source, added_at
              FROM devices
              ORDER BY name",
         )?;
@@ -258,18 +262,19 @@ impl Database {
     ///
     /// Eliminates duplication across get_device_by_id, get_device_by_mqtt_topic, and get_all_devices
     fn map_device_row(row: &rusqlite::Row) -> Result<Device> {
-        let device_type_str: String = row.get(3)?;
-        let power_source_str: String = row.get(4)?;
+        let capability_type_str: String = row.get(3)?;
+        let capability_subtype_str: String = row.get(4)?;
+        let power_source_str: String = row.get(5)?;
 
         Ok(Device {
             id: row.get(0)?,
             mqtt_topic: row.get(1)?,
             name: row.get(2)?,
-            device_type: DeviceType::from_db_string(&device_type_str)
-                .ok_or_else(|| invalid_column_error(3, "device_type"))?,
+            capability: Device::capability_from_db(&capability_type_str, &capability_subtype_str)
+                .ok_or_else(|| invalid_column_error(3, "capability"))?,
             power_source: PowerSource::from_db_string(&power_source_str)
-                .ok_or_else(|| invalid_column_error(4, "power_source"))?,
-            added_at: timestamp_to_datetime(row.get(5)?, "device.added_at"),
+                .ok_or_else(|| invalid_column_error(5, "power_source"))?,
+            added_at: timestamp_to_datetime(row.get(6)?, "device.added_at"),
         })
     }
 }

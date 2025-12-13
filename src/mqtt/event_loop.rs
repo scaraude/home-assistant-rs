@@ -1,13 +1,11 @@
 use crate::db::Database;
-use crate::models::{SwitchMqttMessage, TempSensorMqttMessage, TemperatureReading};
-use crate::mqtt::handlers::{
-    handle_switch_message, handle_temperature_message, handle_temperature_parse_error,
-};
+use crate::models::{DeviceMqttMessage, TemperatureReading};
+use crate::mqtt::handlers::handle_device_message;
 use crate::state::{DeviceStateStore, SwitchStateStore};
 use rumqttc::{Event, EventLoop, Packet};
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 /// Spawn the MQTT event loop handler
 pub(super) fn spawn_event_loop(
@@ -60,26 +58,13 @@ pub(super) fn spawn_event_loop(
                             continue;
                         }
 
-                        // Try parsing as switch message first
-                        if let Ok(switch_msg) =
-                            serde_json::from_slice::<SwitchMqttMessage>(&p.payload)
-                        {
-                            handle_switch_message(
-                                &db,
-                                &device_state,
-                                &switch_state,
-                                mqtt_topic,
-                                switch_msg,
-                            )
-                            .await;
-                        }
-
-                        // Also try parsing as temperature message
-                        match serde_json::from_slice::<TempSensorMqttMessage>(&p.payload) {
+                        // Parse as unified device message
+                        match serde_json::from_slice::<DeviceMqttMessage>(&p.payload) {
                             Ok(msg) => {
-                                handle_temperature_message(
+                                handle_device_message(
                                     &db,
                                     &device_state,
+                                    &switch_state,
                                     &tx,
                                     mqtt_topic,
                                     msg,
@@ -89,12 +74,14 @@ pub(super) fn spawn_event_loop(
                                 .await;
                             }
                             Err(e) => {
-                                handle_temperature_parse_error(
-                                    mqtt_topic,
-                                    &p.topic,
-                                    &p.payload,
-                                    &e,
-                                    &mut parse_errors,
+                                parse_errors += 1;
+                                warn!(
+                                    error = %e,
+                                    mqtt_topic = %mqtt_topic,
+                                    topic = %p.topic,
+                                    payload_preview = ?String::from_utf8_lossy(&p.payload[..p.payload.len().min(100)]),
+                                    parse_error_count = parse_errors,
+                                    "Failed to parse MQTT message"
                                 );
                             }
                         }

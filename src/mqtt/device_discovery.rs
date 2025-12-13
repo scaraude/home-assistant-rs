@@ -1,19 +1,15 @@
 use crate::db::Database;
-use crate::models::{Device, DeviceType, PowerSource, SwitchMqttMessage, TempSensorMqttMessage};
+use crate::models::{
+    CommanderType, Device, DeviceCapability, DeviceMqttMessage, PowerSource, SensorType,
+};
 use tracing::{debug, error, info};
 
-/// MQTT message types for device discovery
-pub enum MqttMessage {
-    TempHumiditySensor(TempSensorMqttMessage),
-    Switch(SwitchMqttMessage),
-}
-
-/// Helper function to get or create a device from MQTT topic
+/// Helper function to get or create a device from unified MQTT message
 /// Returns the device UUID if successful
-pub async fn get_or_create_device(
+pub async fn get_or_create_device_unified(
     db: &Database,
     mqtt_topic: &str,
-    msg: MqttMessage,
+    msg: &DeviceMqttMessage,
 ) -> Option<String> {
     // Try to get existing device
     match db.get_device_by_mqtt_topic(mqtt_topic) {
@@ -32,28 +28,38 @@ pub async fn get_or_create_device(
                 "New device detected, creating entry"
             );
 
-            // Determine device type based on available fields
-            let device_type = match msg {
-                MqttMessage::TempHumiditySensor(_) => DeviceType::TempHumiditySensor,
-                MqttMessage::Switch(_) => DeviceType::Commander,
+            // Determine device capability based on available fields
+            let capability = if msg.temperature.is_some() || msg.humidity.is_some() {
+                DeviceCapability::Sensor {
+                    sensor_type: SensorType::TempHumidity,
+                }
+            } else if msg.occupancy.is_some() {
+                DeviceCapability::Sensor {
+                    sensor_type: SensorType::Presence,
+                }
+            } else if msg.state.is_some() {
+                DeviceCapability::Commander {
+                    commander_type: CommanderType::Switch,
+                }
+            } else {
+                error!(
+                    mqtt_topic = %mqtt_topic,
+                    "Cannot determine device type from MQTT message"
+                );
+                return None;
             };
 
             // Determine power source (if battery field exists, assume battery powered)
-            let power_source: PowerSource = match msg {
-                MqttMessage::TempHumiditySensor(_) => PowerSource::Battery,
-                MqttMessage::Switch(switch_msg) => {
-                    if switch_msg.other.get("battery").is_some() {
-                        PowerSource::Battery
-                    } else {
-                        PowerSource::Plugged
-                    }
-                }
+            let power_source = if msg.battery.is_some() {
+                PowerSource::Battery
+            } else {
+                PowerSource::Plugged
             };
 
             let device = Device::new(
                 mqtt_topic.to_string(),
                 mqtt_topic.to_string(), // Use MQTT topic as default name
-                device_type,
+                capability,
                 power_source,
             );
 
@@ -62,7 +68,7 @@ pub async fn get_or_create_device(
                     info!(
                         device_id = %device.id,
                         mqtt_topic = %mqtt_topic,
-                        device_type = ?device.device_type,
+                        capability = ?device.capability,
                         "Successfully created new device"
                     );
                     Some(device.id)

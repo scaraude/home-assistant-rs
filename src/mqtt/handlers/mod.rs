@@ -1,5 +1,3 @@
-pub mod switch;
-pub mod temperature;
+pub mod device;
 
-pub use switch::handle_switch_message;
-pub use temperature::{handle_temperature_message, handle_temperature_parse_error};
+pub use device::handle_device_message;

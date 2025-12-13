@@ -315,7 +315,12 @@ pub fn serve_switches_list(
     // Filter for commander devices and build switch list
     let switches: Vec<_> = devices
         .into_iter()
-        .filter(|device| device.device_type == crate::models::DeviceType::Commander)
+        .filter(|device| {
+            matches!(
+                device.capability,
+                crate::models::DeviceCapability::Commander { .. }
+            )
+        })
         .map(|device| {
             let current_state = switch_state.get_state(&device.id).unwrap_or(false);
             let link_quality = device_state

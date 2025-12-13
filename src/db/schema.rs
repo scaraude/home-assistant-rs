@@ -104,7 +104,8 @@ impl Database {
                 id TEXT PRIMARY KEY,
                 mqtt_topic TEXT NOT NULL UNIQUE,
                 name TEXT NOT NULL,
-                device_type TEXT NOT NULL,
+                capability_type TEXT NOT NULL,
+                capability_subtype TEXT NOT NULL,
                 power_source TEXT NOT NULL,
                 added_at INTEGER NOT NULL
             )",

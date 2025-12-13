@@ -4,8 +4,8 @@ mod tests {
     use super::super::*;
     use crate::models::{
         AutomationAction, AutomationCondition, AutomationExecutionLog, AutomationRule,
-        ComparisonOperator, Device, DeviceType, LogicalOperator, PowerSource, SensorField,
-        SwitchAction, TemperatureReading,
+        CommanderType, ComparisonOperator, Device, DeviceCapability, LogicalOperator, PowerSource,
+        SensorField, SensorType, SwitchAction, TemperatureReading,
     };
     use chrono::Utc;
     use tempfile::TempDir;
@@ -188,7 +188,9 @@ mod tests {
             id: "device1".to_string(),
             mqtt_topic: "zigbee2mqtt/device1".to_string(),
             name: "Living Room Sensor".to_string(),
-            device_type: DeviceType::TempHumiditySensor,
+            capability: DeviceCapability::Sensor {
+                sensor_type: SensorType::TempHumidity,
+            },
             power_source: PowerSource::Battery,
             added_at: Utc::now(),
         };
@@ -200,7 +202,12 @@ mod tests {
         let retrieved = retrieved.unwrap();
         assert_eq!(retrieved.id, "device1");
         assert_eq!(retrieved.name, "Living Room Sensor");
-        assert_eq!(retrieved.device_type, DeviceType::TempHumiditySensor);
+        assert!(matches!(
+            retrieved.capability,
+            DeviceCapability::Sensor {
+                sensor_type: SensorType::TempHumidity
+            }
+        ));
         assert_eq!(retrieved.power_source, PowerSource::Battery);
     }
 
@@ -212,7 +219,9 @@ mod tests {
             id: "device1".to_string(),
             mqtt_topic: "zigbee2mqtt/device1".to_string(),
             name: "Living Room Sensor".to_string(),
-            device_type: DeviceType::TempHumiditySensor,
+            capability: DeviceCapability::Sensor {
+                sensor_type: SensorType::TempHumidity,
+            },
             power_source: PowerSource::Battery,
             added_at: Utc::now(),
         };
@@ -233,7 +242,9 @@ mod tests {
             id: "device1".to_string(),
             mqtt_topic: "zigbee2mqtt/device1".to_string(),
             name: "Device 1".to_string(),
-            device_type: DeviceType::TempHumiditySensor,
+            capability: DeviceCapability::Sensor {
+                sensor_type: SensorType::TempHumidity,
+            },
             power_source: PowerSource::Battery,
             added_at: Utc::now(),
         };
@@ -242,7 +253,9 @@ mod tests {
             id: "device2".to_string(),
             mqtt_topic: "zigbee2mqtt/device2".to_string(),
             name: "Device 2".to_string(),
-            device_type: DeviceType::Commander,
+            capability: DeviceCapability::Commander {
+                commander_type: CommanderType::Switch,
+            },
             power_source: PowerSource::Plugged,
             added_at: Utc::now(),
         };
@@ -262,7 +275,9 @@ mod tests {
             id: "device1".to_string(),
             mqtt_topic: "zigbee2mqtt/device1".to_string(),
             name: "Old Name".to_string(),
-            device_type: DeviceType::TempHumiditySensor,
+            capability: DeviceCapability::Sensor {
+                sensor_type: SensorType::TempHumidity,
+            },
             power_source: PowerSource::Battery,
             added_at: Utc::now(),
         };
@@ -282,7 +297,9 @@ mod tests {
             id: "device1".to_string(),
             mqtt_topic: "zigbee2mqtt/device1".to_string(),
             name: "Device 1".to_string(),
-            device_type: DeviceType::Commander,
+            capability: DeviceCapability::Commander {
+                commander_type: CommanderType::Switch,
+            },
             power_source: PowerSource::Plugged,
             added_at: Utc::now(),
         };
@@ -311,7 +328,9 @@ mod tests {
             id: "sensor1".to_string(),
             mqtt_topic: "zigbee2mqtt/sensor1".to_string(),
             name: "Living Room Sensor".to_string(),
-            device_type: DeviceType::TempHumiditySensor,
+            capability: DeviceCapability::Sensor {
+                sensor_type: SensorType::TempHumidity,
+            },
             power_source: PowerSource::Battery,
             added_at: Utc::now(),
         };
@@ -612,7 +631,8 @@ mod tests {
         let tx = Transaction::begin(&conn).unwrap();
 
         conn.execute(
-            "INSERT INTO devices (id, mqtt_topic, name, device_type, power_source, added_at) VALUES ('test', 'topic', 'name', 'temphumiditysensor', 'battery', 0)",
+            "INSERT INTO devices (id, mqtt_topic, name, capability_type, capability_subtype, power_source, added_at)
+             VALUES ('test', 'topic', 'name', 'sensor', 'temp_humidity', 'battery', 0)",
             [],
         )
         .unwrap();
@@ -636,7 +656,8 @@ mod tests {
             let _tx = Transaction::begin(&conn).unwrap();
 
             conn.execute(
-                "INSERT INTO devices (id, mqtt_topic, name, device_type, power_source, added_at) VALUES ('test', 'topic', 'name', 'temphumiditysensor', 'battery', 0)",
+                "INSERT INTO devices (id, mqtt_topic, name, capability_type, capability_subtype, power_source, added_at)
+                 VALUES ('test', 'topic', 'name', 'sensor', 'temp_humidity', 'battery', 0)",
                 [],
             )
             .unwrap();
@@ -659,7 +680,9 @@ mod tests {
             id: "device1".to_string(),
             mqtt_topic: "zigbee2mqtt/device1".to_string(),
             name: "Device 1".to_string(),
-            device_type: DeviceType::TempHumiditySensor,
+            capability: DeviceCapability::Sensor {
+                sensor_type: SensorType::TempHumidity,
+            },
             power_source: PowerSource::Battery,
             added_at: Utc::now(),
         };
@@ -671,7 +694,9 @@ mod tests {
             id: "device1".to_string(),
             mqtt_topic: "zigbee2mqtt/different".to_string(),
             name: "Different".to_string(),
-            device_type: DeviceType::Commander,
+            capability: DeviceCapability::Commander {
+                commander_type: CommanderType::Switch,
+            },
             power_source: PowerSource::Plugged,
             added_at: Utc::now(),
         };
@@ -688,7 +713,9 @@ mod tests {
             id: "device1".to_string(),
             mqtt_topic: "zigbee2mqtt/device1".to_string(),
             name: "Device 1".to_string(),
-            device_type: DeviceType::TempHumiditySensor,
+            capability: DeviceCapability::Sensor {
+                sensor_type: SensorType::TempHumidity,
+            },
             power_source: PowerSource::Battery,
             added_at: Utc::now(),
         };
@@ -700,7 +727,9 @@ mod tests {
             id: "device2".to_string(),
             mqtt_topic: "zigbee2mqtt/device1".to_string(),
             name: "Different".to_string(),
-            device_type: DeviceType::Commander,
+            capability: DeviceCapability::Commander {
+                commander_type: CommanderType::Switch,
+            },
             power_source: PowerSource::Plugged,
             added_at: Utc::now(),
         };

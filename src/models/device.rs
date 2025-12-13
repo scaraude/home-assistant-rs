@@ -1,20 +1,39 @@
 use crate::impl_db_enum;
+use crate::models::db_enum::DbEnum;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-/// Type of device in the home automation system
+/// Device capability - what can this device do?
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
-pub enum DeviceType {
-    #[serde(rename = "temphumiditysensor")]
-    TempHumiditySensor,
-    Commander,
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum DeviceCapability {
+    Sensor { sensor_type: SensorType },
+    Commander { commander_type: CommanderType },
 }
 
-// Implement database string conversion using the DbEnum trait
-impl_db_enum!(DeviceType {
-    TempHumiditySensor => "temphumiditysensor",
-    Commander => "commander"
+/// Type of sensor capability
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum SensorType {
+    #[serde(rename = "temp_humidity")]
+    TempHumidity,
+    Presence,
+}
+
+impl_db_enum!(SensorType {
+    TempHumidity => "temp_humidity",
+    Presence => "presence"
+});
+
+/// Type of commander capability
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum CommanderType {
+    Switch,
+}
+
+impl_db_enum!(CommanderType {
+    Switch => "switch"
 });
 
 /// Power source for a device
@@ -44,8 +63,8 @@ pub struct Device {
     /// Human-readable name for the device
     pub name: String,
 
-    /// Type of device (sensor, commander, etc.)
-    pub device_type: DeviceType,
+    /// What can this device do (sensor or commander)
+    pub capability: DeviceCapability,
 
     /// How the device is powered
     pub power_source: PowerSource,
@@ -60,14 +79,14 @@ impl Device {
     pub fn new(
         mqtt_topic: String,
         name: String,
-        device_type: DeviceType,
+        capability: DeviceCapability,
         power_source: PowerSource,
     ) -> Self {
         Self {
             id: uuid::Uuid::new_v4().to_string(),
             mqtt_topic,
             name,
-            device_type,
+            capability,
             power_source,
             added_at: Utc::now(),
         }
@@ -76,6 +95,30 @@ impl Device {
     /// Check if this device is battery-powered
     pub fn _is_battery_powered(&self) -> bool {
         self.power_source == PowerSource::Battery
+    }
+
+    /// Get the capability type and subtype for database storage
+    pub fn capability_to_db(&self) -> (String, String) {
+        match &self.capability {
+            DeviceCapability::Sensor { sensor_type } => {
+                ("sensor".to_string(), sensor_type.to_db_string().to_string())
+            }
+            DeviceCapability::Commander { commander_type } => (
+                "commander".to_string(),
+                commander_type.to_db_string().to_string(),
+            ),
+        }
+    }
+
+    /// Create capability from database strings
+    pub fn capability_from_db(cap_type: &str, cap_subtype: &str) -> Option<DeviceCapability> {
+        match cap_type {
+            "sensor" => SensorType::from_db_string(cap_subtype)
+                .map(|sensor_type| DeviceCapability::Sensor { sensor_type }),
+            "commander" => CommanderType::from_db_string(cap_subtype)
+                .map(|commander_type| DeviceCapability::Commander { commander_type }),
+            _ => None,
+        }
     }
 }
 
@@ -143,35 +186,85 @@ mod tests {
     use crate::models::db_enum::DbEnum;
 
     #[test]
-    fn test_device_type_to_db_string() {
-        assert_eq!(
-            DeviceType::TempHumiditySensor.to_db_string(),
-            "temphumiditysensor"
-        );
-        assert_eq!(DeviceType::Commander.to_db_string(), "commander");
+    fn test_sensor_type_to_db_string() {
+        assert_eq!(SensorType::TempHumidity.to_db_string(), "temp_humidity");
+        assert_eq!(SensorType::Presence.to_db_string(), "presence");
     }
 
     #[test]
-    fn test_device_type_from_db_string() {
+    fn test_sensor_type_from_db_string() {
         assert_eq!(
-            DeviceType::from_db_string("temphumiditysensor"),
-            Some(DeviceType::TempHumiditySensor)
+            SensorType::from_db_string("temp_humidity"),
+            Some(SensorType::TempHumidity)
         );
         assert_eq!(
-            DeviceType::from_db_string("commander"),
-            Some(DeviceType::Commander)
+            SensorType::from_db_string("presence"),
+            Some(SensorType::Presence)
         );
-        assert_eq!(DeviceType::from_db_string("invalid"), None);
+        assert_eq!(SensorType::from_db_string("invalid"), None);
     }
 
     #[test]
-    fn test_device_type_roundtrip() {
-        let types = vec![DeviceType::TempHumiditySensor, DeviceType::Commander];
-        for device_type in types {
-            let db_string = device_type.to_db_string();
-            let parsed = DeviceType::from_db_string(db_string);
-            assert_eq!(Some(device_type), parsed);
-        }
+    fn test_commander_type_to_db_string() {
+        assert_eq!(CommanderType::Switch.to_db_string(), "switch");
+    }
+
+    #[test]
+    fn test_commander_type_from_db_string() {
+        assert_eq!(
+            CommanderType::from_db_string("switch"),
+            Some(CommanderType::Switch)
+        );
+        assert_eq!(CommanderType::from_db_string("invalid"), None);
+    }
+
+    #[test]
+    fn test_capability_to_db() {
+        let device = Device::new(
+            "0x123".to_string(),
+            "Test Sensor".to_string(),
+            DeviceCapability::Sensor {
+                sensor_type: SensorType::TempHumidity,
+            },
+            PowerSource::Battery,
+        );
+        let (cap_type, cap_subtype) = device.capability_to_db();
+        assert_eq!(cap_type, "sensor");
+        assert_eq!(cap_subtype, "temp_humidity");
+
+        let device = Device::new(
+            "0x456".to_string(),
+            "Test Switch".to_string(),
+            DeviceCapability::Commander {
+                commander_type: CommanderType::Switch,
+            },
+            PowerSource::Plugged,
+        );
+        let (cap_type, cap_subtype) = device.capability_to_db();
+        assert_eq!(cap_type, "commander");
+        assert_eq!(cap_subtype, "switch");
+    }
+
+    #[test]
+    fn test_capability_from_db() {
+        let cap = Device::capability_from_db("sensor", "temp_humidity");
+        assert_eq!(
+            cap,
+            Some(DeviceCapability::Sensor {
+                sensor_type: SensorType::TempHumidity
+            })
+        );
+
+        let cap = Device::capability_from_db("commander", "switch");
+        assert_eq!(
+            cap,
+            Some(DeviceCapability::Commander {
+                commander_type: CommanderType::Switch
+            })
+        );
+
+        let cap = Device::capability_from_db("invalid", "invalid");
+        assert_eq!(cap, None);
     }
 
     #[test]
