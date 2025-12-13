@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy } from "svelte";
   import {
     Chart,
     LineController,
@@ -11,9 +11,9 @@
     Tooltip,
     Legend,
     Filler,
-  } from 'chart.js';
-  import 'chartjs-adapter-date-fns';
-  import type { SensorReading } from './api';
+  } from "chart.js";
+  import "chartjs-adapter-date-fns";
+  import type { SensorReading } from "./api";
 
   // Register Chart.js components
   Chart.register(
@@ -29,7 +29,7 @@
   );
 
   export let readings: SensorReading[] = [];
-  export let selectedMetric: 'temperature' | 'humidity' | 'battery' | null = null;
+  export let selectedMetric: "temperature" | "humidity" | null = null;
 
   let canvas: HTMLCanvasElement;
   let chart: Chart | null = null;
@@ -38,43 +38,31 @@
     const timestamps = readings.map((r) => r.timestamp * 1000);
     const temperatures = readings.map((r) => r.temperature);
     const humidities = readings.map((r) => r.humidity);
-    const batteries = readings.map((r) => r.battery ?? 0);
 
     const POINT_RADUIS = 0.3;
     const POINT_RADIUS_HOVER = 1;
     const allDatasets = [
       {
-        label: 'Temperature (°C)',
+        label: "Temperature (°C)",
         data: temperatures,
-        borderColor: 'rgb(59, 130, 246)',
-        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-        yAxisID: 'y',
+        borderColor: "rgb(59, 130, 246)",
+        backgroundColor: "rgba(59, 130, 246, 0.1)",
+        yAxisID: "y",
         tension: 0.4,
         pointRadius: POINT_RADUIS,
         pointHoverRadius: POINT_RADIUS_HOVER,
-        hidden: selectedMetric !== null && selectedMetric !== 'temperature',
+        hidden: selectedMetric !== null && selectedMetric !== "temperature",
       },
       {
-        label: 'Humidity (%)',
+        label: "Humidity (%)",
         data: humidities,
-        borderColor: 'rgb(34, 197, 94)',
-        backgroundColor: 'rgba(34, 197, 94, 0.1)',
-        yAxisID: selectedMetric === 'humidity' ? 'y' : 'y1',
+        borderColor: "rgb(34, 197, 94)",
+        backgroundColor: "rgba(34, 197, 94, 0.1)",
+        yAxisID: selectedMetric === "humidity" ? "y" : "y1",
         tension: 0.4,
         pointRadius: POINT_RADUIS,
         pointHoverRadius: POINT_RADIUS_HOVER,
-        hidden: selectedMetric !== null && selectedMetric !== 'humidity',
-      },
-      {
-        label: 'Battery (%)',
-        data: batteries,
-        borderColor: 'rgb(234, 179, 8)',
-        backgroundColor: 'rgba(234, 179, 8, 0.1)',
-        yAxisID: selectedMetric === 'battery' ? 'y' : 'y1',
-        tension: 0.4,
-        pointRadius: POINT_RADUIS,
-        pointHoverRadius: POINT_RADIUS_HOVER,
-        hidden: selectedMetric !== 'battery',
+        hidden: selectedMetric !== null && selectedMetric !== "humidity",
       },
     ];
 
@@ -84,13 +72,13 @@
   function createChart() {
     if (!canvas || readings.length === 0) return;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
     const { timestamps, datasets } = getDatasets();
 
     chart = new Chart(ctx, {
-      type: 'line',
+      type: "line",
       data: {
         labels: timestamps,
         datasets,
@@ -99,13 +87,13 @@
         responsive: true,
         maintainAspectRatio: false,
         interaction: {
-          mode: 'index',
+          mode: "index",
           intersect: false,
         },
         plugins: {
           legend: {
             display: true,
-            position: 'top',
+            position: "top",
             labels: {
               usePointStyle: true,
               padding: 10,
@@ -122,19 +110,19 @@
                   const date = new Date(items[0].parsed.x);
                   return date.toLocaleString();
                 }
-                return '';
+                return "";
               },
             },
           },
         },
         scales: {
           x: {
-            type: 'time',
+            type: "time",
             time: {
-              tooltipFormat: 'MMM d, HH:mm',
+              tooltipFormat: "MMM d, HH:mm",
               displayFormats: {
-                hour: 'HH:mm',
-                day: 'MMM d',
+                hour: "HH:mm",
+                day: "MMM d",
               },
             },
             grid: {
@@ -148,18 +136,18 @@
             },
           },
           y: {
-            type: 'linear',
+            type: "linear",
             display: true,
-            position: 'left',
+            position: "left",
             title: {
               display: true,
-              text: selectedMetric === 'humidity' ? '%' : selectedMetric === 'battery' ? '%' : '°C',
+              text: selectedMetric === "humidity" ? "%" : "°C",
               font: {
                 size: 10,
               },
             },
             grid: {
-              color: 'rgba(0, 0, 0, 0.05)',
+              color: "rgba(0, 0, 0, 0.05)",
             },
             ticks: {
               font: {
@@ -170,12 +158,12 @@
             max: selectedMetric === null ? 40 : undefined,
           },
           y1: {
-            type: 'linear',
+            type: "linear",
             display: selectedMetric === null,
-            position: 'right',
+            position: "right",
             title: {
               display: true,
-              text: '%',
+              text: "%",
               font: {
                 size: 10,
               },
@@ -207,9 +195,7 @@
     // Update Y-axis label and scale based on selected metric
     const yAxis = chart.options.scales?.y as any;
     if (yAxis?.title) {
-      yAxis.title.text =
-        selectedMetric === 'humidity' ? '%' :
-        selectedMetric === 'battery' ? '%' : '°C';
+      yAxis.title.text = selectedMetric === "humidity" ? "%" : "°C";
     }
     if (yAxis) {
       yAxis.min = selectedMetric === null ? 0 : undefined;
@@ -222,7 +208,7 @@
       y1Axis.display = selectedMetric === null;
     }
 
-    chart.update('none'); // Update without animation for performance
+    chart.update("none"); // Update without animation for performance
   }
 
   onMount(() => {
