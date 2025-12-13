@@ -1,21 +1,19 @@
 mod automation;
 mod cache;
 mod db;
-mod device_state;
 mod http;
 mod logs;
 mod models;
 mod mqtt;
-mod switch_state;
+mod state;
 
 use automation::AutomationEngine;
 use cache::ResponseCache;
 use db::Database;
-use device_state::DeviceStateStore;
 use http::HttpServer;
 use mqtt::MqttClient;
+use state::{DeviceStateStore, SwitchStateStore};
 use std::sync::Arc;
-use switch_state::SwitchStateStore;
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};

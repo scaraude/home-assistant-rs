@@ -55,7 +55,7 @@ impl Database {
     }
 
     /// Get a device by its ID
-    pub fn get_device_by_id(&self, device_id: &str) -> Result<Option<Device>> {
+    pub fn _get_device_by_id(&self, device_id: &str) -> Result<Option<Device>> {
         debug!(device_id = %device_id, "Querying device by ID");
         let start = std::time::Instant::now();
 

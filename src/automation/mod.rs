@@ -1,11 +1,10 @@
 use crate::db::Database;
-use crate::device_state::DeviceStateStore;
 use crate::models::{
     AutomationAction, AutomationExecutionLog, AutomationRule, SensorField, SwitchAction,
     TemperatureReading,
 };
 use crate::mqtt::MqttClient;
-use crate::switch_state::SwitchStateStore;
+use crate::state::{DeviceStateStore, SwitchStateStore};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;

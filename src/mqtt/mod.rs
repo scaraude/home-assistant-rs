@@ -1,9 +1,8 @@
 use crate::db::Database;
-use crate::device_state::DeviceStateStore;
 use crate::models::{
     Device, DeviceType, PowerSource, SwitchMqttMessage, TempSensorMqttMessage, TemperatureReading,
 };
-use crate::switch_state::SwitchStateStore;
+use crate::state::{DeviceStateStore, SwitchStateStore};
 use rumqttc::{AsyncClient, Event, MqttOptions, Packet, QoS};
 use std::sync::Arc;
 use tokio::sync::mpsc;

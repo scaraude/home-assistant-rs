@@ -1,13 +1,12 @@
 use crate::cache::ResponseCache;
 use crate::db::Database;
-use crate::device_state::DeviceStateStore;
 use crate::logs;
 use crate::models::{
     AutomationAction, AutomationCondition, AutomationRule, CreateAutomationRuleRequest,
     SwitchCommand, UpdateAutomationRuleRequest,
 };
 use crate::mqtt::MqttClient;
-use crate::switch_state::SwitchStateStore;
+use crate::state::{DeviceStateStore, SwitchStateStore};
 use http_body_util::{BodyExt, Full};
 use hyper::body::Bytes;
 use hyper::server::conn::http1;

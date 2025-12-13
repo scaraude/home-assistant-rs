@@ -195,7 +195,7 @@ mod tests {
 
         db.insert_device(&device).unwrap();
 
-        let retrieved = db.get_device_by_id("device1").unwrap();
+        let retrieved = db._get_device_by_id("device1").unwrap();
         assert!(retrieved.is_some());
         let retrieved = retrieved.unwrap();
         assert_eq!(retrieved.id, "device1");
@@ -270,7 +270,7 @@ mod tests {
         db.insert_device(&device).unwrap();
         db.update_device_name("device1", "New Name").unwrap();
 
-        let updated = db.get_device_by_id("device1").unwrap().unwrap();
+        let updated = db._get_device_by_id("device1").unwrap().unwrap();
         assert_eq!(updated.name, "New Name");
     }
 
@@ -621,7 +621,7 @@ mod tests {
         drop(conn);
 
         // Verify data was committed
-        let device = db.get_device_by_id("test").unwrap();
+        let device = db._get_device_by_id("test").unwrap();
         assert!(device.is_some());
     }
 
@@ -645,7 +645,7 @@ mod tests {
         }
 
         // Verify data was rolled back
-        let device = db.get_device_by_id("test").unwrap();
+        let device = db._get_device_by_id("test").unwrap();
         assert!(device.is_none());
     }
 
