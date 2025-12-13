@@ -74,7 +74,7 @@ impl Device {
     }
 
     /// Check if this device is battery-powered
-    pub fn is_battery_powered(&self) -> bool {
+    pub fn _is_battery_powered(&self) -> bool {
         self.power_source == PowerSource::Battery
     }
 }

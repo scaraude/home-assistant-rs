@@ -56,7 +56,7 @@ impl DeviceStateStore {
     }
 
     /// Get all known device states
-    pub fn get_all_states(&self) -> HashMap<String, DeviceState> {
+    pub fn _get_all_states(&self) -> HashMap<String, DeviceState> {
         self.states
             .read()
             .ok()
@@ -65,12 +65,12 @@ impl DeviceStateStore {
     }
 
     /// Remove a device state from memory
-    pub fn remove_state(&self, device_id: &str) -> Option<DeviceState> {
+    pub fn _remove_state(&self, device_id: &str) -> Option<DeviceState> {
         self.states.write().ok()?.remove(device_id)
     }
 
     /// Clear all device states
-    pub fn clear(&self) {
+    pub fn _clear(&self) {
         if let Ok(mut states) = self.states.write() {
             states.clear();
         }

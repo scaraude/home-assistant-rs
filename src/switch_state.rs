@@ -27,7 +27,7 @@ impl SwitchStateStore {
     }
 
     /// Get all known switch states
-    pub fn get_all_states(&self) -> HashMap<String, bool> {
+    pub fn _get_all_states(&self) -> HashMap<String, bool> {
         self.states
             .read()
             .ok()

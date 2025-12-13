@@ -17,6 +17,9 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 uuid = { version = "1.11.0", features = ["v4", "serde"] }
 
+[dev-dependencies]
+tempfile = "3.15.0"
+
 [profile.release]
 # Optimize for size on embedded systems
 opt-level = "z"     # Optimize for size
