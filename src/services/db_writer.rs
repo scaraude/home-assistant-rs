@@ -119,14 +119,13 @@ impl DbWriterService {
                     .map(|rule| rule.name)
                     .unwrap_or_else(|| rule_id.clone());
 
-                let log = AutomationExecutionLog {
-                    id: uuid::Uuid::new_v4().to_string(),
-                    rule_id: rule_id.clone(),
-                    rule_name: rule_name.clone(),
+                let log = AutomationExecutionLog::new(
+                    rule_id.clone(),
+                    rule_name.clone(),
                     success,
-                    error_message: error,
-                    executed_at: timestamp,
-                };
+                    error,
+                    timestamp,
+                );
 
                 if let Err(e) = self.db.insert_execution_log(&log) {
                     error!(

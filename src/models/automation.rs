@@ -276,6 +276,7 @@ impl AutomationExecutionLog {
         rule_name: String,
         success: bool,
         error_message: Option<String>,
+        executed_at: DateTime<Utc>,
     ) -> Self {
         Self {
             id: uuid::Uuid::new_v4().to_string(),
@@ -283,7 +284,7 @@ impl AutomationExecutionLog {
             rule_name,
             success,
             error_message,
-            executed_at: Utc::now(),
+            executed_at,
         }
     }
 }

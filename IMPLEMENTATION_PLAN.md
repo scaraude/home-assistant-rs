@@ -4,7 +4,7 @@ This plan covers the architectural refactor to move `home-assistant-rs` toward a
 
 ---
 
-For AI: add marks when you finish to dev a session
+For AI: mark a session as completed when you completed it
 
 ## Session 1 · Event Bus Foundation (2–3 hours) ✅ Completed
 
@@ -112,7 +112,7 @@ CREATE INDEX idx_switch_state_latest
 
 ---
 
-## Session 4 · MQTT Handler Refactor (2–3 hours)
+## Session 4 · MQTT Handler Refactor (2–3 hours) ✅ Completed
 
 - **Goal**: Replace dual writes with event publication.
 - **Files**: `src/mqtt/handlers/device.rs`, `src/mqtt/event_loop.rs`, `src/mqtt/client.rs`.

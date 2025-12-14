@@ -261,6 +261,7 @@ impl AutomationEngine {
             } else {
                 Some(error_messages.join("; "))
             },
+            chrono::Utc::now(),
         );
 
         if let Err(e) = self.db.insert_execution_log(&log) {

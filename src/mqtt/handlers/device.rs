@@ -1,23 +1,21 @@
 use crate::db::Database;
+use crate::events::{bus::EventBus, SystemEvent};
 use crate::models::{
     CommanderType, DeviceCapability, DeviceMqttMessage, SensorReading, SensorType,
 };
 use crate::mqtt::device_discovery::get_or_create_device_unified;
-use crate::state::{DeviceStateStore, SwitchStateStore};
-use tokio::sync::mpsc;
+use chrono::Utc;
 use tracing::{debug, error, info};
 
 /// Handle a unified MQTT device message
 /// Routes to appropriate handler based on device capability
 pub async fn handle_device_message(
     db: &Database,
-    device_state: &DeviceStateStore,
-    switch_state: &SwitchStateStore,
-    tx: &mpsc::Sender<SensorReading>,
+    event_bus: &EventBus,
     mqtt_topic: &str,
     msg: DeviceMqttMessage,
     no_temperature: &mut u64,
-    send_failures: &mut u64,
+    publish_failures: &mut u64,
 ) {
     debug!(
         mqtt_topic = %mqtt_topic,
@@ -41,27 +39,14 @@ pub async fn handle_device_message(
         }
     };
 
-    // Update common device state (link quality, battery, last seen)
-    // Update in-memory state
-    if let Some(lq) = msg.linkquality {
-        device_state.update_link_quality(device_id.clone(), lq);
-        // Persist to database
-        if let Err(e) = db.update_device_link_quality(&device_id, lq) {
-            error!(error = %e, device_id = %device_id, "Failed to persist link quality to database");
-        }
-    }
-    if let Some(battery) = msg.battery {
-        device_state.update_battery(device_id.clone(), battery);
-        // Persist to database
-        if let Err(e) = db.update_device_battery(&device_id, battery) {
-            error!(error = %e, device_id = %device_id, "Failed to persist battery level to database");
-        }
-    }
-    device_state.mark_seen(device_id.clone());
-    // Persist last_seen to database
-    if let Err(e) = db.update_device_last_seen(&device_id) {
-        error!(error = %e, device_id = %device_id, "Failed to persist last_seen to database");
-    }
+    // Publish device state event so downstream services can update stores/DB
+    publish_device_state_event(
+        event_bus,
+        &device_id,
+        msg.battery,
+        msg.linkquality,
+        publish_failures,
+    );
 
     // Get device to determine capability
     let device = match db.get_device_by_mqtt_topic(mqtt_topic) {
@@ -90,14 +75,21 @@ pub async fn handle_device_message(
                 sensor_type,
                 &device_id,
                 &msg,
-                tx,
+                event_bus,
                 no_temperature,
-                send_failures,
+                publish_failures,
             )
             .await;
         }
         DeviceCapability::Commander { commander_type } => {
-            handle_commander_message(commander_type, &device_id, &msg, switch_state).await;
+            handle_commander_message(
+                commander_type,
+                &device_id,
+                &msg,
+                event_bus,
+                publish_failures,
+            )
+            .await;
         }
     }
 }
@@ -107,9 +99,9 @@ async fn handle_sensor_message(
     sensor_type: &SensorType,
     device_id: &str,
     msg: &DeviceMqttMessage,
-    tx: &mpsc::Sender<SensorReading>,
+    event_bus: &EventBus,
     no_temperature: &mut u64,
-    send_failures: &mut u64,
+    publish_failures: &mut u64,
 ) {
     // Create sensor reading based on type
     let sensor_reading = SensorReading::from_mqtt(device_id.to_string(), sensor_type, msg);
@@ -138,20 +130,21 @@ async fn handle_sensor_message(
                 }
             }
 
-            // Send to channel
-            match tx.send(reading).await {
-                Ok(_) => {
-                    debug!(device_id = %device_id, "Sent reading to channel");
-                }
-                Err(e) => {
-                    *send_failures += 1;
-                    error!(
-                        error = %e,
-                        device_id = %device_id,
-                        send_failures = *send_failures,
-                        "Failed to send reading to channel - receiver dropped?"
-                    );
-                }
+            let event = SystemEvent::SensorReading {
+                device_id: device_id.to_string(),
+                timestamp: reading.timestamp(),
+                reading,
+            };
+            if let Err(e) = event_bus.publish(event) {
+                *publish_failures += 1;
+                error!(
+                    error = %e,
+                    device_id = %device_id,
+                    publish_failures = *publish_failures,
+                    "Failed to publish sensor reading event"
+                );
+            } else {
+                debug!(device_id = %device_id, "Published sensor reading event");
             }
         }
         None => {
@@ -171,7 +164,8 @@ async fn handle_commander_message(
     commander_type: &CommanderType,
     device_id: &str,
     msg: &DeviceMqttMessage,
-    switch_state: &SwitchStateStore,
+    event_bus: &EventBus,
+    publish_failures: &mut u64,
 ) {
     match commander_type {
         CommanderType::Switch => {
@@ -184,14 +178,60 @@ async fn handle_commander_message(
                     "Received switch state update"
                 );
 
-                // Update switch state store
-                switch_state.set_state(device_id.to_string(), state);
-                debug!(
-                    device_id = %device_id,
-                    state = %state,
-                    "Updated switch state in store"
-                );
+                let event = SystemEvent::SwitchState {
+                    device_id: device_id.to_string(),
+                    state,
+                    timestamp: Utc::now(),
+                };
+
+                if let Err(e) = event_bus.publish(event) {
+                    *publish_failures += 1;
+                    error!(
+                        error = %e,
+                        device_id = %device_id,
+                        publish_failures = *publish_failures,
+                        "Failed to publish switch state event"
+                    );
+                } else {
+                    debug!(
+                        device_id = %device_id,
+                        state = %state,
+                        "Published switch state event"
+                    );
+                }
             }
         }
+    }
+}
+
+fn publish_device_state_event(
+    event_bus: &EventBus,
+    device_id: &str,
+    battery: Option<u8>,
+    link_quality: Option<u8>,
+    publish_failures: &mut u64,
+) {
+    let event = SystemEvent::DeviceState {
+        device_id: device_id.to_string(),
+        battery,
+        link_quality,
+        timestamp: Utc::now(),
+    };
+
+    if let Err(e) = event_bus.publish(event) {
+        *publish_failures += 1;
+        error!(
+            error = %e,
+            device_id = %device_id,
+            publish_failures = *publish_failures,
+            "Failed to publish device state event"
+        );
+    } else {
+        debug!(
+            device_id = %device_id,
+            battery = ?battery,
+            link_quality = ?link_quality,
+            "Published device state event"
+        );
     }
 }

@@ -1,19 +1,16 @@
 use crate::db::Database;
-use crate::models::{DeviceMqttMessage, SensorReading};
+use crate::events::bus::EventBus;
+use crate::models::DeviceMqttMessage;
 use crate::mqtt::handlers::handle_device_message;
-use crate::state::{DeviceStateStore, SwitchStateStore};
 use rumqttc::{Event, EventLoop, Packet};
 use std::sync::Arc;
-use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 
 /// Spawn the MQTT event loop handler
 pub(super) fn spawn_event_loop(
     mut eventloop: EventLoop,
     db: Arc<Database>,
-    device_state: DeviceStateStore,
-    switch_state: SwitchStateStore,
-    tx: mpsc::Sender<SensorReading>,
+    event_bus: EventBus,
 ) {
     tokio::spawn(async move {
         info!("MQTT event loop started");
@@ -22,7 +19,7 @@ pub(super) fn spawn_event_loop(
         let mut skipped_bridge = 0u64;
         let mut parse_errors = 0u64;
         let mut no_temperature = 0u64;
-        let mut send_failures = 0u64;
+        let mut publish_failures = 0u64;
 
         loop {
             match eventloop.poll().await {
@@ -63,13 +60,11 @@ pub(super) fn spawn_event_loop(
                             Ok(msg) => {
                                 handle_device_message(
                                     &db,
-                                    &device_state,
-                                    &switch_state,
-                                    &tx,
+                                    &event_bus,
                                     mqtt_topic,
                                     msg,
                                     &mut no_temperature,
-                                    &mut send_failures,
+                                    &mut publish_failures,
                                 )
                                 .await;
                             }
@@ -117,7 +112,7 @@ pub(super) fn spawn_event_loop(
                     skipped_bridge = skipped_bridge,
                     parse_errors = parse_errors,
                     no_temperature = no_temperature,
-                    send_failures = send_failures,
+                    publish_failures = publish_failures,
                     "MQTT event loop statistics"
                 );
             }

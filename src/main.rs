@@ -9,15 +9,16 @@ mod mqtt;
 mod services;
 mod state;
 
-use automation::AutomationEngine;
 use cache::ResponseCache;
 use db::Database;
+use events::bus::EventBus;
 use http::HttpServer;
 use mqtt::MqttClient;
+use services::{AutomationService, DbWriterService, StateManagerService};
 use state::{DeviceStateStore, SwitchStateStore};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -59,8 +60,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Device state store initialized");
 
     // Initialize switch state store (before MQTT listener so we can pass it)
-    let switch_state = Arc::new(SwitchStateStore::new());
+    let switch_state = SwitchStateStore::new();
     info!("Switch state store initialized");
+
+    let event_bus = EventBus::new(1000);
+    info!("Event bus initialized with capacity 1000");
 
     // Start MQTT client
     info!(
@@ -68,86 +72,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         port = mqtt_port,
         "Connecting to MQTT broker"
     );
-    let (mqtt_client, mut readings_rx) = MqttClient::new(
+    let mqtt_client = MqttClient::new(
         &mqtt_broker,
         mqtt_port,
         "home-assistant-rs",
         db.clone(),
-        device_state.clone(),
-        (*switch_state).clone(),
+        event_bus.clone(),
     );
 
     mqtt_client.subscribe_to_zigbee2mqtt().await?;
     info!("Successfully subscribed to zigbee2mqtt topics");
 
-    // Initialize automation engine
-    let automation_engine = Arc::new(AutomationEngine::new(
+    // Spawn background services that consume the event bus.
+    let db_writer = DbWriterService::new(db.clone(), event_bus.subscribe());
+    tokio::spawn(async move {
+        db_writer.run().await;
+    });
+
+    let state_manager =
+        StateManagerService::new(device_state.clone(), switch_state.clone(), event_bus.subscribe());
+    tokio::spawn(async move {
+        state_manager.run().await;
+    });
+
+    let automation_service = AutomationService::new(
         db.clone(),
         mqtt_client.clone(),
         device_state.clone(),
-        (*switch_state).clone(),
-    ));
-    info!("Automation engine initialized");
-
-    // Spawn database writer task with automation engine
-    let db_clone = db.clone();
-    let automation_clone = automation_engine.clone();
+        switch_state.clone(),
+        event_bus.clone(),
+        event_bus.subscribe(),
+    );
     tokio::spawn(async move {
-        info!("Database writer task started");
-        let mut reading_count = 0u64;
-
-        while let Some(reading) = readings_rx.recv().await {
-            reading_count += 1;
-
-            match &reading {
-                crate::models::SensorReading::TempHumidity {
-                    device_id,
-                    temperature,
-                    humidity,
-                    ..
-                } => {
-                    info!(
-                        device_id = %device_id,
-                        temperature = %temperature,
-                        humidity = %humidity,
-                        count = reading_count,
-                        "Received temperature/humidity sensor reading"
-                    );
-                }
-                crate::models::SensorReading::Presence {
-                    device_id,
-                    occupied,
-                    ..
-                } => {
-                    info!(
-                        device_id = %device_id,
-                        occupied = %occupied,
-                        count = reading_count,
-                        "Received presence sensor reading"
-                    );
-                }
-            }
-
-            if let Err(e) = db_clone.insert_reading(&reading) {
-                error!(
-                    error = %e,
-                    device_id = %reading.device_id(),
-                    reading_count = reading_count,
-                    "Failed to insert reading into database"
-                );
-            } else {
-                debug!(
-                    device_id = %reading.device_id(),
-                    reading_count = reading_count,
-                    "Successfully inserted reading"
-                );
-            }
-
-            // Evaluate automation rules after inserting reading
-            automation_clone.evaluate_reading(&reading).await;
-        }
-
-        warn!("Database writer task channel closed - no more readings will be processed");
+        automation_service.run().await;
     });
 
     // Initialize response cache (60 second TTL matches monitor.sh interval)
@@ -176,6 +133,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Wrap MQTT client in Arc<Mutex> for sharing with HTTP server
     let mqtt_client = Arc::new(Mutex::new(mqtt_client));
+    let switch_state = Arc::new(switch_state);
 
     // Start HTTP server
     info!(addr = %http_addr, "Starting HTTP server");

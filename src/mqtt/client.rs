@@ -1,10 +1,8 @@
 use super::event_loop::spawn_event_loop;
 use crate::db::Database;
-use crate::models::SensorReading;
-use crate::state::{DeviceStateStore, SwitchStateStore};
+use crate::events::bus::EventBus;
 use rumqttc::{AsyncClient, ClientError, MqttOptions, QoS};
 use std::sync::Arc;
-use tokio::sync::mpsc;
 use tracing::{debug, error, info};
 
 /// Unified MQTT client for both publishing commands and listening to messages.
@@ -12,6 +10,7 @@ use tracing::{debug, error, info};
 #[derive(Clone)]
 pub struct MqttClient {
     client: AsyncClient,
+    event_bus: EventBus,
 }
 
 impl MqttClient {
@@ -21,9 +20,8 @@ impl MqttClient {
         broker_port: u16,
         client_id: &str,
         db: Arc<Database>,
-        device_state: DeviceStateStore,
-        switch_state: SwitchStateStore,
-    ) -> (Self, mpsc::Receiver<SensorReading>) {
+        event_bus: EventBus,
+    ) -> Self {
         info!(
             broker = %broker_host,
             port = broker_port,
@@ -42,23 +40,15 @@ impl MqttClient {
         );
 
         let (async_client, eventloop) = AsyncClient::new(mqtt_options, 10);
-        let (tx, rx) = mpsc::channel(100);
-
-        info!(
-            queue_size = 10,
-            channel_capacity = 100,
-            "MQTT client and channels created"
-        );
+        info!(queue_size = 10, "MQTT client created");
 
         // Spawn the event loop handler
-        spawn_event_loop(eventloop, db, device_state, switch_state, tx);
+        spawn_event_loop(eventloop, db, event_bus.clone());
 
-        (
-            Self {
-                client: async_client,
-            },
-            rx,
-        )
+        Self {
+            client: async_client,
+            event_bus,
+        }
     }
 
     /// Subscribe to zigbee2mqtt topics
@@ -66,6 +56,7 @@ impl MqttClient {
         info!(
             topic = "zigbee2mqtt/#",
             qos = "AtMostOnce",
+            subscribers = self.event_bus.receiver_count(),
             "Subscribing to MQTT topics"
         );
 
