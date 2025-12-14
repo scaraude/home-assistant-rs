@@ -14,6 +14,9 @@ impl Database {
         // Create device_state table
         self.create_device_state_table(&conn)?;
 
+        // Create switch_state table
+        self.create_switch_state_table(&conn)?;
+
         // Create temperature_readings table
         self.create_temperature_readings_table(&conn)?;
 
@@ -21,6 +24,42 @@ impl Database {
         self.create_automation_tables(&conn)?;
 
         info!("Database schema initialization complete");
+        Ok(())
+    }
+
+    /// Create switch_state table for historical switch state changes
+    fn create_switch_state_table(&self, conn: &rusqlite::Connection) -> Result<()> {
+        debug!("Creating switch_state table if not exists");
+        match conn.execute(
+            "CREATE TABLE IF NOT EXISTS switch_state (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                device_id TEXT NOT NULL,
+                state INTEGER NOT NULL,
+                timestamp INTEGER NOT NULL,
+                FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE
+            )",
+            [],
+        ) {
+            Ok(_) => debug!("Switch state table created/verified"),
+            Err(e) => {
+                error!(error = %e, "Failed to create switch_state table");
+                return Err(e);
+            }
+        }
+
+        debug!("Creating index idx_switch_state_latest if not exists");
+        match conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_switch_state_latest
+             ON switch_state(device_id, timestamp DESC)",
+            [],
+        ) {
+            Ok(_) => debug!("Index idx_switch_state_latest created/verified"),
+            Err(e) => {
+                error!(error = %e, "Failed to create idx_switch_state_latest index");
+                return Err(e);
+            }
+        }
+
         Ok(())
     }
 

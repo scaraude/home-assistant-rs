@@ -385,6 +385,39 @@ mod tests {
         assert_eq!(sensor2.name, "sensor2");
     }
 
+    // ==================== Switch State Tests ====================
+
+    #[test]
+    fn test_insert_and_retrieve_latest_switch_state() {
+        let (db, _temp_dir) = create_test_db();
+        let now = Utc::now();
+
+        let device = Device {
+            id: "switch1".to_string(),
+            mqtt_topic: "zigbee2mqtt/switch1".to_string(),
+            name: "Test Switch".to_string(),
+            capability: DeviceCapability::Commander {
+                commander_type: CommanderType::Switch,
+            },
+            power_source: PowerSource::Plugged,
+            added_at: now,
+        };
+        db.insert_device(&device).unwrap();
+
+        db.insert_switch_state("switch1", false, now - chrono::Duration::seconds(10))
+            .unwrap();
+        db.insert_switch_state("switch1", true, now).unwrap();
+
+        let latest = db.get_latest_switch_state("switch1").unwrap();
+        assert_eq!(latest, Some(true));
+    }
+
+    #[test]
+    fn test_get_latest_switch_state_when_absent() {
+        let (db, _temp_dir) = create_test_db();
+        assert!(db.get_latest_switch_state("missing").unwrap().is_none());
+    }
+
     // ==================== Automation Rule Tests ====================
 
     #[test]

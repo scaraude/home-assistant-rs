@@ -71,7 +71,7 @@ For AI: add marks when you finish to dev a session
 
 ---
 
-## Session 3 · DB Writer Service (2 hours)
+## Session 3 · DB Writer Service (2 hours) ✅ Completed
 
 - **Goal**: Persist events to SQLite.
 - **Files**: `src/services/db_writer.rs`, `src/db/schema.rs`, `src/db/queries/mod.rs`, `src/db/queries/switch.rs`.
