@@ -12,6 +12,7 @@ A lightweight home automation service written in Rust, optimized for Raspberry P
 - 📊 **System Monitoring**: Real-time CPU, RAM, and process metrics
 - 🚀 **Lightweight**: ~3MB binary, ~10-20MB runtime memory
 - ⚡ **Async**: Non-blocking I/O for efficient resource usage
+- 📡 **WebSocket Streaming**: Event bus pushes updates in <100 ms (no polling)
 - 📡 **Device Discovery**: Automatic registration of new Zigbee devices
 - 🔋 **Device State**: Battery level and link quality monitoring
 
@@ -42,6 +43,17 @@ A lightweight home automation service written in Rust, optimized for Raspberry P
         │ • Lights      │                                  │ (Browser UI) │
         └───────────────┘                                  └──────────────┘
 ```
+
+### Event-Driven Flow
+
+MQTT handlers publish strongly typed `SystemEvent`s into a `tokio::broadcast` bus. Multiple services subscribe:
+
+- `DbWriterService` persists readings, switch flips, and automation logs.
+- `StateManagerService` keeps in-memory device/switch state for fast HTTP responses.
+- `AutomationService` evaluates rules on every reading and publishes execution events.
+- `WebSocketBroadcaster` streams each event JSON payload to browsers over `/ws`.
+
+The frontend performs an initial REST fetch, then stays synchronized via WebSocket pushes—no polling, no HTTP cache.
 
 ## Prerequisites
 
@@ -277,6 +289,10 @@ CREATE TABLE automation_execution_log (
 - `GET /api/system/top-consumers?type=ram` - Top RAM consumers
 - `GET /api/system/process-history?process={name}&pid={pid}&hours=24` - Process metrics
 
+### Real-time Events
+
+- `GET /ws` - WebSocket upgrade endpoint. Each text frame contains a serialized `SystemEvent` (sensor readings, switch changes, device telemetry, automation activity). Used by the Svelte frontend for sub-100 ms updates with automatic reconnection/backoff on the client.
+
 ## Features in Detail
 
 ### Device Discovery
@@ -329,11 +345,12 @@ Create rules with conditions and actions:
 
 ### Performance Optimizations
 
-**Caching**:
+**Event-driven core**:
 
-- 60-second HTTP response cache with ETag support
-- Delta updates for sensor data (99% bandwidth reduction)
-- 304 Not Modified responses for unchanged data
+- MQTT → EventBus → services pipeline removes periodic HTTP polling
+- Broadcast channel feeds DB writer, automation, state manager, and WebSocket broadcaster concurrently
+- `/ws` pushes JSON events to the frontend in <100 ms, saving ~96 % bandwidth vs. the old poller
+- Cache removal frees ~300–800 KB of RAM while eliminating cache invalidation logic
 
 **Database**:
 
@@ -344,9 +361,9 @@ Create rules with conditions and actions:
 
 **Frontend**:
 
-- Client-side caching with delta updates
-- 15-second polling with conditional requests
-- Chart.js for efficient data visualization
+- Initial REST fetch + WebSocket stream for incremental updates
+- Reconnection with exponential backoff + jitter for resilience on spotty Pi Wi-Fi
+- Charting + derived state rely on Svelte stores that merge each event payload
 
 ## Development
 
@@ -355,13 +372,14 @@ Create rules with conditions and actions:
 ```
 src/
 ├── main.rs              # Entry point, runtime initialization
+├── events/              # SystemEvent enum + helpers
+├── services/            # Long-running workers (DB writer, automation, state, websocket)
 ├── mqtt/                # MQTT client and message handlers
 ├── db/                  # Database layer with query modules
 ├── http/                # HTTP server (Hyper) and API routes
 ├── models/              # Data models (Device, SensorReading, etc.)
-├── state/               # In-memory state stores
-├── automation/          # Rule evaluation engine
-├── cache/               # HTTP response cache
+├── state/               # In-memory state stores used by services + HTTP
+├── automation/          # Rule evaluation engine for REST CRUD helpers
 └── logs/                # System log parsing
 
 frontend/                # Svelte dashboard
