@@ -24,56 +24,24 @@ pub fn json_response_with_status(json: String, status: StatusCode) -> Response<F
         .expect("Failed to build JSON response - this should never happen with valid headers")
 }
 
-/// Create a JSON response with ETag header
-pub fn json_response_with_etag(json: String, etag: String) -> Response<Full<Bytes>> {
+/// Create a JSON response with a custom latest timestamp header
+pub fn json_response_with_timestamp(json: String, latest_timestamp: i64) -> Response<Full<Bytes>> {
     Response::builder()
         .status(StatusCode::OK)
         .header("Content-Type", "application/json")
-        .header("ETag", etag)
-        .header("Cache-Control", "private, must-revalidate")
-        .body(Full::new(Bytes::from(json)))
-        .expect("Failed to build cached JSON response - this should never happen")
-}
-
-/// Create a JSON response with ETag and custom timestamp header
-pub fn json_response_with_cache_headers(
-    json: String,
-    etag: String,
-    latest_timestamp: i64,
-) -> Response<Full<Bytes>> {
-    Response::builder()
-        .status(StatusCode::OK)
-        .header("Content-Type", "application/json")
-        .header("ETag", etag)
-        .header("Cache-Control", "private, must-revalidate")
         .header("X-Latest-Timestamp", latest_timestamp.to_string())
         .body(Full::new(Bytes::from(json)))
-        .expect("Failed to build cached JSON response with timestamp header")
+        .expect("Failed to build JSON response with timestamp header")
 }
 
-/// Create a JSON response with ETag and total lines header (for log pagination)
-pub fn json_response_with_lines_header(
-    json: String,
-    etag: String,
-    total_lines: usize,
-) -> Response<Full<Bytes>> {
+/// Create a JSON response with total lines header (for log pagination)
+pub fn json_response_with_total_lines(json: String, total_lines: usize) -> Response<Full<Bytes>> {
     Response::builder()
         .status(StatusCode::OK)
         .header("Content-Type", "application/json")
-        .header("ETag", etag)
-        .header("Cache-Control", "private, must-revalidate")
         .header("X-Total-Lines", total_lines.to_string())
         .body(Full::new(Bytes::from(json)))
-        .expect("Failed to build cached JSON response with total lines header")
-}
-
-/// Create a 304 Not Modified response with ETag
-pub fn not_modified_response(etag: String) -> Response<Full<Bytes>> {
-    Response::builder()
-        .status(StatusCode::NOT_MODIFIED)
-        .header("ETag", etag)
-        .body(Full::new(Bytes::new()))
-        .expect("Failed to build 304 Not Modified response")
+        .expect("Failed to build JSON response with total lines header")
 }
 
 /// Create an error response with JSON error message

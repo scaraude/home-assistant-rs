@@ -1,5 +1,4 @@
 mod automation;
-mod cache;
 mod db;
 mod events;
 mod http;
@@ -9,7 +8,6 @@ mod mqtt;
 mod services;
 mod state;
 
-use cache::ResponseCache;
 use db::Database;
 use events::bus::EventBus;
 use http::HttpServer;
@@ -89,8 +87,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         db_writer.run().await;
     });
 
-    let state_manager =
-        StateManagerService::new(device_state.clone(), switch_state.clone(), event_bus.subscribe());
+    let state_manager = StateManagerService::new(
+        device_state.clone(),
+        switch_state.clone(),
+        event_bus.subscribe(),
+    );
     tokio::spawn(async move {
         state_manager.run().await;
     });
@@ -107,44 +108,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         automation_service.run().await;
     });
 
-    // Initialize response cache (60 second TTL matches monitor.sh interval)
-    let cache = Arc::new(ResponseCache::new(60));
-    info!("Response cache initialized with 60s TTL");
-
-    // Spawn cache cleanup task (runs every 5 minutes to prevent memory accumulation)
-    let cache_clone = cache.clone();
-    tokio::spawn(async move {
-        info!("Cache cleanup task started (runs every 5 minutes)");
-        let mut interval = tokio::time::interval(std::time::Duration::from_secs(300)); // 5 minutes
-
-        loop {
-            interval.tick().await;
-            let removed = cache_clone.cleanup_expired();
-            if removed > 0 {
-                info!(
-                    removed_entries = removed,
-                    "Cache cleanup: removed expired entries"
-                );
-            } else {
-                debug!("Cache cleanup: no expired entries to remove");
-            }
-        }
-    });
-
     // Wrap MQTT client in Arc<Mutex> for sharing with HTTP server
     let mqtt_client = Arc::new(Mutex::new(mqtt_client));
     let switch_state = Arc::new(switch_state);
 
     // Start HTTP server
     info!(addr = %http_addr, "Starting HTTP server");
-    let server = HttpServer::new(
-        db,
-        cache,
-        mqtt_client,
-        switch_state,
-        device_state,
-        http_addr,
-    );
+    let server = HttpServer::new(db, mqtt_client, switch_state, device_state, http_addr);
     server.run().await?;
 
     Ok(())

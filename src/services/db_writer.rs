@@ -31,10 +31,7 @@ impl DbWriterService {
                     self.handle_event(event);
 
                     if processed_events % 100 == 0 {
-                        info!(
-                            processed_events,
-                            "DbWriterService processed events batch"
-                        );
+                        info!(processed_events, "DbWriterService processed events batch");
                     }
                 }
                 Err(broadcast::error::RecvError::Lagged(skipped)) => {

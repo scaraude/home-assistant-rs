@@ -3,7 +3,6 @@ mod responses;
 mod routes;
 mod static_files;
 
-use crate::cache::ResponseCache;
 use crate::db::Database;
 use crate::mqtt::MqttClient;
 use crate::state::{DeviceStateStore, SwitchStateStore};
@@ -11,7 +10,7 @@ use http_body_util::Full;
 use hyper::body::Bytes;
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
-use hyper::{Request, Response, StatusCode};
+use hyper::{Request, Response};
 use hyper_util::rt::TokioIo;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -21,7 +20,6 @@ use tracing::{debug, error, info, warn};
 
 pub struct HttpServer {
     db: Arc<Database>,
-    cache: Arc<ResponseCache>,
     mqtt: Arc<Mutex<MqttClient>>,
     switch_state: Arc<SwitchStateStore>,
     device_state: DeviceStateStore,
@@ -31,7 +29,6 @@ pub struct HttpServer {
 impl HttpServer {
     pub fn new(
         db: Arc<Database>,
-        cache: Arc<ResponseCache>,
         mqtt: Arc<Mutex<MqttClient>>,
         switch_state: Arc<SwitchStateStore>,
         device_state: DeviceStateStore,
@@ -39,7 +36,6 @@ impl HttpServer {
     ) -> Self {
         Self {
             db,
-            cache,
             mqtt,
             switch_state,
             device_state,
@@ -75,7 +71,6 @@ impl HttpServer {
 
                     let io = TokioIo::new(stream);
                     let db = self.db.clone();
-                    let cache = self.cache.clone();
                     let mqtt = self.mqtt.clone();
                     let switch_state = self.switch_state.clone();
                     let device_state = self.device_state.clone();
@@ -92,7 +87,6 @@ impl HttpServer {
                                     handle_request(
                                         req,
                                         db.clone(),
-                                        cache.clone(),
                                         mqtt.clone(),
                                         switch_state.clone(),
                                         device_state.clone(),
@@ -123,7 +117,6 @@ impl HttpServer {
 async fn handle_request(
     req: Request<hyper::body::Incoming>,
     db: Arc<Database>,
-    cache: Arc<ResponseCache>,
     mqtt: Arc<Mutex<MqttClient>>,
     switch_state: Arc<SwitchStateStore>,
     device_state: DeviceStateStore,
@@ -141,41 +134,6 @@ async fn handle_request(
         "Incoming HTTP request"
     );
 
-    // Check if client sent If-None-Match header (conditional request)
-    let client_etag = req
-        .headers()
-        .get("if-none-match")
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.trim_matches('"').to_string());
-
-    // Try to get cached response for GET requests on cacheable endpoints
-    if method == hyper::Method::GET && is_cacheable_path(&path, query.as_deref()) {
-        if let Some(cached) = cache.get(&path, query.as_deref()) {
-            // Check if client's ETag matches cached ETag
-            if let Some(ref client_etag_value) = client_etag {
-                if client_etag_value == &cached.etag {
-                    debug!(
-                        path = %path,
-                        client_etag = %client_etag_value,
-                        cached_etag = %cached.etag,
-                        "Cache hit - returning 304 Not Modified"
-                    );
-                    return Ok(responses::not_modified_response(cached.etag.clone()));
-                }
-            }
-
-            // Cache hit, return cached response with ETag
-            debug!(path = %path, etag = %cached.etag, "Cache hit - returning cached response");
-            return Ok(Response::builder()
-                .status(StatusCode::OK)
-                .header("Content-Type", "application/json")
-                .header("ETag", cached.etag)
-                .header("Cache-Control", "private, must-revalidate")
-                .body(Full::new(cached.body))
-                .expect("Failed to build cached response"));
-        }
-    }
-
     let response = match (method.as_str(), path.as_str()) {
         ("GET", "/") => {
             debug!("Serving index page");
@@ -187,11 +145,11 @@ async fn handle_request(
         }
         ("GET", "/api/sensors") => {
             debug!("Serving sensors list");
-            routes::serve_sensors(&db, &cache, &path, query.as_deref())
+            routes::serve_sensors(&db)
         }
         ("GET", "/api/readings") => {
             debug!(query = ?query, "Serving readings");
-            routes::serve_readings(&db, &cache, &path, query.as_deref())
+            routes::serve_readings(&db, query.as_deref())
         }
         ("GET", "/api/devices/switches") => {
             debug!("Serving switches list");
@@ -243,11 +201,11 @@ async fn handle_request(
         }
         ("GET", "/api/logs/view") => {
             debug!(query = ?query, "Serving log file view");
-            routes::serve_log_view(&cache, &path, query.as_deref())
+            routes::serve_log_view(query.as_deref())
         }
         ("GET", "/api/logs/process") => {
             debug!(query = ?query, "Serving process history");
-            routes::serve_process_history(&cache, &path, query.as_deref())
+            routes::serve_process_history(query.as_deref())
         }
         (_, path_str) if path_str.starts_with("/assets/") || path_str.ends_with(".svg") => {
             debug!(path = %path_str, "Serving static asset");
@@ -271,22 +229,4 @@ async fn handle_request(
     );
 
     Ok(response)
-}
-
-/// Determine if a path should be cached
-/// Delta requests (with since/since_line params) are not cached to avoid pollution
-fn is_cacheable_path(path: &str, query: Option<&str>) -> bool {
-    // Check if path is a cacheable endpoint
-    if !matches!(path, "/api/readings" | "/api/logs/view" | "/api/sensors") {
-        return false;
-    }
-
-    // Don't cache delta requests - they change constantly and pollute the cache
-    if let Some(q) = query {
-        if q.contains("since=") || q.contains("since_line=") {
-            return false;
-        }
-    }
-
-    true
 }

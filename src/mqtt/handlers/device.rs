@@ -1,5 +1,5 @@
 use crate::db::Database;
-use crate::events::{bus::EventBus, SystemEvent};
+use crate::events::{SystemEvent, bus::EventBus};
 use crate::models::{
     CommanderType, DeviceCapability, DeviceMqttMessage, SensorReading, SensorType,
 };

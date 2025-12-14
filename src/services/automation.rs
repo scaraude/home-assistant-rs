@@ -2,14 +2,14 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::db::Database;
-use crate::events::{bus::EventBus, SystemEvent};
+use crate::events::{SystemEvent, bus::EventBus};
 use crate::models::{
     AutomationAction, AutomationCondition, AutomationRule, SensorField, SensorReading, SwitchAction,
 };
 use crate::mqtt::MqttClient;
 use crate::state::{DeviceStateStore, SwitchStateStore};
 use chrono::{DateTime, Utc};
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{RwLock, broadcast};
 use tracing::{debug, error, info, warn};
 
 /// Service responsible for evaluating automation rules and executing actions in response
@@ -223,32 +223,30 @@ impl AutomationService {
 
     async fn evaluate_condition(&self, condition: &AutomationCondition) -> bool {
         let field_value = match condition.field {
-            SensorField::Temperature => {
-                self.db
-                    .get_latest_reading_for_sensor(&condition.device_id)
-                    .ok()
-                    .flatten()
-                    .and_then(|reading| {
-                        if let SensorReading::TempHumidity { temperature, .. } = reading {
-                            Some(temperature as f64)
-                        } else {
-                            None
-                        }
-                    })
-            }
-            SensorField::Humidity => {
-                self.db
-                    .get_latest_reading_for_sensor(&condition.device_id)
-                    .ok()
-                    .flatten()
-                    .and_then(|reading| {
-                        if let SensorReading::TempHumidity { humidity, .. } = reading {
-                            Some(humidity as f64)
-                        } else {
-                            None
-                        }
-                    })
-            }
+            SensorField::Temperature => self
+                .db
+                .get_latest_reading_for_sensor(&condition.device_id)
+                .ok()
+                .flatten()
+                .and_then(|reading| {
+                    if let SensorReading::TempHumidity { temperature, .. } = reading {
+                        Some(temperature as f64)
+                    } else {
+                        None
+                    }
+                }),
+            SensorField::Humidity => self
+                .db
+                .get_latest_reading_for_sensor(&condition.device_id)
+                .ok()
+                .flatten()
+                .and_then(|reading| {
+                    if let SensorReading::TempHumidity { humidity, .. } = reading {
+                        Some(humidity as f64)
+                    } else {
+                        None
+                    }
+                }),
             SensorField::Battery => self
                 .device_state
                 .get_battery(&condition.device_id)

@@ -1,4 +1,3 @@
-use crate::cache::ResponseCache;
 use crate::db::Database;
 use crate::http::query::QueryParams;
 use crate::http::responses::*;
@@ -24,12 +23,7 @@ pub fn health_check() -> Response<Full<Bytes>> {
     success_response()
 }
 
-pub fn serve_sensors(
-    db: &Database,
-    cache: &ResponseCache,
-    path: &str,
-    query: Option<&str>,
-) -> Response<Full<Bytes>> {
+pub fn serve_sensors(db: &Database) -> Response<Full<Bytes>> {
     debug!("Querying database for all sensors");
 
     match db.get_all_sensors() {
@@ -46,7 +40,7 @@ pub fn serve_sensors(
                         response_size = json.len(),
                         "Successfully serialized sensors to JSON"
                     );
-                    json_response_with_cache(json, cache, path, query)
+                    json_response(json)
                 }
                 Err(e) => {
                     error!(error = %e, "Failed to serialize sensors to JSON");
@@ -61,12 +55,7 @@ pub fn serve_sensors(
     }
 }
 
-pub fn serve_readings(
-    db: &Database,
-    cache: &ResponseCache,
-    path: &str,
-    query: Option<&str>,
-) -> Response<Full<Bytes>> {
+pub fn serve_readings(db: &Database, query: Option<&str>) -> Response<Full<Bytes>> {
     debug!(query = ?query, "Parsing query parameters");
 
     // Parse query parameters for device_id, hours, and since
@@ -121,11 +110,7 @@ pub fn serve_readings(
                         "Successfully serialized readings to JSON"
                     );
 
-                    // Create cached response with custom header for delta tracking
-                    let bytes = Bytes::from(json.clone());
-                    let etag = cache.put(path, query, bytes.clone());
-
-                    json_response_with_cache_headers(json, etag, latest_timestamp)
+                    json_response_with_timestamp(json, latest_timestamp)
                 }
                 Err(e) => {
                     error!(error = %e, "Failed to serialize readings to JSON");
@@ -161,11 +146,7 @@ pub fn serve_logs_list() -> Response<Full<Bytes>> {
     }
 }
 
-pub fn serve_log_view(
-    cache: &ResponseCache,
-    path: &str,
-    query: Option<&str>,
-) -> Response<Full<Bytes>> {
+pub fn serve_log_view(query: Option<&str>) -> Response<Full<Bytes>> {
     let params = QueryParams::new(query);
     let filename = params.get("file");
     let max_lines = params.get_usize("lines", 1000);
@@ -211,11 +192,7 @@ pub fn serve_log_view(
                         "Successfully serialized log entries to JSON"
                     );
 
-                    // Create cached response with custom header for delta tracking
-                    let bytes = Bytes::from(json.clone());
-                    let etag = cache.put(path, query, bytes.clone());
-
-                    json_response_with_lines_header(json, etag, total_lines)
+                    json_response_with_total_lines(json, total_lines)
                 }
                 Err(e) => {
                     error!(error = %e, filename = %file, "Failed to serialize log entries to JSON");
@@ -230,11 +207,7 @@ pub fn serve_log_view(
     }
 }
 
-pub fn serve_process_history(
-    cache: &ResponseCache,
-    path: &str,
-    query: Option<&str>,
-) -> Response<Full<Bytes>> {
+pub fn serve_process_history(query: Option<&str>) -> Response<Full<Bytes>> {
     let params = QueryParams::new(query);
     let process_name = params.get("process");
     let pid = params.get("pid");
@@ -280,8 +253,7 @@ pub fn serve_process_history(
                         "Successfully serialized process history to JSON"
                     );
 
-                    // Create cached response
-                    json_response_with_cache(json, cache, path, query)
+                    json_response(json)
                 }
                 Err(e) => {
                     error!(error = %e, process = %process, pid = %process_pid, "Failed to serialize process history to JSON");
@@ -827,23 +799,4 @@ pub fn serve_execution_logs(db: &Database, query: Option<&str>) -> Response<Full
             internal_error_response(e.to_string().as_str())
         }
     }
-}
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-/// Create a cached JSON response
-fn json_response_with_cache(
-    json: String,
-    cache: &ResponseCache,
-    path: &str,
-    query: Option<&str>,
-) -> Response<Full<Bytes>> {
-    let bytes = Bytes::from(json.clone());
-    let etag = cache.put(path, query, bytes.clone());
-
-    debug!(path = %path, etag = %etag, "Created cached response");
-
-    json_response_with_etag(json, etag)
 }

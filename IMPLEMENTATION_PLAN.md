@@ -137,7 +137,7 @@ CREATE INDEX idx_switch_state_latest
 
 ---
 
-## Session 5 · Automation Service (2–3 hours)
+## Session 5 · Automation Service (2–3 hours) ✅ Completed
 
 - **Goal**: Run automation logic as an event consumer.
 - **Files**: `src/services/automation.rs`, `src/automation/mod.rs`.
@@ -162,7 +162,7 @@ CREATE INDEX idx_switch_state_latest
 
 ---
 
-## Session 6 · Main Integration (1–2 hours)
+## Session 6 · Main Integration (1–2 hours) ✅ Completed
 
 - **Goal**: Wire services and remove legacy plumbing.
 - **File**: `src/main.rs`.
@@ -209,7 +209,7 @@ let server = HttpServer::new(db, mqtt_client, switch_state, device_state, http_a
 
 ---
 
-## Session 7 · HTTP Server Cleanup (1 hour)
+## Session 7 · HTTP Server Cleanup (1 hour) ✅ Completed
 
 - **Goal**: Remove backend cache usage.
 - **Files**: `src/http/mod.rs`, `src/http/routes.rs`.

@@ -7,11 +7,7 @@ use std::sync::Arc;
 use tracing::{debug, error, info, warn};
 
 /// Spawn the MQTT event loop handler
-pub(super) fn spawn_event_loop(
-    mut eventloop: EventLoop,
-    db: Arc<Database>,
-    event_bus: EventBus,
-) {
+pub(super) fn spawn_event_loop(mut eventloop: EventLoop, db: Arc<Database>, event_bus: EventBus) {
     tokio::spawn(async move {
         info!("MQTT event loop started");
         let mut message_count = 0u64;

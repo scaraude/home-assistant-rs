@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use rusqlite::{params, Result};
+use rusqlite::{Result, params};
 use tracing::debug;
 
 use super::super::connection::{Database, MutexExt};
