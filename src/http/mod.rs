@@ -2,6 +2,7 @@ mod query;
 mod responses;
 mod routes;
 mod static_files;
+pub mod websocket;
 
 use crate::db::Database;
 use crate::mqtt::MqttClient;

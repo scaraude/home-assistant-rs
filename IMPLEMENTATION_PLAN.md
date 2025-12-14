@@ -232,7 +232,7 @@ let server = HttpServer::new(db, mqtt_client, switch_state, device_state, http_a
 
 ---
 
-## Session 8 · WebSocket Infrastructure (2–3 hours)
+## Session 8 · WebSocket Infrastructure (2–3 hours) ✅ Completed
 
 - **Goal**: Serve events over WebSocket.
 - **Files**: `Cargo.toml`, `src/services/websocket.rs`, `src/http/websocket.rs`.
