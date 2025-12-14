@@ -6,6 +6,7 @@ pub mod websocket;
 
 use crate::db::Database;
 use crate::mqtt::MqttClient;
+use crate::services::WebSocketBroadcaster;
 use crate::state::{DeviceStateStore, SwitchStateStore};
 use http_body_util::Full;
 use hyper::body::Bytes;
@@ -25,6 +26,7 @@ pub struct HttpServer {
     switch_state: Arc<SwitchStateStore>,
     device_state: DeviceStateStore,
     addr: SocketAddr,
+    ws_broadcaster: Arc<WebSocketBroadcaster>,
 }
 
 impl HttpServer {
@@ -34,6 +36,7 @@ impl HttpServer {
         switch_state: Arc<SwitchStateStore>,
         device_state: DeviceStateStore,
         addr: SocketAddr,
+        ws_broadcaster: Arc<WebSocketBroadcaster>,
     ) -> Self {
         Self {
             db,
@@ -41,6 +44,7 @@ impl HttpServer {
             switch_state,
             device_state,
             addr,
+            ws_broadcaster,
         }
     }
 
@@ -75,6 +79,7 @@ impl HttpServer {
                     let mqtt = self.mqtt.clone();
                     let switch_state = self.switch_state.clone();
                     let device_state = self.device_state.clone();
+                    let ws_broadcaster = self.ws_broadcaster.clone();
                     let conn_id = connection_count;
 
                     tokio::spawn(async move {
@@ -91,6 +96,7 @@ impl HttpServer {
                                         mqtt.clone(),
                                         switch_state.clone(),
                                         device_state.clone(),
+                                        ws_broadcaster.clone(),
                                     )
                                 }),
                             )
@@ -121,6 +127,7 @@ async fn handle_request(
     mqtt: Arc<Mutex<MqttClient>>,
     switch_state: Arc<SwitchStateStore>,
     device_state: DeviceStateStore,
+    ws_broadcaster: Arc<WebSocketBroadcaster>,
 ) -> Result<Response<Full<Bytes>>, hyper::Error> {
     let path = req.uri().path().to_string();
     let method = req.method().clone();
@@ -135,89 +142,91 @@ async fn handle_request(
         "Incoming HTTP request"
     );
 
-    let response = match (method.as_str(), path.as_str()) {
-        ("GET", "/") => {
+    let response_result = match (method.as_str(), path.as_str()) {
+        ("GET", "/") => Ok({
             debug!("Serving index page");
             static_files::serve_static_file("static/index.html", "text/html; charset=utf-8")
-        }
-        ("GET", "/health") => {
+        }),
+        ("GET", "/health") => Ok({
             debug!("Health check request");
             routes::health_check()
-        }
-        ("GET", "/api/sensors") => {
+        }),
+        ("GET", "/api/sensors") => Ok({
             debug!("Serving sensors list");
             routes::serve_sensors(&db)
-        }
-        ("GET", "/api/readings") => {
+        }),
+        ("GET", "/api/readings") => Ok({
             debug!(query = ?query, "Serving readings");
             routes::serve_readings(&db, query.as_deref())
-        }
-        ("GET", "/api/devices/switches") => {
+        }),
+        ("GET", "/api/devices/switches") => Ok({
             debug!("Serving switches list");
             routes::serve_switches_list(&db, &switch_state, &device_state)
-        }
-        ("GET", path) if path.starts_with("/api/devices/") && path.ends_with("/state") => {
+        }),
+        ("GET", path) if path.starts_with("/api/devices/") && path.ends_with("/state") => Ok({
             debug!(path = %path, "Serving device state");
             let device_id = &path["/api/devices/".len()..path.len() - "/state".len()];
             routes::serve_device_state(&db, device_id)
-        }
-        ("POST", "/api/commands/execute") => {
+        }),
+        ("POST", "/api/commands/execute") => Ok({
             debug!("Executing command");
             routes::execute_command(req, &db, &mqtt).await
-        }
-        ("PATCH", path) if path.starts_with("/api/devices/") => {
+        }),
+        ("PATCH", path) if path.starts_with("/api/devices/") => Ok({
             debug!(path = %path, "Updating device");
             routes::update_device(req, &db, path).await
-        }
-        ("GET", "/api/automation/rules") => {
+        }),
+        ("GET", "/api/automation/rules") => Ok({
             debug!("Serving automation rules list");
             routes::serve_automation_rules(&db)
-        }
-        ("GET", path) if path.starts_with("/api/automation/rules/") => {
+        }),
+        ("GET", path) if path.starts_with("/api/automation/rules/") => Ok({
             debug!(path = %path, "Serving automation rule by ID");
             let rule_id = &path["/api/automation/rules/".len()..];
             routes::serve_automation_rule(&db, rule_id)
-        }
-        ("POST", "/api/automation/rules") => {
+        }),
+        ("POST", "/api/automation/rules") => Ok({
             debug!("Creating automation rule");
             routes::create_automation_rule(req, &db).await
-        }
-        ("PUT", path) if path.starts_with("/api/automation/rules/") => {
+        }),
+        ("PUT", path) if path.starts_with("/api/automation/rules/") => Ok({
             debug!(path = %path, "Updating automation rule");
             let rule_id = &path["/api/automation/rules/".len()..];
             routes::update_automation_rule(req, &db, rule_id).await
-        }
-        ("DELETE", path) if path.starts_with("/api/automation/rules/") => {
+        }),
+        ("DELETE", path) if path.starts_with("/api/automation/rules/") => Ok({
             debug!(path = %path, "Deleting automation rule");
             let rule_id = &path["/api/automation/rules/".len()..];
             routes::delete_automation_rule(&db, rule_id)
-        }
-        ("GET", "/api/automation/logs") => {
+        }),
+        ("GET", "/api/automation/logs") => Ok({
             debug!("Serving automation execution logs");
             routes::serve_execution_logs(&db, query.as_deref())
-        }
-        ("GET", "/api/logs/list") => {
+        }),
+        ("GET", "/api/logs/list") => Ok({
             debug!("Serving logs list");
             routes::serve_logs_list()
-        }
-        ("GET", "/api/logs/view") => {
+        }),
+        ("GET", "/api/logs/view") => Ok({
             debug!(query = ?query, "Serving log file view");
             routes::serve_log_view(query.as_deref())
-        }
-        ("GET", "/api/logs/process") => {
+        }),
+        ("GET", "/api/logs/process") => Ok({
             debug!(query = ?query, "Serving process history");
             routes::serve_process_history(query.as_deref())
-        }
-        (_, path_str) if path_str.starts_with("/assets/") || path_str.ends_with(".svg") => {
+        }),
+        ("GET", "/ws") => websocket::handle_websocket_upgrade(req, ws_broadcaster).await,
+        (_, path_str) if path_str.starts_with("/assets/") || path_str.ends_with(".svg") => Ok({
             debug!(path = %path_str, "Serving static asset");
             static_files::serve_static_asset(path_str)
-        }
-        _ => {
+        }),
+        _ => Ok({
             warn!(path = %path, method = %method, "Request to unknown path");
             responses::not_found_response("Endpoint not found")
-        }
+        }),
     };
 
+    let response = response_result?;
     let elapsed = start.elapsed();
     let status = response.status();
 

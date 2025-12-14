@@ -267,7 +267,7 @@ futures-util = "0.3"
 
 ---
 
-## Session 9 · WebSocket Integration (1 hour)
+## Session 9 · WebSocket Integration (1 hour) ✅ Completed
 
 - **Goal**: Expose `/ws` and run broadcaster.
 - **Files**: `src/main.rs`, `src/http/mod.rs`.
@@ -285,7 +285,7 @@ tokio::spawn(async move { ws_broadcaster_clone.run().await });
 - Inject `ws_broadcaster` into `HttpServer`.
 - In `handle_request`, route `("GET", "/ws")` to `websocket::handle_websocket_upgrade`.
 
-**Checkpoint 9**: ✅ `/ws` accessible; ✅ Upgrade confirmed with `wscat`.
+**Checkpoint 9**: ✅ `/ws` accessible; ✅ Upgrade confirmed with `wscat`; ✅ `cargo check`/`cargo test` clean.
 
 ---
 

@@ -12,7 +12,7 @@ use db::Database;
 use events::bus::EventBus;
 use http::HttpServer;
 use mqtt::MqttClient;
-use services::{AutomationService, DbWriterService, StateManagerService};
+use services::{AutomationService, DbWriterService, StateManagerService, WebSocketBroadcaster};
 use state::{DeviceStateStore, SwitchStateStore};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -63,6 +63,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let event_bus = EventBus::new(1000);
     info!("Event bus initialized with capacity 1000");
+
+    let ws_broadcaster = Arc::new(WebSocketBroadcaster::new(event_bus.subscribe()));
+    let ws_broadcaster_task = ws_broadcaster.clone();
+    tokio::spawn(async move {
+        ws_broadcaster_task.run().await;
+    });
+    info!("WebSocket broadcaster task spawned");
 
     // Start MQTT client
     info!(
@@ -115,7 +122,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Start HTTP server
     info!(addr = %http_addr, "Starting HTTP server");
-    let server = HttpServer::new(db, mqtt_client, switch_state, device_state, http_addr);
+    let server = HttpServer::new(
+        db,
+        mqtt_client,
+        switch_state,
+        device_state,
+        http_addr,
+        ws_broadcaster,
+    );
     server.run().await?;
 
     Ok(())
