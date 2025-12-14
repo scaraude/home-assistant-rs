@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { SwitchDevice, AutomationRule, SensorReading, DeviceInfo } from "./api";
+  import type { SwitchDevice, AutomationRule, DeviceInfo } from "./api";
   import {
     deleteAutomationRule,
     updateAutomationRule,
@@ -15,7 +15,7 @@
     deviceId,
     deviceRules = [],
     loading = false,
-    error = null
+    error = null,
   }: {
     deviceId: string;
     deviceRules?: AutomationRule[];
@@ -165,7 +165,11 @@
         <p class="empty-hint">
           Create a rule to automate this switch based on sensor readings
         </p>
-        <button class="empty-action-btn" onclick={handleCreateRule} type="button">
+        <button
+          class="empty-action-btn"
+          onclick={handleCreateRule}
+          type="button"
+        >
           <svg
             xmlns="http://www.w3.org/2000/svg"
             viewBox="0 0 24 24"
@@ -252,7 +256,10 @@
                 <ul class="actions-list">
                   {#each rule.actions as action}
                     <li class="action-item">
-                      <span class="action-type" class:on={action.action === "on"}>
+                      <span
+                        class="action-type"
+                        class:on={action.action === "on"}
+                      >
                         {action.action.toUpperCase()}
                       </span>
                     </li>
@@ -278,9 +285,8 @@
                     )}
                   </span>
                   <span class="trigger-count">
-                    {rule.trigger_count} {rule.trigger_count === 1
-                      ? "execution"
-                      : "executions"}
+                    {rule.trigger_count}
+                    {rule.trigger_count === 1 ? "execution" : "executions"}
                   </span>
                 </div>
               {/if}

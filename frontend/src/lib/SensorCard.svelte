@@ -11,7 +11,6 @@
   export let sensorData: SensorData;
 
   let deviceState: DeviceState | null = null;
-  let loadingState = false;
 
   type Metric = "temperature" | "humidity" | null;
   let selectedMetric: Metric = null;
@@ -105,13 +104,10 @@
   async function loadDeviceState() {
     if (!deviceId) return;
 
-    loadingState = true;
     try {
       deviceState = await fetchDeviceState(deviceId);
     } catch (err) {
       console.error("Failed to fetch device state:", err);
-    } finally {
-      loadingState = false;
     }
   }
 

@@ -1,9 +1,17 @@
 import { defineConfig } from 'vite'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
+import checker from 'vite-plugin-checker';
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [svelte()],
+  plugins: [svelte(),
+  checker({
+    typescript: true,
+    overlay: {
+      initialIsOpen: false,
+    },
+  }),
+  ],
 
   build: {
     outDir: '../static',
