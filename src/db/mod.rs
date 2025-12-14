@@ -10,4 +10,4 @@ mod queries;
 mod tests;
 
 // Re-export the main Database struct and utilities
-pub use connection::{Database, MutexExt, Transaction};
+pub use connection::Database;

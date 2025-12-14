@@ -299,7 +299,7 @@ pub fn serve_process_history(
 pub fn serve_switches_list(
     db: &Arc<Database>,
     switch_state: &Arc<SwitchStateStore>,
-    device_state: &DeviceStateStore,
+    _device_state: &DeviceStateStore,
 ) -> Response<Full<Bytes>> {
     debug!("Getting list of available switches from database");
 
@@ -363,6 +363,45 @@ pub fn serve_switches_list(
         }
         Err(e) => {
             error!(error = %e, "Failed to serialize switches to JSON");
+            internal_error_response(e.to_string().as_str())
+        }
+    }
+}
+
+pub fn serve_device_state(db: &Arc<Database>, device_id: &str) -> Response<Full<Bytes>> {
+    debug!(device_id = %device_id, "Getting device state from database");
+
+    match db.get_device_state(device_id) {
+        Ok(Some(state)) => {
+            let json_data = serde_json::json!({
+                "device_id": state.device_id,
+                "battery_level": state.battery_level,
+                "link_quality": state.link_quality,
+                "last_seen": state.last_seen.timestamp(),
+            });
+
+            match serde_json::to_string(&json_data) {
+                Ok(json) => {
+                    info!(
+                        device_id = %device_id,
+                        battery_level = ?state.battery_level,
+                        link_quality = ?state.link_quality,
+                        "Successfully retrieved device state"
+                    );
+                    json_response(json)
+                }
+                Err(e) => {
+                    error!(error = %e, device_id = %device_id, "Failed to serialize device state");
+                    internal_error_response(e.to_string().as_str())
+                }
+            }
+        }
+        Ok(None) => {
+            debug!(device_id = %device_id, "No device state found");
+            not_found_response("Device state not found")
+        }
+        Err(e) => {
+            error!(error = %e, device_id = %device_id, "Database error while fetching device state");
             internal_error_response(e.to_string().as_str())
         }
     }

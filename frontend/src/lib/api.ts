@@ -3,10 +3,10 @@
 export interface SensorReading {
   device_id: string;
   temperature: number;
-  humidity: number | null;
-  battery: number | null;
-  link_quality: number | null;
+  humidity: number;  // Now required
   timestamp: number;
+  // Note: battery and link_quality are no longer in sensor readings
+  // They are now in device_state (see SwitchDevice interface)
 }
 
 export interface DeviceInfo {
@@ -154,12 +154,21 @@ export type LogEntry = SystemMonitorEntry | ProcessMonitorEntry | TopConsumerEnt
 
 // Switch API Types
 
+export interface DeviceState {
+  device_id: string;
+  battery_level: number | null;
+  link_quality: number | null;
+  last_seen: number;
+}
+
 export interface SwitchDevice {
   id: string;
   name: string;
   state: boolean;
+  // Device state fields (from device_state table)
   link_quality: number | null;
-  last_updated: number;
+  battery_level: number | null;
+  last_seen: number | null;
 }
 
 export interface SwitchCommand {
@@ -316,6 +325,24 @@ export async function updateDeviceName(deviceId: string, name: string): Promise<
     const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
     throw new Error(errorData.error || `Failed to update device name: ${response.statusText}`);
   }
+}
+
+/**
+ * Fetch device state (battery, link_quality, last_seen)
+ * @param deviceId - Device ID (e.g., "0x7cc6b6fffec90892")
+ */
+export async function fetchDeviceState(deviceId: string): Promise<DeviceState | null> {
+  const response = await fetch(`/api/devices/${deviceId}/state`);
+
+  if (response.status === 404) {
+    return null; // No state found for this device
+  }
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch device state: ${response.statusText}`);
+  }
+
+  return response.json();
 }
 
 // Automation Rules API Types

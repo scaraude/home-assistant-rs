@@ -1,6 +1,6 @@
 use crate::models::DeviceState;
 use rusqlite::{Result, params};
-use tracing::{debug, error};
+use tracing::debug;
 
 use super::super::connection::{Database, MutexExt};
 

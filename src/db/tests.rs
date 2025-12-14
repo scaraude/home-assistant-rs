@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod tests {
+    use super::super::connection::{MutexExt, Transaction};
     use super::super::queries::utils::timestamp_to_datetime;
     use super::super::*;
     use crate::models::{

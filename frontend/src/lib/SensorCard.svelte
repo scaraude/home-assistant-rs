@@ -3,11 +3,15 @@
   import GraphModal from "./GraphModal.svelte";
   import LinkQualityBadge from "./LinkQualityBadge.svelte";
   import BatteryBadge from "./BatteryBadge.svelte";
-  import type { SensorData } from "./api";
-  import { updateDeviceName } from "./api";
+  import type { SensorData, DeviceState } from "./api";
+  import { updateDeviceName, fetchDeviceState } from "./api";
   import { formatDistanceToNow } from "date-fns";
+  import { onMount } from "svelte";
 
   export let sensorData: SensorData;
+
+  let deviceState: DeviceState | null = null;
+  let loadingState = false;
 
   type Metric = "temperature" | "humidity" | null;
   let selectedMetric: Metric = null;
@@ -97,6 +101,28 @@
   function focusOnMount(node: HTMLElement) {
     node.focus();
   }
+
+  async function loadDeviceState() {
+    if (!deviceId) return;
+
+    loadingState = true;
+    try {
+      deviceState = await fetchDeviceState(deviceId);
+    } catch (err) {
+      console.error("Failed to fetch device state:", err);
+    } finally {
+      loadingState = false;
+    }
+  }
+
+  onMount(() => {
+    loadDeviceState();
+  });
+
+  // Reload device state when deviceId changes
+  $: if (deviceId) {
+    loadDeviceState();
+  }
 </script>
 
 <div class="sensor-card">
@@ -143,11 +169,13 @@
       {/if}
     </div>
     <div class="badges">
-      {#if latest && latest.battery != null}
-        <BatteryBadge battery={latest.battery} />
-      {/if}
-      {#if latest && latest.link_quality != null}
-        <LinkQualityBadge linkQuality={latest.link_quality} />
+      {#if deviceState}
+        {#if deviceState.battery_level != null}
+          <BatteryBadge battery={deviceState.battery_level} />
+        {/if}
+        {#if deviceState.link_quality != null}
+          <LinkQualityBadge linkQuality={deviceState.link_quality} />
+        {/if}
       {/if}
     </div>
   </div>
@@ -346,8 +374,9 @@
   }
 
   .badges {
-    display: flex-column;
-    gap: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
   }
 
   .readings {

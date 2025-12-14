@@ -3,6 +3,7 @@
   import { executeCommand, updateDeviceName, fetchAutomationRules } from "./api";
   import { formatDistanceToNow } from "date-fns";
   import LinkQualityBadge from "./LinkQualityBadge.svelte";
+  import BatteryBadge from "./BatteryBadge.svelte";
   import AutomationRulePanel from "./AutomationRulePanel.svelte";
   import { slide } from "svelte/transition";
   import { rulesByDevice } from "./stores/automations";
@@ -24,9 +25,9 @@
   $: deviceRulesFromStore = $rulesByDevice[device.id] || [];
   $: ruleCount = deviceRulesFromStore.length;
   $: shortId = device.id.slice(0, 16) + (device.id.length > 16 ? "..." : "");
-  $: timeAgo = formatDistanceToNow(new Date(device.last_updated * 1000), {
+  $: timeAgo = device.last_seen ? formatDistanceToNow(new Date(device.last_seen * 1000), {
     addSuffix: true,
-  });
+  }) : "Never";
 
   async function toggleSwitch() {
     if (isToggling) return;
@@ -173,14 +174,19 @@
       <div class="device-id">{shortId}</div>
       <div
         class="last-update"
-        title={new Date(device.last_updated * 1000).toLocaleString()}
+        title={device.last_seen ? new Date(device.last_seen * 1000).toLocaleString() : 'Never'}
       >
         {timeAgo}
       </div>
     </div>
-    {#if device.link_quality != null}
-      <LinkQualityBadge linkQuality={device.link_quality} />
-    {/if}
+    <div class="badges">
+      {#if device.battery_level != null}
+        <BatteryBadge battery={device.battery_level} />
+      {/if}
+      {#if device.link_quality != null}
+        <LinkQualityBadge linkQuality={device.link_quality} />
+      {/if}
+    </div>
   </div>
 
   <div class="status-section">

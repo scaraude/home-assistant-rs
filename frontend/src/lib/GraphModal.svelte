@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import TemperatureGraph from './TemperatureGraph.svelte';
-  import type { SensorReading } from './api';
+  import { onMount } from "svelte";
+  import TemperatureGraph from "./TemperatureGraph.svelte";
+  import type { SensorReading } from "./api";
 
   export let isOpen = false;
   export let readings: SensorReading[] = [];
-  export let selectedMetric: 'temperature' | 'humidity' | 'battery' | null = null;
+  export let selectedMetric: "temperature" | "humidity" | null = null;
   export let sensorName: string;
 
   function close() {
@@ -19,27 +19,42 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape') {
+    if (event.key === "Escape") {
       close();
     }
   }
 
   onMount(() => {
-    document.addEventListener('keydown', handleKeydown);
+    document.addEventListener("keydown", handleKeydown);
     return () => {
-      document.removeEventListener('keydown', handleKeydown);
+      document.removeEventListener("keydown", handleKeydown);
     };
   });
 </script>
 
 {#if isOpen}
-  <div class="modal-backdrop" on:click={handleBackdropClick} role="presentation">
+  <div
+    class="modal-backdrop"
+    on:click={handleBackdropClick}
+    role="presentation"
+  >
     <div class="modal-content">
       <div class="modal-header">
         <h2>{sensorName}</h2>
-        <button class="close-button" on:click={close} type="button" aria-label="Close modal">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+        <button
+          class="close-button"
+          on:click={close}
+          type="button"
+          aria-label="Close modal"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+          >
+            <path
+              d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+            />
           </svg>
         </button>
       </div>
@@ -79,7 +94,9 @@
   .modal-content {
     background: white;
     border-radius: 12px;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    box-shadow:
+      0 20px 25px -5px rgba(0, 0, 0, 0.1),
+      0 10px 10px -5px rgba(0, 0, 0, 0.04);
     width: 100%;
     max-width: 1200px;
     max-height: 90vh;

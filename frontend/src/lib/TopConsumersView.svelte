@@ -109,7 +109,6 @@
               <tr class="expanded-row">
                 <td colspan="6" class="expanded-cell">
                   <ProcessHistoryGraph
-                    {entries}
                     processName={entry.process}
                     pid={entry.pid}
                   />

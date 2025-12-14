@@ -197,6 +197,11 @@ async fn handle_request(
             debug!("Serving switches list");
             routes::serve_switches_list(&db, &switch_state, &device_state)
         }
+        ("GET", path) if path.starts_with("/api/devices/") && path.ends_with("/state") => {
+            debug!(path = %path, "Serving device state");
+            let device_id = &path["/api/devices/".len()..path.len() - "/state".len()];
+            routes::serve_device_state(&db, device_id)
+        }
         ("POST", "/api/commands/execute") => {
             debug!("Executing command");
             routes::execute_command(req, &db, &mqtt).await
