@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::models::{DeviceMqttMessage, TemperatureReading};
+    use crate::models::{DeviceMqttMessage, SensorReading};
     use crate::state::{DeviceStateStore, SwitchStateStore};
 
     // ==================== Message Parsing Tests ====================

@@ -323,9 +323,12 @@ pub fn serve_switches_list(
         })
         .map(|device| {
             let current_state = switch_state.get_state(&device.id).unwrap_or(false);
-            let link_quality = device_state
-                .get_state(&device.id)
-                .and_then(|state| state.link_quality);
+
+            // Fetch device state from database instead of in-memory store
+            let device_db_state = db.get_device_state(&device.id).ok().flatten();
+            let link_quality = device_db_state.as_ref().and_then(|s| s.link_quality);
+            let battery_level = device_db_state.as_ref().and_then(|s| s.battery_level);
+            let last_seen = device_db_state.as_ref().map(|s| s.last_seen.timestamp());
 
             info!(
                 device_id = %device.id,
@@ -333,7 +336,8 @@ pub fn serve_switches_list(
                 name = %device.name,
                 state = %current_state,
                 link_quality = ?link_quality,
-                "Retrieved switch state from store"
+                battery_level = ?battery_level,
+                "Retrieved switch state from database"
             );
 
             serde_json::json!({
@@ -342,7 +346,8 @@ pub fn serve_switches_list(
                 "name": device.name,
                 "state": current_state,
                 "link_quality": link_quality,
-                "last_updated": chrono::Utc::now().timestamp()
+                "battery_level": battery_level,
+                "last_seen": last_seen,
             })
         })
         .collect();

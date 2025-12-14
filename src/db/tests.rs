@@ -5,7 +5,7 @@ mod tests {
     use crate::models::{
         AutomationAction, AutomationCondition, AutomationExecutionLog, AutomationRule,
         CommanderType, ComparisonOperator, Device, DeviceCapability, LogicalOperator, PowerSource,
-        SensorField, SensorType, SwitchAction, TemperatureReading,
+        SensorField, SensorReading, SensorType, SwitchAction,
     };
     use chrono::Utc;
     use tempfile::TempDir;
@@ -24,50 +24,54 @@ mod tests {
     fn test_insert_and_get_temperature_reading() {
         let (db, _temp_dir) = create_test_db();
 
-        let reading = TemperatureReading {
+        let timestamp = Utc::now();
+        let reading = SensorReading::TempHumidity {
             device_id: "sensor1".to_string(),
             temperature: 22.5,
-            humidity: Some(45.0),
-            battery: Some(100),
-            link_quality: Some(255),
-            timestamp: Utc::now(),
+            humidity: 45.0,
+            timestamp,
         };
 
         // Insert reading
         db.insert_reading(&reading).unwrap();
 
         // Retrieve readings
-        let readings = db
-            .get_readings_since(reading.timestamp.timestamp() - 1)
-            .unwrap();
+        let readings = db.get_readings_since(timestamp.timestamp() - 1).unwrap();
         assert_eq!(readings.len(), 1);
-        assert_eq!(readings[0].device_id, "sensor1");
-        assert_eq!(readings[0].temperature, 22.5);
-        assert_eq!(readings[0].humidity, Some(45.0));
-        assert_eq!(readings[0].battery, Some(100));
-        assert_eq!(readings[0].link_quality, Some(255));
+
+        // Pattern match to verify the reading
+        match &readings[0] {
+            SensorReading::TempHumidity {
+                device_id,
+                temperature,
+                humidity,
+                ..
+            } => {
+                assert_eq!(device_id, "sensor1");
+                assert_eq!(*temperature, 22.5);
+                assert_eq!(*humidity, 45.0);
+            }
+            _ => panic!("Expected TempHumidity reading"),
+        }
     }
 
     #[test]
     fn test_get_readings_for_specific_sensor() {
         let (db, _temp_dir) = create_test_db();
 
-        let reading1 = TemperatureReading {
+        let timestamp = Utc::now();
+        let reading1 = SensorReading::TempHumidity {
             device_id: "sensor1".to_string(),
             temperature: 22.5,
-            humidity: Some(45.0),
-            battery: Some(100),
-            link_quality: Some(255),
-            timestamp: Utc::now(),
+            humidity: 45.0,
+            timestamp,
         };
 
-        let reading2 = TemperatureReading {
+        let reading2 = SensorReading::TempHumidity {
             device_id: "sensor2".to_string(),
             temperature: 18.0,
-            humidity: Some(60.0),
-            battery: Some(95),
-            link_quality: Some(200),
-            timestamp: Utc::now(),
+            humidity: 60.0,
+            timestamp,
         };
 
         db.insert_reading(&reading1).unwrap();
@@ -75,11 +79,21 @@ mod tests {
 
         // Get readings for sensor1 only
         let readings = db
-            .get_readings_for_sensor_since("sensor1", reading1.timestamp.timestamp() - 1)
+            .get_readings_for_sensor_since("sensor1", timestamp.timestamp() - 1)
             .unwrap();
         assert_eq!(readings.len(), 1);
-        assert_eq!(readings[0].device_id, "sensor1");
-        assert_eq!(readings[0].temperature, 22.5);
+
+        match &readings[0] {
+            SensorReading::TempHumidity {
+                device_id,
+                temperature,
+                ..
+            } => {
+                assert_eq!(device_id, "sensor1");
+                assert_eq!(*temperature, 22.5);
+            }
+            _ => panic!("Expected TempHumidity reading"),
+        }
     }
 
     #[test]
@@ -87,21 +101,17 @@ mod tests {
         let (db, _temp_dir) = create_test_db();
 
         let now = Utc::now();
-        let reading1 = TemperatureReading {
+        let reading1 = SensorReading::TempHumidity {
             device_id: "sensor1".to_string(),
             temperature: 20.0,
-            humidity: None,
-            battery: None,
-            link_quality: None,
+            humidity: 40.0,
             timestamp: now - chrono::Duration::seconds(10),
         };
 
-        let reading2 = TemperatureReading {
+        let reading2 = SensorReading::TempHumidity {
             device_id: "sensor1".to_string(),
             temperature: 22.5,
-            humidity: Some(45.0),
-            battery: Some(100),
-            link_quality: Some(255),
+            humidity: 45.0,
             timestamp: now,
         };
 
@@ -111,9 +121,18 @@ mod tests {
         // Should get the latest reading (reading2)
         let latest = db.get_latest_reading_for_sensor("sensor1").unwrap();
         assert!(latest.is_some());
-        let latest = latest.unwrap();
-        assert_eq!(latest.temperature, 22.5);
-        assert_eq!(latest.humidity, Some(45.0));
+
+        match latest.unwrap() {
+            SensorReading::TempHumidity {
+                temperature,
+                humidity,
+                ..
+            } => {
+                assert_eq!(temperature, 22.5);
+                assert_eq!(humidity, 45.0);
+            }
+            _ => panic!("Expected TempHumidity reading"),
+        }
     }
 
     #[test]
@@ -129,22 +148,19 @@ mod tests {
         let (db, _temp_dir) = create_test_db();
 
         // Insert readings from multiple sensors
-        let reading1 = TemperatureReading {
+        let timestamp = Utc::now();
+        let reading1 = SensorReading::TempHumidity {
             device_id: "sensor1".to_string(),
             temperature: 22.5,
-            humidity: None,
-            battery: None,
-            link_quality: None,
-            timestamp: Utc::now(),
+            humidity: 50.0,
+            timestamp,
         };
 
-        let reading2 = TemperatureReading {
+        let reading2 = SensorReading::TempHumidity {
             device_id: "sensor2".to_string(),
             temperature: 18.0,
-            humidity: None,
-            battery: None,
-            link_quality: None,
-            timestamp: Utc::now(),
+            humidity: 60.0,
+            timestamp,
         };
 
         db.insert_reading(&reading1).unwrap();
@@ -155,27 +171,28 @@ mod tests {
     }
 
     #[test]
-    fn test_temperature_reading_with_null_fields() {
+    fn test_temperature_reading_with_required_fields() {
         let (db, _temp_dir) = create_test_db();
 
-        let reading = TemperatureReading {
+        let timestamp = Utc::now();
+        let reading = SensorReading::TempHumidity {
             device_id: "sensor1".to_string(),
             temperature: 22.5,
-            humidity: None,
-            battery: None,
-            link_quality: None,
-            timestamp: Utc::now(),
+            humidity: 50.0, // humidity is now required
+            timestamp,
         };
 
         db.insert_reading(&reading).unwrap();
 
-        let readings = db
-            .get_readings_since(reading.timestamp.timestamp() - 1)
-            .unwrap();
+        let readings = db.get_readings_since(timestamp.timestamp() - 1).unwrap();
         assert_eq!(readings.len(), 1);
-        assert_eq!(readings[0].humidity, None);
-        assert_eq!(readings[0].battery, None);
-        assert_eq!(readings[0].link_quality, None);
+
+        match &readings[0] {
+            SensorReading::TempHumidity { humidity, .. } => {
+                assert_eq!(*humidity, 50.0); // Verify humidity is stored
+            }
+            _ => panic!("Expected TempHumidity reading"),
+        }
     }
 
     // ==================== Device Tests ====================
@@ -337,24 +354,21 @@ mod tests {
         db.insert_device(&device).unwrap();
 
         // Insert a reading for this device
-        let reading = TemperatureReading {
+        let timestamp = Utc::now();
+        let reading = SensorReading::TempHumidity {
             device_id: "sensor1".to_string(),
             temperature: 22.5,
-            humidity: None,
-            battery: None,
-            link_quality: None,
-            timestamp: Utc::now(),
+            humidity: 50.0,
+            timestamp,
         };
         db.insert_reading(&reading).unwrap();
 
         // Insert a reading for a device without a name
-        let reading2 = TemperatureReading {
+        let reading2 = SensorReading::TempHumidity {
             device_id: "sensor2".to_string(),
             temperature: 18.0,
-            humidity: None,
-            battery: None,
-            link_quality: None,
-            timestamp: Utc::now(),
+            humidity: 60.0,
+            timestamp,
         };
         db.insert_reading(&reading2).unwrap();
 

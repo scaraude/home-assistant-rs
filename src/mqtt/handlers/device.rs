@@ -42,13 +42,26 @@ pub async fn handle_device_message(
     };
 
     // Update common device state (link quality, battery, last seen)
+    // Update in-memory state
     if let Some(lq) = msg.linkquality {
         device_state.update_link_quality(device_id.clone(), lq);
+        // Persist to database
+        if let Err(e) = db.update_device_link_quality(&device_id, lq) {
+            error!(error = %e, device_id = %device_id, "Failed to persist link quality to database");
+        }
     }
     if let Some(battery) = msg.battery {
         device_state.update_battery(device_id.clone(), battery);
+        // Persist to database
+        if let Err(e) = db.update_device_battery(&device_id, battery) {
+            error!(error = %e, device_id = %device_id, "Failed to persist battery level to database");
+        }
     }
     device_state.mark_seen(device_id.clone());
+    // Persist last_seen to database
+    if let Err(e) = db.update_device_last_seen(&device_id) {
+        error!(error = %e, device_id = %device_id, "Failed to persist last_seen to database");
+    }
 
     // Get device to determine capability
     let device = match db.get_device_by_mqtt_topic(mqtt_topic) {

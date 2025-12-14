@@ -26,16 +26,9 @@ impl Database {
                 let start = std::time::Instant::now();
                 let result = self.conn.lock_or_recover().execute(
                     "INSERT INTO temperature_readings
-                     (device_id, temperature, humidity, battery, link_quality, timestamp)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                    params![
-                        device_id,
-                        temperature,
-                        humidity,
-                        None::<u8>, // battery is now stored in DeviceState, not in readings
-                        None::<u8>, // link_quality is now stored in DeviceState, not in readings
-                        timestamp.timestamp()
-                    ],
+                     (device_id, temperature, humidity, timestamp)
+                     VALUES (?1, ?2, ?3, ?4)",
+                    params![device_id, temperature, humidity, timestamp.timestamp()],
                 );
 
                 match result {

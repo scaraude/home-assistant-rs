@@ -8,11 +8,14 @@ impl Database {
         debug!("Acquiring database lock for schema initialization");
         let conn = self.conn.lock_or_recover();
 
+        // Create devices table first (referenced by foreign keys)
+        self.create_devices_table(&conn)?;
+
+        // Create device_state table
+        self.create_device_state_table(&conn)?;
+
         // Create temperature_readings table
         self.create_temperature_readings_table(&conn)?;
-
-        // Create devices table
-        self.create_devices_table(&conn)?;
 
         // Create automation tables
         self.create_automation_tables(&conn)?;
@@ -30,8 +33,6 @@ impl Database {
                 device_id TEXT NOT NULL,
                 temperature REAL NOT NULL,
                 humidity REAL NOT NULL,
-                battery INTEGER,
-                link_quality INTEGER,
                 timestamp INTEGER NOT NULL
             )",
             [],
@@ -57,38 +58,39 @@ impl Database {
             }
         }
 
-        // Migration: Add link_quality column if it doesn't exist
-        self.migrate_add_link_quality_column(conn)?;
-
         Ok(())
     }
 
-    /// Migration: Add link_quality column if it doesn't exist
-    fn migrate_add_link_quality_column(&self, conn: &rusqlite::Connection) -> Result<()> {
-        debug!("Checking if link_quality column exists");
-        let column_exists: Result<i32, _> = conn.query_row(
-            "SELECT COUNT(*) FROM pragma_table_info('temperature_readings') WHERE name='link_quality'",
+    /// Create device_state table for ephemeral device state (battery, link_quality, last_seen)
+    fn create_device_state_table(&self, conn: &rusqlite::Connection) -> Result<()> {
+        debug!("Creating device_state table if not exists");
+        match conn.execute(
+            "CREATE TABLE IF NOT EXISTS device_state (
+                device_id TEXT PRIMARY KEY,
+                battery_level INTEGER,
+                link_quality INTEGER,
+                last_seen INTEGER NOT NULL,
+                FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE
+            )",
             [],
-            |row| row.get(0),
-        );
-
-        match column_exists {
-            Ok(0) => {
-                info!("link_quality column does not exist, adding it");
-                match conn.execute(
-                    "ALTER TABLE temperature_readings ADD COLUMN link_quality INTEGER",
-                    [],
-                ) {
-                    Ok(_) => info!("Successfully added link_quality column"),
-                    Err(e) => {
-                        error!(error = %e, "Failed to add link_quality column");
-                        return Err(e);
-                    }
-                }
-            }
-            Ok(_) => debug!("link_quality column already exists"),
+        ) {
+            Ok(_) => debug!("Device state table created/verified"),
             Err(e) => {
-                error!(error = %e, "Failed to check if link_quality column exists");
+                error!(error = %e, "Failed to create device_state table");
+                return Err(e);
+            }
+        }
+
+        // Index for efficient last_seen queries
+        debug!("Creating index idx_device_state_last_seen if not exists");
+        match conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_device_state_last_seen
+             ON device_state(last_seen DESC)",
+            [],
+        ) {
+            Ok(_) => debug!("Index idx_device_state_last_seen created/verified"),
+            Err(e) => {
+                error!(error = %e, "Failed to create index idx_device_state_last_seen");
                 return Err(e);
             }
         }
