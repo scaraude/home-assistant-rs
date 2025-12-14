@@ -2,13 +2,12 @@ use crate::events::SystemEvent;
 use serde_json::Error as SerdeError;
 use std::collections::HashMap;
 use std::sync::{
-    atomic::{AtomicU64, Ordering},
     Arc,
+    atomic::{AtomicU64, Ordering},
 };
 use tokio::sync::{
-    broadcast,
+    Mutex, RwLock, broadcast,
     mpsc::{self, UnboundedReceiver, UnboundedSender},
-    Mutex, RwLock,
 };
 use tracing::{debug, error, info, warn};
 
@@ -70,6 +69,10 @@ impl WebSocketBroadcaster {
                     stale_clients.push(client_id);
                 }
             }
+            info!(
+                client_count = clients.len(),
+                "WebSocket broadcasted event to clients"
+            );
         }
 
         if !stale_clients.is_empty() {

@@ -11,7 +11,7 @@
   import { dataCache } from "../lib/stores/dataCache";
   import { get } from "svelte/store";
 
-  type TimeRange = "1h" | "6h" | "24h" | "all";
+  type TimeRange = "1h" | "6h" | "24h" | "week";
 
   const TIME_RANGE_KEY = "homeAssistant:sensorTimeRange";
 
@@ -20,7 +20,7 @@
     "1h": 1,
     "6h": 6,
     "24h": 24,
-    all: 168, // 7 days
+    week: 168, // 7 days
   };
 
   let selectedTimeRange: TimeRange = "24h";
@@ -97,7 +97,7 @@
       savedTimeRange === "1h" ||
       savedTimeRange === "6h" ||
       savedTimeRange === "24h" ||
-      savedTimeRange === "all"
+      savedTimeRange === "week"
     ) {
       selectedTimeRange = savedTimeRange;
     }
@@ -139,10 +139,10 @@
       </button>
       <button
         class="time-range-btn"
-        class:active={selectedTimeRange === "all"}
-        on:click={() => setTimeRange("all")}
+        class:active={selectedTimeRange === "week"}
+        on:click={() => setTimeRange("week")}
       >
-        All
+        Week
       </button>
     </div>
   </div>
