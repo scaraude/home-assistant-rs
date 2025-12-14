@@ -91,7 +91,7 @@ impl SwitchState {
 }
 
 /// Sensor reading - time-series data stored in database
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum SensorReading {
     #[serde(rename = "temp_humidity")]

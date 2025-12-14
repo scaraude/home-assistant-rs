@@ -135,7 +135,7 @@ impl_db_enum!(SwitchAction {
 });
 
 /// An action to execute when rule conditions are met
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AutomationAction {
     /// Unique identifier for the action
     pub id: String,

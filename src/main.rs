@@ -1,6 +1,7 @@
 mod automation;
 mod cache;
 mod db;
+mod events;
 mod http;
 mod logs;
 mod models;
