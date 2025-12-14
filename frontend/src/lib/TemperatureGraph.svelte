@@ -69,6 +69,31 @@
     return { timestamps, datasets: allDatasets };
   }
 
+  function roundAwayFromZeroTo5(n: number) {
+    if (n === 0) return 0;
+    const sign = Math.sign(n);
+    const absN = Math.abs(n);
+    const roundedAbs = Math.ceil(absN / 5) * 5;
+    return sign * roundedAbs;
+  }
+
+  function computeGraphTemperatureMinMax(
+    datasets: { label: string; data: number[] }[]
+  ) {
+    const temperatureDataSet = datasets.find(
+      ({ label }) => label === "Temperature (°C)"
+    );
+
+    if (!temperatureDataSet) return { min: 0, max: 40 };
+
+    const minTemperature = Math.min(...temperatureDataSet.data);
+    const maxTemperature = Math.max(...temperatureDataSet.data);
+    return {
+      min: Math.min(roundAwayFromZeroTo5(minTemperature), 0),
+      max: Math.max(roundAwayFromZeroTo5(maxTemperature), 40),
+    };
+  }
+
   function createChart() {
     if (!canvas || readings.length === 0) return;
 
@@ -154,8 +179,7 @@
                 size: 10,
               },
             },
-            min: selectedMetric === null ? 0 : undefined,
-            max: selectedMetric === null ? 40 : undefined,
+            ...computeGraphTemperatureMinMax(datasets),
           },
           y1: {
             type: "linear",
@@ -197,9 +221,12 @@
     if (yAxis?.title) {
       yAxis.title.text = selectedMetric === "humidity" ? "%" : "°C";
     }
+
+    const { max: maxTemperatureLimit, min: minTemperatureLimit } =
+      computeGraphTemperatureMinMax(datasets);
     if (yAxis) {
-      yAxis.min = selectedMetric === null ? 0 : undefined;
-      yAxis.max = selectedMetric === null ? 40 : undefined;
+      yAxis.min = selectedMetric === null ? minTemperatureLimit : undefined;
+      yAxis.max = selectedMetric === null ? maxTemperatureLimit : undefined;
     }
 
     // Show/hide secondary Y-axis and set fixed scale
