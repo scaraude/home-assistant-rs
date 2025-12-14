@@ -4,7 +4,9 @@ This plan covers the architectural refactor to move `home-assistant-rs` toward a
 
 ---
 
-## Session 1 · Event Bus Foundation (2–3 hours)
+For AI: add marks when you finish to dev a session
+
+## Session 1 · Event Bus Foundation (2–3 hours) ✅ Completed
 
 - **Goal**: Introduce strongly typed events and a broadcast bus.
 - **Files**: `src/events/mod.rs`, `src/events/bus.rs`.
@@ -45,7 +47,7 @@ This plan covers the architectural refactor to move `home-assistant-rs` toward a
 
 ---
 
-## Session 2 · State Manager Service (1–2 hours)
+## Session 2 · State Manager Service (1–2 hours) ✅ Completed
 
 - **Goal**: Consume events and keep in-memory state authoritative.
 - **Files**: `src/services/mod.rs`, `src/services/state_manager.rs`.
@@ -432,21 +434,21 @@ Closes #<issue_number>"
 
 ## Session Summary
 
-| # | Session | Duration | Checkpoint | Resume? |
-|---|---------|----------|------------|---------|
-| 1 | Event Bus Foundation | 2–3h | Events + bus compile, tests pass ✅ | Yes |
-| 2 | State Manager Service | 1–2h | Service compiles ✅ | Yes |
-| 3 | DB Writer Service | 2h | Service + DB schema compile ✅ | Yes |
-| 4 | MQTT Handler Refactor | 2–3h | MQTT publishes events ✅ | Yes |
-| 5 | Automation Service | 2–3h | Service compiles ✅ | Yes |
-| 6 | Integration in `main.rs` | 1–2h | Services spawn ✅ | Yes |
-| 7 | HTTP Server Cleanup | 1h | HTTP works without cache ✅ | Yes |
-| 8 | WebSocket Infrastructure | 2–3h | WS service compiles ✅ | Yes |
-| 9 | WebSocket Integration | 1h | `/ws` endpoint works ✅ | Yes |
-|10 | Frontend WebSocket | 2h | Real-time updates work ✅ | Yes |
-|11 | Testing & Validation | 2–3h | All tests pass ✅ | Yes |
-|12 | Pi Deployment | 1–2h | Production stable ✅ | Yes |
-|13 | Cleanup & Docs | 1h | Committed to git ✅ | Done |
+| #   | Session                  | Duration | Checkpoint                          | Resume? |
+| --- | ------------------------ | -------- | ----------------------------------- | ------- |
+| 1   | Event Bus Foundation     | 2–3h     | Events + bus compile, tests pass ✅ | Yes     |
+| 2   | State Manager Service    | 1–2h     | Service compiles ✅                 | Yes     |
+| 3   | DB Writer Service        | 2h       | Service + DB schema compile ✅      | Yes     |
+| 4   | MQTT Handler Refactor    | 2–3h     | MQTT publishes events ✅            | Yes     |
+| 5   | Automation Service       | 2–3h     | Service compiles ✅                 | Yes     |
+| 6   | Integration in `main.rs` | 1–2h     | Services spawn ✅                   | Yes     |
+| 7   | HTTP Server Cleanup      | 1h       | HTTP works without cache ✅         | Yes     |
+| 8   | WebSocket Infrastructure | 2–3h     | WS service compiles ✅              | Yes     |
+| 9   | WebSocket Integration    | 1h       | `/ws` endpoint works ✅             | Yes     |
+| 10  | Frontend WebSocket       | 2h       | Real-time updates work ✅           | Yes     |
+| 11  | Testing & Validation     | 2–3h     | All tests pass ✅                   | Yes     |
+| 12  | Pi Deployment            | 1–2h     | Production stable ✅                | Yes     |
+| 13  | Cleanup & Docs           | 1h       | Committed to git ✅                 | Done    |
 
 **Total Time**: 18–27 hours across multiple sessions.
 

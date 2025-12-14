@@ -83,8 +83,9 @@ impl SystemEvent {
             | SystemEvent::SwitchState { device_id, .. }
             | SystemEvent::DeviceState { device_id, .. }
             | SystemEvent::DeviceDiscovered { device_id, .. } => Some(device_id.as_str()),
-            SystemEvent::AutomationTriggered { .. }
-            | SystemEvent::AutomationExecuted { .. } => None,
+            SystemEvent::AutomationTriggered { .. } | SystemEvent::AutomationExecuted { .. } => {
+                None
+            }
         }
     }
 

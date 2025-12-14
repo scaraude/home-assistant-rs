@@ -6,6 +6,7 @@ mod http;
 mod logs;
 mod models;
 mod mqtt;
+mod services;
 mod state;
 
 use automation::AutomationEngine;
