@@ -100,6 +100,7 @@ impl HttpServer {
                                     )
                                 }),
                             )
+                            .with_upgrades()
                             .await
                         {
                             error!(
