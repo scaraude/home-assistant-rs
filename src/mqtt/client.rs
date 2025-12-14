@@ -19,6 +19,7 @@ impl MqttClient {
         broker_host: &str,
         broker_port: u16,
         client_id: &str,
+        capacity: Option<usize>,
         db: Arc<Database>,
         event_bus: EventBus,
     ) -> Self {
@@ -39,8 +40,13 @@ impl MqttClient {
             "MQTT options configured"
         );
 
-        let (async_client, eventloop) = AsyncClient::new(mqtt_options, 10);
-        info!(queue_size = 10, "MQTT client created");
+        let cap = if capacity.is_some() {
+            capacity.unwrap()
+        } else {
+            50
+        };
+        let (async_client, eventloop) = AsyncClient::new(mqtt_options, cap);
+        info!(queue_size = cap, "MQTT client created");
 
         // Spawn the event loop handler
         spawn_event_loop(eventloop, db, event_bus.clone());

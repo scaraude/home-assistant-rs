@@ -74,6 +74,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &mqtt_broker,
         mqtt_port,
         "home-assistant-rs",
+        Some(20),
         db.clone(),
         event_bus.clone(),
     );
