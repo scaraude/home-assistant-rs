@@ -5,6 +5,7 @@
   import BatteryBadge from "./BatteryBadge.svelte";
   import type { SensorData, DeviceState } from "./api";
   import { updateDeviceName, fetchDeviceState } from "./api";
+  import { dataCache } from "./stores/dataCache";
   import { formatDistanceToNow } from "date-fns";
   import { onMount } from "svelte";
 
@@ -101,11 +102,16 @@
     node.focus();
   }
 
+  $: deviceState = deviceId ? $dataCache.deviceStates[deviceId] ?? null : null;
+
   async function loadDeviceState() {
     if (!deviceId) return;
 
     try {
-      deviceState = await fetchDeviceState(deviceId);
+      const fetchedState = await fetchDeviceState(deviceId);
+      if (fetchedState) {
+        dataCache.updateDeviceState(deviceId, fetchedState);
+      }
     } catch (err) {
       console.error("Failed to fetch device state:", err);
     }
