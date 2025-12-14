@@ -140,8 +140,8 @@ generate-service-files: ## Generate systemd service files
 	# Home Assistant RS service
 	@echo "[Unit]\n\
 Description=Home Assistant RS - Rust-based Home Automation\n\
-After=network.target mosquitto.service\n\
-Wants=mosquitto.service\n\
+After=mosquitto.service\n\
+Requires=mosquitto.service\n\
 \n\
 [Service]\n\
 Type=simple\n\
@@ -159,7 +159,6 @@ WantedBy=multi-user.target" > systemd/home-assistant-rs.service
 	# Mosquitto service (override default if needed)
 	@echo "[Unit]\n\
 Description=Mosquitto MQTT Broker\n\
-After=network.target\n\
 \n\
 [Service]\n\
 Type=simple\n\
@@ -173,8 +172,8 @@ WantedBy=multi-user.target" > systemd/mosquitto.service
 	# Zigbee2MQTT service
 	@echo "[Unit]\n\
 Description=Zigbee2MQTT Bridge\n\
-After=network.target mosquitto.service\n\
-Wants=mosquitto.service\n\
+After=mosquitto.service\n\
+Requires=mosquitto.service\n\
 \n\
 [Service]\n\
 Type=simple\n\
