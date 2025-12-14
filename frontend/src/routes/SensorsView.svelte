@@ -1,15 +1,15 @@
 <script lang="ts">
-  import { cache } from "../lib/stores/cache";
-  import { onDestroy, onMount } from "svelte";
+  import { onMount } from "svelte";
   import SensorCard from "../lib/SensorCard.svelte";
   import {
     fetchSensors,
     fetchReadings,
-    fetchReadingsSince,
     type SensorData,
     type SensorReading,
     type DeviceInfo,
   } from "../lib/api";
+  import { dataCache } from "../lib/stores/dataCache";
+  import { get } from "svelte/store";
 
   type TimeRange = "1h" | "6h" | "24h" | "all";
 
@@ -27,8 +27,6 @@
   let sensorData: SensorData[] = [];
   let loading = true;
   let error: string | null = null;
-  let intervalId: number | null = null;
-  let isFirstLoad = true;
 
   // Build sensor data from readings
   function buildSensorData(
@@ -49,108 +47,51 @@
     });
   }
 
-  async function loadDataFull() {
-    try {
-      error = null;
-      const hours = timeRangeToHours[selectedTimeRange];
+  async function loadData(range: TimeRange, force = false) {
+    const hours = timeRangeToHours[range];
+    const sensorState = get(dataCache).sensors;
 
+    if (!force && sensorState.loaded && sensorState.rangeHours === hours) {
+      loading = false;
+      return;
+    }
+
+    loading = true;
+    error = null;
+
+    try {
       const [sensors, readingsResult] = await Promise.all([
         fetchSensors(),
         fetchReadings(undefined, hours),
       ]);
 
-      // Store in cache
-      if (readingsResult.latestTimestamp !== null) {
-        cache.setSensorReadings(
-          readingsResult.readings,
-          readingsResult.latestTimestamp
-        );
-      }
-
-      sensorData = buildSensorData(sensors, readingsResult.readings);
-      loading = false;
+      dataCache.setSensors(sensors);
+      dataCache.setSensorReadings(
+        readingsResult.readings,
+        readingsResult.latestTimestamp ?? 0,
+        hours
+      );
     } catch (err) {
       error = err instanceof Error ? err.message : "Failed to load sensor data";
+    } finally {
       loading = false;
-    }
-  }
-
-  async function loadDataDelta() {
-    try {
-      error = null;
-      const latestTimestamp = cache.getSensorTimestamp();
-
-      if (latestTimestamp === 0) {
-        // No cached data, do full load
-        return loadDataFull();
-      }
-
-      const [sensors, deltaResult] = await Promise.all([
-        fetchSensors(),
-        fetchReadingsSince(latestTimestamp),
-      ]);
-
-      // If we got new readings, merge them
-      if (
-        deltaResult.readings.length > 0 &&
-        deltaResult.latestTimestamp !== null
-      ) {
-        cache.mergeSensorReadings(
-          deltaResult.readings,
-          deltaResult.latestTimestamp
-        );
-      }
-
-      // Rebuild sensor data from cache
-      let allReadings: SensorReading[] = [];
-      cache.subscribe((state) => {
-        allReadings = state.sensors.readings;
-      })();
-
-      sensorData = buildSensorData(sensors, allReadings);
-    } catch (err) {
-      console.error("Delta update failed, falling back to full load:", err);
-      loadDataFull();
-    }
-  }
-
-  async function loadData() {
-    if (isFirstLoad) {
-      await loadDataFull();
-      isFirstLoad = false;
-    } else {
-      await loadDataDelta();
     }
   }
 
   function setTimeRange(range: TimeRange) {
+    if (selectedTimeRange === range) {
+      return;
+    }
     selectedTimeRange = range;
     localStorage.setItem(TIME_RANGE_KEY, range);
-    // Clear cache and reload full data when time range changes
-    cache.clearSensors();
-    isFirstLoad = true;
-    loadData();
+    void loadData(range, true);
   }
 
-  function startPolling() {
-    // Initial load
-    loadData();
-
-    // Poll every 15 seconds (using delta updates)
-    intervalId = window.setInterval(() => {
-      loadData();
-    }, 15000);
-  }
-
-  function stopPolling() {
-    if (intervalId !== null) {
-      clearInterval(intervalId);
-      intervalId = null;
-    }
+  function retryLoad() {
+    void loadData(selectedTimeRange, true);
   }
 
   onMount(() => {
-    // Restore saved time range from localStorage
     const savedTimeRange = localStorage.getItem(TIME_RANGE_KEY);
     if (
       savedTimeRange === "1h" ||
@@ -161,12 +102,13 @@
       selectedTimeRange = savedTimeRange;
     }
 
-    startPolling();
+    void loadData(selectedTimeRange);
   });
 
-  onDestroy(() => {
-    stopPolling();
-  });
+  $: sensorData = buildSensorData(
+    $dataCache.sensors.devices,
+    $dataCache.sensors.readings
+  );
 </script>
 
 <div class="sensor-view">
@@ -213,7 +155,7 @@
   {:else if error}
     <div class="error">
       <p>Error: {error}</p>
-      <button on:click={loadData}>Retry</button>
+      <button on:click={retryLoad}>Retry</button>
     </div>
   {:else if sensorData.length === 0}
     <div class="no-sensors">

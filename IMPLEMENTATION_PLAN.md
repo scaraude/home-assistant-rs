@@ -289,7 +289,7 @@ tokio::spawn(async move { ws_broadcaster_clone.run().await });
 
 ---
 
-## Session 10 · Frontend WebSocket Client (2 hours)
+## Session 10 · Frontend WebSocket Client (2 hours) ✅ Completed
 
 - **Goal**: Replace polling with push updates.
 - **Files**: `frontend/src/lib/websocket.ts`, `frontend/src/App.svelte`, `frontend/src/lib/stores/dataCache.ts`.

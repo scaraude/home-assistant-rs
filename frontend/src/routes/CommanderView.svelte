@@ -1,23 +1,43 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount } from 'svelte';
   import SwitchCard from '../lib/SwitchCard.svelte';
   import { fetchSwitches, fetchAutomationRules, type SwitchDevice } from '../lib/api';
   import { automationStore } from '../lib/stores/automations';
+  import { dataCache } from '../lib/stores/dataCache';
+  import { get } from 'svelte/store';
 
   let switches: SwitchDevice[] = [];
   let loading = true;
   let error: string | null = null;
-  let intervalId: number | null = null;
+  let isFetchingSwitches = false;
 
-  async function loadSwitches() {
-    try {
-      error = null;
-      switches = await fetchSwitches();
+  $: switches = $dataCache.switches.devices.map((device) => ({ ...device }));
+
+  async function loadSwitches(force = false) {
+    if (isFetchingSwitches) {
+      return;
+    }
+
+    const state = get(dataCache).switches;
+    if (!force && state.loaded) {
       loading = false;
+      error = null;
+      return;
+    }
+
+    isFetchingSwitches = true;
+    loading = true;
+    error = null;
+
+    try {
+      const result = await fetchSwitches();
+      dataCache.setSwitches(result);
     } catch (err) {
       error = err instanceof Error ? err.message : 'Failed to load switches';
-      loading = false;
       console.error('Failed to load switches:', err);
+    } finally {
+      isFetchingSwitches = false;
+      loading = false;
     }
   }
 
@@ -31,49 +51,15 @@
     }
   }
 
-  function startPolling() {
-    // Initial load
-    loadSwitches();
-    loadAutomationRules();
-
-    // Poll every 15 seconds to get updated state
-    intervalId = window.setInterval(() => {
-      // Don't show loading on subsequent polls
-      fetchSwitches()
-        .then(newSwitches => {
-          switches = newSwitches;
-          error = null;
-        })
-        .catch(err => {
-          console.error('Failed to poll switches:', err);
-          // Don't update error state on polling failures to avoid UI flicker
-        });
-
-      // Also poll automation rules
-      fetchAutomationRules()
-        .then(rules => {
-          automationStore.setRules(rules);
-        })
-        .catch(err => {
-          console.warn('Failed to poll automation rules:', err);
-          // Silent fail - not critical
-        });
-    }, 15000);
-  }
-
-  function stopPolling() {
-    if (intervalId !== null) {
-      clearInterval(intervalId);
-      intervalId = null;
-    }
-  }
-
   onMount(() => {
-    startPolling();
-  });
-
-  onDestroy(() => {
-    stopPolling();
+    const state = get(dataCache).switches;
+    if (!state.loaded) {
+      void loadSwitches(true);
+    } else {
+      loading = false;
+      error = null;
+    }
+    void loadAutomationRules();
   });
 </script>
 
@@ -98,7 +84,7 @@
         </svg>
       </div>
       <p>Error: {error}</p>
-      <button on:click={loadSwitches}>Retry</button>
+      <button on:click={() => loadSwitches(true)}>Retry</button>
     </div>
   {:else if switches.length === 0}
     <div class="no-switches">

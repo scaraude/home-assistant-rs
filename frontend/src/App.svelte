@@ -1,8 +1,12 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import Router, { location } from 'svelte-spa-router';
   import SensorsView from './routes/SensorsView.svelte';
   import LogsView from './routes/LogsView.svelte';
   import CommanderView from './routes/CommanderView.svelte';
+  import { fetchSensors, fetchReadings, fetchSwitches } from './lib/api';
+  import { dataCache } from './lib/stores/dataCache';
+  import { eventStream, type SystemEvent } from './lib/websocket';
 
   // Route definitions
   const routes = {
@@ -11,6 +15,89 @@
     '/commander': CommanderView,
     '/logs': LogsView,
   };
+
+  const DEFAULT_SENSOR_HOURS = 24;
+  let initializing = true;
+  let initError: string | null = null;
+  let initialLoadInFlight = false;
+
+  async function loadInitialData() {
+    if (initialLoadInFlight) {
+      return;
+    }
+
+    initialLoadInFlight = true;
+    initializing = true;
+    initError = null;
+
+    try {
+      const [sensors, readingsResult, switches] = await Promise.all([
+        fetchSensors(),
+        fetchReadings(undefined, DEFAULT_SENSOR_HOURS),
+        fetchSwitches(),
+      ]);
+
+      dataCache.setSensors(sensors);
+      dataCache.setSensorReadings(
+        readingsResult.readings,
+        readingsResult.latestTimestamp ?? 0,
+        DEFAULT_SENSOR_HOURS,
+      );
+      dataCache.setSwitches(switches);
+    } catch (error) {
+      console.error('Failed to load initial data:', error);
+      initError = error instanceof Error ? error.message : 'Failed to load initial data';
+    } finally {
+      initializing = false;
+      initialLoadInFlight = false;
+    }
+  }
+
+  function handleEvent(event: SystemEvent) {
+    switch (event.event) {
+      case 'sensor_reading':
+        dataCache.mergeSensorReading(event.reading);
+        break;
+      case 'switch_state':
+        dataCache.updateSwitchState(event.device_id, {
+          state: event.state,
+          last_seen: event.timestamp,
+        });
+        dataCache.updateDeviceState(event.device_id, { last_seen: event.timestamp });
+        break;
+      case 'device_state':
+        dataCache.updateDeviceState(event.device_id, {
+          battery_level: event.battery,
+          link_quality: event.link_quality,
+          last_seen: event.timestamp,
+        });
+        break;
+      default:
+        break;
+    }
+  }
+
+  function retryInitialLoad() {
+    void loadInitialData();
+  }
+
+  onMount(() => {
+    let unsubscribe: (() => void) | undefined;
+
+    void loadInitialData();
+    eventStream.connect();
+    unsubscribe = eventStream.events.subscribe((evt) => {
+      if (!evt) {
+        return;
+      }
+      handleEvent(evt);
+    });
+
+    return () => {
+      unsubscribe?.();
+      eventStream.disconnect();
+    };
+  });
 
   // Track current route for active state
   $: currentPath = $location;
@@ -52,8 +139,22 @@
           System Logs
         </a>
       </nav>
+
+      {#if initializing}
+        <div class="sync-indicator">
+          <span class="dot"></span>
+          Syncing data...
+        </div>
+      {/if}
     </div>
   </header>
+
+  {#if initError}
+    <div class="init-error">
+      <span>Failed to load initial data: {initError}</span>
+      <button type="button" on:click={retryInitialLoad}>Retry</button>
+    </div>
+  {/if}
 
   <div class="container">
     <Router {routes} />
@@ -143,6 +244,61 @@
     padding: 2rem 1rem;
   }
 
+  .sync-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.8125rem;
+    color: #2563eb;
+    margin-left: 1rem;
+  }
+
+  .sync-indicator .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 9999px;
+    background: #2563eb;
+    animation: pulse 1s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%,
+    100% {
+      opacity: 0.4;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+
+  .init-error {
+    max-width: 1400px;
+    margin: 1rem auto 0;
+    padding: 0.75rem 1rem;
+    background: #fee2e2;
+    border: 1px solid #fecaca;
+    color: #b91c1c;
+    border-radius: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .init-error button {
+    background: #dc2626;
+    border: none;
+    color: white;
+    padding: 0.4rem 0.75rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.8125rem;
+  }
+
+  .init-error button:hover {
+    background: #b91c1c;
+  }
+
   @media (max-width: 640px) {
     h1 {
       font-size: 1.25rem;
@@ -173,6 +329,11 @@
 
     .container {
       padding-bottom: 5rem;
+    }
+
+    .init-error {
+      flex-direction: column;
+      align-items: flex-start;
     }
   }
 </style>
