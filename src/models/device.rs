@@ -161,23 +161,6 @@ impl DeviceState {
             last_seen: Utc::now(),
         }
     }
-
-    /// Update link quality from MQTT message
-    pub fn update_link_quality(&mut self, link_quality: u8) {
-        self.link_quality = Some(link_quality);
-        self.last_seen = Utc::now();
-    }
-
-    /// Update battery level from MQTT message
-    pub fn update_battery(&mut self, battery: u8) {
-        self.battery_level = Some(battery);
-        self.last_seen = Utc::now();
-    }
-
-    /// Mark the device as seen (updates last_seen timestamp)
-    pub fn mark_seen(&mut self) {
-        self.last_seen = Utc::now();
-    }
 }
 
 #[cfg(test)]

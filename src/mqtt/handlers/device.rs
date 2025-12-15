@@ -1,7 +1,7 @@
 use crate::db::Database;
 use crate::events::{SystemEvent, bus::EventBus};
 use crate::models::{
-    CommanderType, DeviceCapability, DeviceMqttMessage, SensorReading, SensorType,
+    CommanderType, DeviceCapability, DeviceMqttMessage, SensorReading, SensorType, SwitchState,
 };
 use crate::mqtt::device_discovery::get_or_create_device_unified;
 use chrono::Utc;
@@ -39,12 +39,13 @@ pub async fn handle_device_message(
         }
     };
 
+    let (battery, linkquality) = msg.extract_device_state();
     // Publish device state event so downstream services can update stores/DB
     publish_device_state_event(
         event_bus,
         &device_id,
-        msg.battery,
-        msg.linkquality,
+        battery,
+        linkquality,
         publish_failures,
     );
 
@@ -170,7 +171,8 @@ async fn handle_commander_message(
     match commander_type {
         CommanderType::Switch => {
             if let Some(state_str) = &msg.state {
-                let state = state_str.to_uppercase() == "ON";
+                let state = SwitchState::from_mqtt_string(state_str).unwrap_or_default();
+
                 info!(
                     device_id = %device_id,
                     state = %state,

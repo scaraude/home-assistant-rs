@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
+use crate::models::SwitchState;
+
 /// In-memory state storage for switch devices
 #[derive(Clone)]
 pub struct SwitchStateStore {
@@ -15,9 +17,9 @@ impl SwitchStateStore {
     }
 
     /// Update the state of a switch
-    pub fn set_state(&self, device_id: String, state: bool) {
+    pub fn set_state(&self, device_id: String, state: SwitchState) {
         if let Ok(mut states) = self.states.write() {
-            states.insert(device_id, state);
+            states.insert(device_id, state.to_bool());
         }
     }
 

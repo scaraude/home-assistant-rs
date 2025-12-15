@@ -29,15 +29,15 @@ pub async fn get_or_create_device_unified(
             );
 
             // Determine device capability based on available fields
-            let capability = if msg.temperature.is_some() || msg.humidity.is_some() {
+            let capability = if msg.has_sensor_data(&SensorType::TempHumidity) {
                 DeviceCapability::Sensor {
                     sensor_type: SensorType::TempHumidity,
                 }
-            } else if msg.occupancy.is_some() {
+            } else if msg.has_sensor_data(&SensorType::Presence) {
                 DeviceCapability::Sensor {
                     sensor_type: SensorType::Presence,
                 }
-            } else if msg.state.is_some() {
+            } else if msg.has_commander_data(&CommanderType::Switch) {
                 DeviceCapability::Commander {
                     commander_type: CommanderType::Switch,
                 }

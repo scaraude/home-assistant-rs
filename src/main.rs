@@ -1,4 +1,3 @@
-mod automation;
 mod db;
 mod events;
 mod http;

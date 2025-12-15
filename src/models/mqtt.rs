@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 use super::{CommanderType, SensorType};
 
@@ -58,7 +59,7 @@ impl DeviceMqttMessage {
 }
 
 /// Switch state enum
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum SwitchState {
     On,
@@ -80,12 +81,25 @@ impl SwitchState {
         matches!(self, SwitchState::On)
     }
 
-    /// Convert from boolean (true = ON, false = OFF)
-    pub fn from_bool(value: bool) -> Self {
-        if value {
-            SwitchState::On
-        } else {
-            SwitchState::Off
+    pub fn to_integer(&self) -> i32 {
+        match self {
+            SwitchState::On => 1,
+            SwitchState::Off => 0,
+        }
+    }
+}
+
+impl Default for SwitchState {
+    fn default() -> Self {
+        SwitchState::Off
+    }
+}
+
+impl fmt::Display for SwitchState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SwitchState::On => write!(f, "ON"),
+            SwitchState::Off => write!(f, "OFF"),
         }
     }
 }
@@ -145,64 +159,6 @@ impl SensorReading {
         match self {
             SensorReading::TempHumidity { timestamp, .. } => *timestamp,
             SensorReading::Presence { timestamp, .. } => *timestamp,
-        }
-    }
-}
-
-/// Commander state - current state stored in memory
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "lowercase")]
-pub enum CommanderState {
-    Switch {
-        device_id: String,
-        state: SwitchState,
-        #[serde(with = "chrono::serde::ts_seconds")]
-        last_updated: DateTime<Utc>,
-    },
-}
-
-impl CommanderState {
-    /// Create a commander state from MQTT message
-    pub fn from_mqtt(
-        device_id: String,
-        commander_type: &CommanderType,
-        msg: &DeviceMqttMessage,
-    ) -> Option<Self> {
-        match commander_type {
-            CommanderType::Switch => msg
-                .state
-                .as_ref()
-                .and_then(|s| SwitchState::from_mqtt_string(s))
-                .map(|state| CommanderState::Switch {
-                    device_id,
-                    state,
-                    last_updated: Utc::now(),
-                }),
-        }
-    }
-
-    /// Update state from MQTT message
-    pub fn update_from_mqtt(&mut self, msg: &DeviceMqttMessage) {
-        match self {
-            CommanderState::Switch {
-                state,
-                last_updated,
-                ..
-            } => {
-                if let Some(state_str) = &msg.state {
-                    if let Some(new_state) = SwitchState::from_mqtt_string(state_str) {
-                        *state = new_state;
-                        *last_updated = Utc::now();
-                    }
-                }
-            }
-        }
-    }
-
-    /// Get the device ID for this state
-    pub fn device_id(&self) -> &str {
-        match self {
-            CommanderState::Switch { device_id, .. } => device_id,
         }
     }
 }
@@ -295,28 +251,6 @@ mod tests {
             assert_eq!(humidity, 50.0);
         } else {
             panic!("Expected TempHumidity reading");
-        }
-    }
-
-    #[test]
-    fn test_commander_state_from_mqtt() {
-        let msg = DeviceMqttMessage {
-            linkquality: Some(100),
-            battery: None,
-            temperature: None,
-            humidity: None,
-            occupancy: None,
-            state: Some("ON".to_string()),
-            other: Default::default(),
-        };
-
-        let state = CommanderState::from_mqtt("device1".to_string(), &CommanderType::Switch, &msg);
-        assert!(state.is_some());
-
-        if let Some(CommanderState::Switch { state, .. }) = state {
-            assert_eq!(state, SwitchState::On);
-        } else {
-            panic!("Expected Switch state");
         }
     }
 }

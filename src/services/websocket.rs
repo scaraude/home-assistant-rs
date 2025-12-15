@@ -110,9 +110,4 @@ impl WebSocketBroadcaster {
             info!(client_id, "Removed WebSocket client");
         }
     }
-
-    pub async fn client_count(&self) -> usize {
-        let clients = self.clients.read().await;
-        clients.len()
-    }
 }

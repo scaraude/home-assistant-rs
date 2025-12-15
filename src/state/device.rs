@@ -29,27 +29,6 @@ impl DeviceStateStore {
         }
     }
 
-    /// Update link quality for a device
-    pub fn update_link_quality(&self, device_id: String, link_quality: u8) {
-        self.update_state(device_id, |state| {
-            state.update_link_quality(link_quality);
-        });
-    }
-
-    /// Update battery level for a device
-    pub fn update_battery(&self, device_id: String, battery: u8) {
-        self.update_state(device_id, |state| {
-            state.update_battery(battery);
-        });
-    }
-
-    /// Mark device as seen (updates last_seen timestamp)
-    pub fn mark_seen(&self, device_id: String) {
-        self.update_state(device_id, |state| {
-            state.mark_seen();
-        });
-    }
-
     /// Get the state of a device (returns None if unknown)
     pub fn get_state(&self, device_id: &str) -> Option<DeviceState> {
         self.states.read().ok()?.get(device_id).cloned()

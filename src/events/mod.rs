@@ -2,7 +2,7 @@
 
 pub mod bus;
 
-use crate::models::{AutomationAction, DeviceCapability, SensorReading};
+use crate::models::{AutomationAction, DeviceCapability, SensorReading, SwitchState};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -18,7 +18,7 @@ pub enum SystemEvent {
     },
     SwitchState {
         device_id: String,
-        state: bool,
+        state: SwitchState,
         #[serde(with = "chrono::serde::ts_seconds")]
         timestamp: DateTime<Utc>,
     },
@@ -63,81 +63,19 @@ impl SystemEvent {
             SystemEvent::AutomationExecuted { .. } => "automation_executed",
         }
     }
-
-    /// Timestamp associated with the event.
-    pub fn timestamp(&self) -> DateTime<Utc> {
-        match self {
-            SystemEvent::SensorReading { timestamp, .. }
-            | SystemEvent::SwitchState { timestamp, .. }
-            | SystemEvent::DeviceState { timestamp, .. }
-            | SystemEvent::DeviceDiscovered { timestamp, .. }
-            | SystemEvent::AutomationTriggered { timestamp, .. }
-            | SystemEvent::AutomationExecuted { timestamp, .. } => *timestamp,
-        }
-    }
-
-    /// Device identifier when the event references a device.
-    pub fn device_id(&self) -> Option<&str> {
-        match self {
-            SystemEvent::SensorReading { device_id, .. }
-            | SystemEvent::SwitchState { device_id, .. }
-            | SystemEvent::DeviceState { device_id, .. }
-            | SystemEvent::DeviceDiscovered { device_id, .. } => Some(device_id.as_str()),
-            SystemEvent::AutomationTriggered { .. } | SystemEvent::AutomationExecuted { .. } => {
-                None
-            }
-        }
-    }
-
-    /// Convenience constructor for automation execution failures.
-    pub fn automation_failure(rule_id: impl Into<String>, error: impl Into<String>) -> Self {
-        SystemEvent::AutomationExecuted {
-            rule_id: rule_id.into(),
-            success: false,
-            error: Some(error.into()),
-            timestamp: Utc::now(),
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::TimeZone;
-
-    fn demo_reading() -> SensorReading {
-        SensorReading::TempHumidity {
-            device_id: "device-123".into(),
-            temperature: 21.5,
-            humidity: 40.0,
-            timestamp: Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
-        }
-    }
 
     #[test]
     fn event_type_helper_matches_variants() {
         let event = SystemEvent::SwitchState {
             device_id: "switch-1".into(),
-            state: true,
+            state: SwitchState::On,
             timestamp: Utc::now(),
         };
         assert_eq!("switch_state", event.event_type());
-    }
-
-    #[test]
-    fn serialization_round_trip() {
-        let ts = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap();
-        let event = SystemEvent::SensorReading {
-            device_id: "sensor-1".into(),
-            reading: demo_reading(),
-            timestamp: ts,
-        };
-
-        let json = serde_json::to_string(&event).expect("serialize");
-        let back: SystemEvent = serde_json::from_str(&json).expect("deserialize");
-        assert_eq!(event, back);
-        assert_eq!(back.event_type(), "sensor_reading");
-        assert_eq!(back.timestamp(), ts);
-        assert_eq!(back.device_id(), Some("sensor-1"));
     }
 }

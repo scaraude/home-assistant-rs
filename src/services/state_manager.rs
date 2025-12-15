@@ -83,7 +83,7 @@ impl StateManagerService {
                 self.switch_state.set_state(device_id, state);
                 debug!(
                     device_id = %id_for_log,
-                    state = state,
+                    state = state.to_bool(),
                     timestamp = %timestamp,
                     "Switch state updated from event"
                 );

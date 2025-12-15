@@ -174,53 +174,6 @@ mod tests {
     // ==================== State Store Tests ====================
 
     #[test]
-    fn test_device_state_update_link_quality() {
-        let device_state = DeviceStateStore::new();
-
-        device_state.update_link_quality("device_001".to_string(), 255);
-
-        let state = device_state.get_state("device_001").unwrap();
-        assert_eq!(state.link_quality, Some(255));
-        assert_eq!(state.device_id, "device_001");
-    }
-
-    #[test]
-    fn test_device_state_update_battery() {
-        let device_state = DeviceStateStore::new();
-
-        device_state.update_battery("device_001".to_string(), 100);
-
-        let state = device_state.get_state("device_001").unwrap();
-        assert_eq!(state.battery_level, Some(100));
-    }
-
-    #[test]
-    fn test_device_state_mark_seen() {
-        let device_state = DeviceStateStore::new();
-
-        device_state.mark_seen("device_001".to_string());
-
-        let state = device_state.get_state("device_001").unwrap();
-        // Just verify that last_seen was set (timestamp > 0)
-        assert!(state.last_seen.timestamp() > 0);
-    }
-
-    #[test]
-    fn test_device_state_multiple_updates() {
-        let device_state = DeviceStateStore::new();
-
-        // Update link quality
-        device_state.update_link_quality("device_001".to_string(), 200);
-
-        // Update battery
-        device_state.update_battery("device_001".to_string(), 85);
-
-        let state = device_state.get_state("device_001").unwrap();
-        assert_eq!(state.link_quality, Some(200));
-        assert_eq!(state.battery_level, Some(85));
-    }
-
-    #[test]
     fn test_device_state_get_nonexistent() {
         let device_state = DeviceStateStore::new();
 
