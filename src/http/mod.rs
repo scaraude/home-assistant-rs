@@ -8,6 +8,7 @@ use crate::db::Database;
 use crate::mqtt::MqttClient;
 use crate::services::WebSocketBroadcaster;
 use crate::state::{DeviceStateStore, SwitchStateStore};
+use crate::http::query::DeviceStatePath;
 use http_body_util::Full;
 use hyper::body::Bytes;
 use hyper::server::conn::http1;
@@ -164,10 +165,10 @@ async fn handle_request(
             debug!("Serving switches list");
             routes::serve_switches_list(&db, &switch_state, &device_state)
         }),
-        ("GET", path) if path.starts_with("/api/devices/") && path.ends_with("/state") => Ok({
+        ("GET", path) if DeviceStatePath::parse(path).is_some() => Ok({
+            let device_path = DeviceStatePath::parse(path).expect("path validated");
             debug!(path = %path, "Serving device state");
-            let device_id = &path["/api/devices/".len()..path.len() - "/state".len()];
-            routes::serve_device_state(&db, device_id)
+            routes::serve_device_state(&db, device_path.device_id)
         }),
         ("POST", "/api/commands/execute") => Ok({
             debug!("Executing command");

@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use serde::de;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 
 use super::{CommanderType, SensorType};
@@ -27,8 +28,8 @@ pub struct DeviceMqttMessage {
     pub occupancy: Option<bool>,
 
     // ==================== Commander fields ====================
-    /// Switch state (ON/OFF as string)
-    pub state: Option<String>,
+    /// Switch state parsed from MQTT payload
+    pub state: Option<SwitchState>,
 
     // ==================== Catch-all ====================
     /// Other fields we don't use yet
@@ -59,8 +60,7 @@ impl DeviceMqttMessage {
 }
 
 /// Switch state enum
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "UPPERCASE")]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SwitchState {
     On,
     Off,
@@ -95,13 +95,32 @@ impl SwitchState {
         }
     }
 
-    /// Convert from boolean (true = ON, false = OFF)
-    pub fn from_bool(value: bool) -> Self {
-        if value {
-            SwitchState::On
-        } else {
-            SwitchState::Off
+    /// Toggle the switch state.
+    pub fn toggled(self) -> Self {
+        match self {
+            SwitchState::On => SwitchState::Off,
+            SwitchState::Off => SwitchState::On,
         }
+    }
+}
+
+impl Serialize for SwitchState {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(self.to_mqtt_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for SwitchState {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        SwitchState::from_mqtt_string(&value)
+            .ok_or_else(|| de::Error::custom(format!("invalid switch state: {}", value)))
     }
 }
 
@@ -186,7 +205,13 @@ pub struct SwitchCommand {
     pub device_id: String,
 
     /// Desired state (true = ON, false = OFF)
-    pub state: bool,
+    pub state: SwitchState,
+}
+
+/// Payload sent to Zigbee2MQTT when toggling a switch.
+#[derive(Debug, Serialize)]
+pub struct SwitchCommandMessage {
+    pub state: SwitchState,
 }
 
 #[cfg(test)]
@@ -206,8 +231,6 @@ mod tests {
     fn test_switch_state_bool_conversion() {
         assert_eq!(SwitchState::On.to_bool(), true);
         assert_eq!(SwitchState::Off.to_bool(), false);
-        assert_eq!(SwitchState::from_bool(true), SwitchState::On);
-        assert_eq!(SwitchState::from_bool(false), SwitchState::Off);
     }
 
     #[test]
@@ -234,7 +257,7 @@ mod tests {
             temperature: None,
             humidity: None,
             occupancy: None,
-            state: Some("ON".to_string()),
+            state: Some(SwitchState::On),
             other: Default::default(),
         };
 

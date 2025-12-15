@@ -1,7 +1,8 @@
 #[cfg(test)]
 mod tests {
-    use crate::models::DeviceMqttMessage;
+    use crate::models::{DeviceMqttMessage, SwitchState};
     use crate::state::{DeviceStateStore, SwitchStateStore};
+    use crate::mqtt::topic::ZigbeeTopic;
 
     // ==================== Message Parsing Tests ====================
 
@@ -57,7 +58,7 @@ mod tests {
         }"#;
 
         let msg: DeviceMqttMessage = serde_json::from_str(json).unwrap();
-        assert_eq!(msg.state, Some("ON".to_string()));
+        assert_eq!(msg.state, Some(SwitchState::On));
         assert_eq!(msg.linkquality, Some(150));
     }
 
@@ -69,7 +70,7 @@ mod tests {
         }"#;
 
         let msg: DeviceMqttMessage = serde_json::from_str(json).unwrap();
-        assert_eq!(msg.state, Some("OFF".to_string()));
+        assert_eq!(msg.state, Some(SwitchState::Off));
         assert_eq!(msg.linkquality, Some(180));
     }
 
@@ -83,7 +84,7 @@ mod tests {
         }"#;
 
         let msg: DeviceMqttMessage = serde_json::from_str(json).unwrap();
-        assert_eq!(msg.state, Some("ON".to_string()));
+        assert_eq!(msg.state, Some(SwitchState::On));
         assert_eq!(msg.linkquality, Some(200));
         // battery is a known field, so it goes into the battery field, not other
         assert_eq!(msg.battery, Some(75));
@@ -185,20 +186,20 @@ mod tests {
     fn test_switch_state_on() {
         let switch_state = SwitchStateStore::new();
 
-        switch_state.set_state("switch_001".to_string(), true);
+        switch_state.set_state("switch_001".to_string(), SwitchState::On);
 
         let state = switch_state.get_state("switch_001").unwrap();
-        assert!(state);
+        assert_eq!(state, SwitchState::On);
     }
 
     #[test]
     fn test_switch_state_off() {
         let switch_state = SwitchStateStore::new();
 
-        switch_state.set_state("switch_001".to_string(), false);
+        switch_state.set_state("switch_001".to_string(), SwitchState::Off);
 
         let state = switch_state.get_state("switch_001").unwrap();
-        assert!(!state);
+        assert_eq!(state, SwitchState::Off);
     }
 
     #[test]
@@ -206,16 +207,25 @@ mod tests {
         let switch_state = SwitchStateStore::new();
 
         // Set to ON
-        switch_state.set_state("switch_001".to_string(), true);
-        assert_eq!(switch_state.get_state("switch_001"), Some(true));
+        switch_state.set_state("switch_001".to_string(), SwitchState::On);
+        assert_eq!(
+            switch_state.get_state("switch_001"),
+            Some(SwitchState::On)
+        );
 
         // Toggle to OFF
-        switch_state.set_state("switch_001".to_string(), false);
-        assert_eq!(switch_state.get_state("switch_001"), Some(false));
+        switch_state.set_state("switch_001".to_string(), SwitchState::Off);
+        assert_eq!(
+            switch_state.get_state("switch_001"),
+            Some(SwitchState::Off)
+        );
 
         // Toggle back to ON
-        switch_state.set_state("switch_001".to_string(), true);
-        assert_eq!(switch_state.get_state("switch_001"), Some(true));
+        switch_state.set_state("switch_001".to_string(), SwitchState::On);
+        assert_eq!(
+            switch_state.get_state("switch_001"),
+            Some(SwitchState::On)
+        );
     }
 
     #[test]
@@ -228,17 +238,10 @@ mod tests {
 
     #[test]
     fn test_switch_state_case_conversion() {
-        // Test that state strings are converted to uppercase for boolean comparison
-        assert_eq!("ON".to_uppercase(), "ON");
-        assert_eq!("on".to_uppercase(), "ON");
-        assert_eq!("On".to_uppercase(), "ON");
-        assert_eq!("off".to_uppercase(), "OFF");
-        assert_eq!("OFF".to_uppercase(), "OFF");
-
-        // Verify the logic used in the actual code
-        assert_eq!("ON".to_uppercase() == "ON", true);
-        assert_eq!("on".to_uppercase() == "ON", true);
-        assert_eq!("OFF".to_uppercase() == "ON", false);
+        assert_eq!(SwitchState::from_mqtt_string("ON"), Some(SwitchState::On));
+        assert_eq!(SwitchState::from_mqtt_string("on"), Some(SwitchState::On));
+        assert_eq!(SwitchState::from_mqtt_string("Off"), Some(SwitchState::Off));
+        assert_eq!(SwitchState::from_mqtt_string("invalid"), None);
     }
 
     // ==================== Command Publishing Format Tests ====================
@@ -246,22 +249,22 @@ mod tests {
     #[test]
     fn test_publish_command_topic_format() {
         let device_id = "0x00158d0001a2b3c4";
-        let topic = format!("zigbee2mqtt/{}/set", device_id);
+        let topic = ZigbeeTopic::command_topic(device_id);
         assert_eq!(topic, "zigbee2mqtt/0x00158d0001a2b3c4/set");
     }
 
     #[test]
     fn test_publish_command_topic_format_various_ids() {
         assert_eq!(
-            format!("zigbee2mqtt/{}/set", "switch_001"),
+            ZigbeeTopic::command_topic("switch_001"),
             "zigbee2mqtt/switch_001/set"
         );
         assert_eq!(
-            format!("zigbee2mqtt/{}/set", "sensor_temp"),
+            ZigbeeTopic::command_topic("sensor_temp"),
             "zigbee2mqtt/sensor_temp/set"
         );
         assert_eq!(
-            format!("zigbee2mqtt/{}/set", "0xABCD"),
+            ZigbeeTopic::command_topic("0xABCD"),
             "zigbee2mqtt/0xABCD/set"
         );
     }

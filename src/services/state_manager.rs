@@ -149,7 +149,7 @@ mod tests {
         handle.await.unwrap();
         assert_eq!(
             switch_store.get_state("switch-1"),
-            Some(true),
+            Some(SwitchState::On),
             "switch state updated"
         );
     }

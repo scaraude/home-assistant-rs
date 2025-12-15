@@ -1,7 +1,7 @@
 use crate::db::Database;
 use crate::events::{SystemEvent, bus::EventBus};
 use crate::models::{
-    CommanderType, DeviceCapability, DeviceMqttMessage, SensorReading, SensorType, SwitchState,
+    CommanderType, DeviceCapability, DeviceMqttMessage, SensorReading, SensorType,
 };
 use crate::mqtt::device_discovery::get_or_create_device_unified;
 use chrono::Utc;
@@ -170,9 +170,7 @@ async fn handle_commander_message(
 ) {
     match commander_type {
         CommanderType::Switch => {
-            if let Some(state_str) = &msg.state {
-                let state = SwitchState::from_mqtt_string(state_str).unwrap_or_default();
-
+            if let Some(state) = msg.state {
                 info!(
                     device_id = %device_id,
                     state = %state,

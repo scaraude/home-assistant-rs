@@ -1,10 +1,10 @@
 use crate::db::Database;
-use crate::http::query::QueryParams;
+use crate::http::query::{ExecutionLogsQuery, QueryParams};
 use crate::http::responses::*;
 use crate::logs;
 use crate::models::{
     AutomationAction, AutomationCondition, AutomationRule, CreateAutomationRuleRequest,
-    SwitchCommand, SwitchState, UpdateAutomationRuleRequest,
+    SwitchCommand, SwitchCommandMessage, UpdateAutomationRuleRequest,
 };
 use crate::mqtt::MqttClient;
 use crate::state::{DeviceStateStore, SwitchStateStore};
@@ -294,7 +294,7 @@ pub fn serve_switches_list(
             )
         })
         .map(|device| {
-            let current_state = switch_state.get_state(&device.id).unwrap_or(false);
+            let current_state = switch_state.get_state(&device.id).unwrap_or_default();
 
             // Fetch device state from database instead of in-memory store
             let device_db_state = db.get_device_state(&device.id).ok().flatten();
@@ -316,7 +316,7 @@ pub fn serve_switches_list(
                 "id": device.id,
                 "mqtt_topic": device.mqtt_topic,
                 "name": device.name,
-                "state": current_state,
+                "state": current_state.to_bool(),
                 "link_quality": link_quality,
                 "battery_level": battery_level,
                 "last_seen": last_seen,
@@ -428,13 +428,24 @@ pub async fn execute_command(
     };
 
     // Build the MQTT payload
-    let switch_state = SwitchState::from_bool(command.state);
-    let payload = format!(r#"{{"state":"{}"}}"#, switch_state);
+    let payload = match serde_json::to_string(&SwitchCommandMessage {
+        state: command.state,
+    }) {
+        Ok(json) => json,
+        Err(e) => {
+            error!(
+                error = %e,
+                device_id = %command.device_id,
+                "Failed to serialize MQTT command payload"
+            );
+            return internal_error_response("Failed to serialize command payload");
+        }
+    };
 
     info!(
         device_id = %command.device_id,
         mqtt_topic = %mqtt_topic,
-        state = %switch_state,
+        state = %command.state,
         payload = %payload,
         "Executing switch command"
     );
@@ -446,7 +457,7 @@ pub async fn execute_command(
             info!(
                 device_id = %command.device_id,
                 mqtt_topic = %mqtt_topic,
-                state = %switch_state,
+                state = %command.state,
                 "Command executed successfully"
             );
             json_response(r#"{"status":"ok"}"#.into())
@@ -773,15 +784,7 @@ pub fn delete_automation_rule(db: &Database, rule_id: &str) -> Response<Full<Byt
 }
 
 pub fn serve_execution_logs(db: &Database, query: Option<&str>) -> Response<Full<Bytes>> {
-    // Parse limit from query string (default: 100)
-    let limit = query
-        .and_then(|q| {
-            q.split('&')
-                .find(|p| p.starts_with("limit="))
-                .and_then(|p| p.strip_prefix("limit="))
-                .and_then(|v| v.parse::<i64>().ok())
-        })
-        .unwrap_or(100);
+    let limit = ExecutionLogsQuery::new(query).limit();
 
     match db.get_execution_logs(limit) {
         Ok(logs) => {

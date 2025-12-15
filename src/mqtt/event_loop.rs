@@ -2,6 +2,7 @@ use crate::db::Database;
 use crate::events::bus::EventBus;
 use crate::models::DeviceMqttMessage;
 use crate::mqtt::handlers::handle_device_message;
+use crate::mqtt::topic::ZigbeeTopic;
 use rumqttc::{Event, EventLoop, Packet};
 use std::sync::Arc;
 use tracing::{debug, error, info, warn};
@@ -29,10 +30,8 @@ pub(super) fn spawn_event_loop(mut eventloop: EventLoop, db: Arc<Database>, even
                         "Received MQTT message"
                     );
 
-                    // Extract MQTT identifier from topic: zigbee2mqtt/<mqtt_id>
-                    if let Some(mqtt_topic) = p.topic.strip_prefix("zigbee2mqtt/") {
-                        // Skip bridge topics
-                        if mqtt_topic.starts_with("bridge/") {
+                    if let Some(topic) = ZigbeeTopic::parse(&p.topic) {
+                        if topic.is_bridge() {
                             skipped_bridge += 1;
                             debug!(
                                 topic = %p.topic,
@@ -42,8 +41,7 @@ pub(super) fn spawn_event_loop(mut eventloop: EventLoop, db: Arc<Database>, even
                             continue;
                         }
 
-                        // Skip /set topics (command topics, not device state)
-                        if mqtt_topic.ends_with("/set") {
+                        if topic.is_command_channel() {
                             debug!(
                                 topic = %p.topic,
                                 "Skipping /set command topic"
@@ -51,7 +49,11 @@ pub(super) fn spawn_event_loop(mut eventloop: EventLoop, db: Arc<Database>, even
                             continue;
                         }
 
-                        // Parse as unified device message
+                        let Some(mqtt_topic) = topic.device_id() else {
+                            debug!(topic = %p.topic, "Ignoring topic without device id");
+                            continue;
+                        };
+
                         match serde_json::from_slice::<DeviceMqttMessage>(&p.payload) {
                             Ok(msg) => {
                                 handle_device_message(

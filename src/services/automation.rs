@@ -5,7 +5,7 @@ use crate::db::Database;
 use crate::events::{SystemEvent, bus::EventBus};
 use crate::models::{
     AutomationAction, AutomationCondition, AutomationRule, SensorField, SensorReading,
-    SwitchAction, SwitchState,
+    SwitchAction, SwitchCommandMessage, SwitchState,
 };
 use crate::mqtt::MqttClient;
 use crate::state::{DeviceStateStore, SwitchStateStore};
@@ -303,11 +303,11 @@ impl AutomationService {
             .ok_or_else(|| format!("Device not found: {}", action.device_id))?;
 
         let desired_state = match action.action {
-            SwitchAction::On => true,
-            SwitchAction::Off => false,
+            SwitchAction::On => SwitchState::On,
+            SwitchAction::Off => SwitchState::Off,
             SwitchAction::Toggle => {
                 if let Some(current) = self.switch_state.get_state(&action.device_id) {
-                    !current
+                    current.toggled()
                 } else {
                     return Err(format!(
                         "Current state unknown for device {}",
@@ -317,10 +317,8 @@ impl AutomationService {
             }
         };
 
-        let payload = format!(
-            r#"{{"state":"{}"}}"#,
-            SwitchState::from_bool(desired_state).to_mqtt_string(),
-        );
+        let payload = serde_json::to_string(&SwitchCommandMessage { state: desired_state })
+            .map_err(|e| format!("MQTT payload serialization error: {}", e))?;
 
         self.mqtt_client
             .publish_command(&mqtt_topic, &payload)

@@ -3,6 +3,7 @@ mod client;
 mod device_discovery;
 mod event_loop;
 mod handlers;
+pub mod topic;
 
 // Tests
 #[cfg(test)]

@@ -2,15 +2,56 @@ use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
+use std::str::FromStr;
 use tracing::debug;
 
-/// Allowed log files (whitelist for security)
-const ALLOWED_LOG_FILES: &[&str] = &[
-    "system_monitor.log",
-    "process_monitor.log",
-    "top_cpu_consumers.log",
-    "top_ram_consumers.log",
-];
+/// Enumerates supported log files, preventing stringly-typed lookups.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LogFile {
+    SystemMonitor,
+    ProcessMonitor,
+    TopCpuConsumers,
+    TopRamConsumers,
+}
+
+impl LogFile {
+    const ALL: [LogFile; 4] = [
+        LogFile::SystemMonitor,
+        LogFile::ProcessMonitor,
+        LogFile::TopCpuConsumers,
+        LogFile::TopRamConsumers,
+    ];
+
+    pub fn filename(self) -> &'static str {
+        match self {
+            LogFile::SystemMonitor => "system_monitor.log",
+            LogFile::ProcessMonitor => "process_monitor.log",
+            LogFile::TopCpuConsumers => "top_cpu_consumers.log",
+            LogFile::TopRamConsumers => "top_ram_consumers.log",
+        }
+    }
+
+    pub fn display_name(self) -> &'static str {
+        match self {
+            LogFile::SystemMonitor => "System Monitor",
+            LogFile::ProcessMonitor => "Process Monitor",
+            LogFile::TopCpuConsumers => "Top CPU Consumers",
+            LogFile::TopRamConsumers => "Top RAM Consumers",
+        }
+    }
+}
+
+impl FromStr for LogFile {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        LogFile::ALL
+            .iter()
+            .copied()
+            .find(|lf| lf.filename() == s)
+            .ok_or(())
+    }
+}
 
 /// Log file metadata
 #[derive(Debug, Serialize, Deserialize)]
@@ -63,45 +104,13 @@ pub enum LogEntry {
 
 /// Get list of available log files
 pub fn list_log_files() -> Vec<LogFileInfo> {
-    ALLOWED_LOG_FILES
+    LogFile::ALL
         .iter()
-        .map(|name| LogFileInfo {
-            name: name.to_string(),
-            display_name: format_display_name(name),
+        .map(|log_file| LogFileInfo {
+            name: log_file.filename().to_string(),
+            display_name: log_file.display_name().to_string(),
         })
         .collect()
-}
-
-/// Format log file name for display
-fn format_display_name(filename: &str) -> String {
-    filename
-        .replace(".log", "")
-        .replace('_', " ")
-        .split_whitespace()
-        .map(|word| {
-            let mut chars = word.chars();
-            match chars.next() {
-                None => String::new(),
-                Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-/// Validate log file name against whitelist
-pub fn is_valid_log_file(filename: &str) -> bool {
-    // Check against whitelist
-    if !ALLOWED_LOG_FILES.contains(&filename) {
-        return false;
-    }
-
-    // Prevent path traversal
-    if filename.contains("..") || filename.contains('/') || filename.contains('\\') {
-        return false;
-    }
-
-    true
 }
 
 /// Get the log directory path
@@ -122,14 +131,12 @@ pub fn read_log_file_with_offset(
     since_line: Option<usize>,
     max_lines: usize,
 ) -> Result<(Vec<LogEntry>, usize), String> {
-    // Validate filename
-    if !is_valid_log_file(filename) {
-        return Err(format!("Invalid log file name: {}", filename));
-    }
+    let log_file =
+        LogFile::from_str(filename).map_err(|_| format!("Invalid log file name: {}", filename))?;
 
     // Build full path
     let log_dir = get_log_dir();
-    let file_path = log_dir.join(filename);
+    let file_path = log_dir.join(log_file.filename());
 
     // Check if file exists
     if !file_path.exists() {
@@ -169,11 +176,10 @@ pub fn read_log_file_with_offset(
     };
 
     // Parse based on file type
-    let entries = match filename {
-        "system_monitor.log" => parse_system_monitor_log(&lines)?,
-        "process_monitor.log" => parse_process_monitor_log(&lines)?,
-        "top_cpu_consumers.log" | "top_ram_consumers.log" => parse_top_consumers_log(&lines)?,
-        _ => return Err(format!("Unknown log file type: {}", filename)),
+    let entries = match log_file {
+        LogFile::SystemMonitor => parse_system_monitor_log(&lines)?,
+        LogFile::ProcessMonitor => parse_process_monitor_log(&lines)?,
+        LogFile::TopCpuConsumers | LogFile::TopRamConsumers => parse_top_consumers_log(&lines)?,
     };
 
     Ok((entries, total_lines))
@@ -186,12 +192,7 @@ pub fn read_process_history(
     pid: &str,
     max_lines: usize,
 ) -> Result<Vec<LogEntry>, String> {
-    let filename = "process_monitor.log";
-
-    // Validate filename
-    if !is_valid_log_file(filename) {
-        return Err(format!("Invalid log file name: {}", filename));
-    }
+    let filename = LogFile::ProcessMonitor.filename();
 
     // Build full path
     let log_dir = get_log_dir();
@@ -336,24 +337,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_is_valid_log_file() {
-        assert!(is_valid_log_file("system_monitor.log"));
-        assert!(is_valid_log_file("process_monitor.log"));
-        assert!(!is_valid_log_file("../etc/passwd"));
-        assert!(!is_valid_log_file("system_monitor.log/../passwd"));
-        assert!(!is_valid_log_file("invalid.log"));
-    }
-
-    #[test]
     fn test_format_display_name() {
-        assert_eq!(format_display_name("system_monitor.log"), "System Monitor");
-        assert_eq!(
-            format_display_name("process_monitor.log"),
-            "Process Monitor"
-        );
-        assert_eq!(
-            format_display_name("top_cpu_consumers.log"),
-            "Top Cpu Consumers"
-        );
+        assert_eq!(LogFile::SystemMonitor.display_name(), "System Monitor");
+        assert_eq!(LogFile::ProcessMonitor.display_name(), "Process Monitor");
+        assert_eq!(LogFile::TopCpuConsumers.display_name(), "Top CPU Consumers");
     }
 }

@@ -2,6 +2,7 @@ use super::event_loop::spawn_event_loop;
 use crate::db::Database;
 use crate::events::bus::EventBus;
 use rumqttc::{AsyncClient, ClientError, MqttOptions, QoS};
+use crate::mqtt::topic::{ZIGBEE_NAMESPACE, ZigbeeTopic};
 use std::sync::Arc;
 use tracing::{debug, error, info};
 
@@ -59,8 +60,9 @@ impl MqttClient {
 
     /// Subscribe to zigbee2mqtt topics
     pub async fn subscribe_to_zigbee2mqtt(&self) -> Result<(), ClientError> {
+        let subscription = format!("{ZIGBEE_NAMESPACE}#");
         info!(
-            topic = "zigbee2mqtt/#",
+            topic = %subscription,
             qos = "AtMostOnce",
             subscribers = self.event_bus.receiver_count(),
             "Subscribing to MQTT topics"
@@ -68,15 +70,15 @@ impl MqttClient {
 
         match self
             .client
-            .subscribe("zigbee2mqtt/#", QoS::AtMostOnce)
+            .subscribe(&subscription, QoS::AtMostOnce)
             .await
         {
             Ok(_) => {
-                info!("Successfully subscribed to zigbee2mqtt/# topics");
+                info!("Successfully subscribed to Zigbee namespace topics");
                 Ok(())
             }
             Err(e) => {
-                error!(error = %e, topic = "zigbee2mqtt/#", "Failed to subscribe to MQTT topics");
+                error!(error = %e, topic = %subscription, "Failed to subscribe to MQTT topics");
                 Err(e)
             }
         }
@@ -84,7 +86,7 @@ impl MqttClient {
 
     /// Publish a command to a device
     pub async fn publish_command(&self, device_id: &str, payload: &str) -> Result<(), ClientError> {
-        let topic = format!("zigbee2mqtt/{}/set", device_id);
+        let topic = ZigbeeTopic::command_topic(device_id);
 
         info!(
             topic = %topic,

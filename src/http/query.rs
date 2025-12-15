@@ -47,3 +47,42 @@ impl<'a> QueryParams<'a> {
         self.get(key).and_then(|v| v.parse().ok())
     }
 }
+
+/// Typed extractor for device state routes: `/api/devices/{id}/state`.
+pub struct DeviceStatePath<'a> {
+    pub device_id: &'a str,
+}
+
+impl<'a> DeviceStatePath<'a> {
+    const PREFIX: &'static str = "/api/devices/";
+    const SUFFIX: &'static str = "/state";
+
+    pub fn parse(path: &'a str) -> Option<Self> {
+        if path.starts_with(Self::PREFIX) && path.ends_with(Self::SUFFIX) {
+            let id = &path[Self::PREFIX.len()..path.len() - Self::SUFFIX.len()];
+            if !id.is_empty() {
+                return Some(Self { device_id: id });
+            }
+        }
+        None
+    }
+}
+
+/// Helper for parsing `/api/automation/logs` query parameters.
+pub struct ExecutionLogsQuery<'a> {
+    params: QueryParams<'a>,
+}
+
+impl<'a> ExecutionLogsQuery<'a> {
+    pub fn new(query: Option<&'a str>) -> Self {
+        Self {
+            params: QueryParams::new(query),
+        }
+    }
+
+    /// Limit the number of rows returned, clamped to [1, 1000].
+    pub fn limit(&self) -> i64 {
+        let value = self.params.get_i64("limit", 100);
+        value.clamp(1, 1000)
+    }
+}
