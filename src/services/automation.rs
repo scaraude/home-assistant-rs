@@ -4,7 +4,8 @@ use std::sync::Arc;
 use crate::db::Database;
 use crate::events::{SystemEvent, bus::EventBus};
 use crate::models::{
-    AutomationAction, AutomationCondition, AutomationRule, SensorField, SensorReading, SwitchAction,
+    AutomationAction, AutomationCondition, AutomationRule, SensorField, SensorReading,
+    SwitchAction, SwitchState,
 };
 use crate::mqtt::MqttClient;
 use crate::state::{DeviceStateStore, SwitchStateStore};
@@ -318,7 +319,7 @@ impl AutomationService {
 
         let payload = format!(
             r#"{{"state":"{}"}}"#,
-            if desired_state { "ON" } else { "OFF" }
+            SwitchState::from_bool(desired_state).to_mqtt_string(),
         );
 
         self.mqtt_client

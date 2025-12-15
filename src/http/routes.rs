@@ -4,7 +4,7 @@ use crate::http::responses::*;
 use crate::logs;
 use crate::models::{
     AutomationAction, AutomationCondition, AutomationRule, CreateAutomationRuleRequest,
-    SwitchCommand, UpdateAutomationRuleRequest,
+    SwitchCommand, SwitchState, UpdateAutomationRuleRequest,
 };
 use crate::mqtt::MqttClient;
 use crate::state::{DeviceStateStore, SwitchStateStore};
@@ -428,13 +428,13 @@ pub async fn execute_command(
     };
 
     // Build the MQTT payload
-    let state_str = if command.state { "ON" } else { "OFF" };
-    let payload = format!(r#"{{"state":"{}"}}"#, state_str);
+    let switch_state = SwitchState::from_bool(command.state);
+    let payload = format!(r#"{{"state":"{}"}}"#, switch_state);
 
     info!(
         device_id = %command.device_id,
         mqtt_topic = %mqtt_topic,
-        state = %state_str,
+        state = %switch_state,
         payload = %payload,
         "Executing switch command"
     );
@@ -446,7 +446,7 @@ pub async fn execute_command(
             info!(
                 device_id = %command.device_id,
                 mqtt_topic = %mqtt_topic,
-                state = %state_str,
+                state = %switch_state,
                 "Command executed successfully"
             );
             json_response(r#"{"status":"ok"}"#.into())

@@ -76,6 +76,13 @@ impl SwitchState {
         }
     }
 
+    pub fn to_mqtt_string(&self) -> &'static str {
+        match self {
+            SwitchState::On => "ON",
+            SwitchState::Off => "OFF",
+        }
+    }
+
     /// Convert to boolean (ON = true, OFF = false)
     pub fn to_bool(&self) -> bool {
         matches!(self, SwitchState::On)
@@ -85,6 +92,15 @@ impl SwitchState {
         match self {
             SwitchState::On => 1,
             SwitchState::Off => 0,
+        }
+    }
+
+    /// Convert from boolean (true = ON, false = OFF)
+    pub fn from_bool(value: bool) -> Self {
+        if value {
+            SwitchState::On
+        } else {
+            SwitchState::Off
         }
     }
 }

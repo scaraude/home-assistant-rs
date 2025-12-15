@@ -95,6 +95,8 @@ impl StateManagerService {
 
 #[cfg(test)]
 mod tests {
+    use crate::models::SwitchState;
+
     use super::*;
     use chrono::{TimeZone, Utc};
 
@@ -138,7 +140,7 @@ mod tests {
 
         tx.send(SystemEvent::SwitchState {
             device_id: "switch-1".into(),
-            state: true,
+            state: SwitchState::On,
             timestamp: Utc::now(),
         })
         .unwrap();
