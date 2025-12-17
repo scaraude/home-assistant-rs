@@ -75,6 +75,7 @@
       isEditingName = false;
 
       await updateDeviceName(deviceId, trimmedName);
+      dataCache.updateDeviceName(deviceId, trimmedName);
     } catch (err) {
       // Revert on error
       sensorData.name = previousName;
@@ -102,7 +103,9 @@
     node.focus();
   }
 
-  $: deviceState = deviceId ? $dataCache.deviceStates[deviceId] ?? null : null;
+  $: deviceState = deviceId
+    ? ($dataCache.deviceStates[deviceId] ?? null)
+    : null;
 
   async function loadDeviceState() {
     if (!deviceId) return;

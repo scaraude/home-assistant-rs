@@ -68,6 +68,18 @@ function createDataCache() {
       }));
     },
 
+    updateDeviceName(deviceId: string, name: string) {
+      update((state) => ({
+        ...state,
+        sensors: {
+          ...state.sensors,
+          devices: state.sensors.devices.map((device) =>
+            device.device_id === deviceId ? { ...device, name } : device,
+          ),
+        },
+      }));
+    },
+
     setSensorReadings(readings: SensorReading[], latestTimestamp: number, rangeHours: number) {
       const sorted = sortReadings(readings);
       update((state) => ({
