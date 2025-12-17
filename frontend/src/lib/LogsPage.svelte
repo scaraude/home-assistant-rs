@@ -16,16 +16,16 @@
   type Tab = 'system' | 'processes' | 'top-cpu' | 'top-ram';
   type TimeRange = '1h' | '6h' | '24h' | 'all';
 
-  let activeTab: Tab = 'system';
-  let selectedTimeRange: TimeRange = '24h';
-  let systemEntries: SystemMonitorEntry[] = [];
-  let processEntries: ProcessMonitorEntry[] = [];
-  let topCpuEntries: TopConsumerEntry[] = [];
-  let topRamEntries: TopConsumerEntry[] = [];
-  let loading = true;
-  let error: string | null = null;
-  let pollInterval: number | null = null;
-  let isFirstLoad = true;
+  let activeTab = $state<Tab>('system');
+  let selectedTimeRange = $state<TimeRange>('24h');
+  let systemEntries = $state<SystemMonitorEntry[]>([]);
+  let processEntries = $state<ProcessMonitorEntry[]>([]);
+  let topCpuEntries = $state<TopConsumerEntry[]>([]);
+  let topRamEntries = $state<TopConsumerEntry[]>([]);
+  let loading = $state(true);
+  let error = $state<string | null>(null);
+  let pollInterval = $state<number | null>(null);
+  let isFirstLoad = $state(true);
 
   // Map time ranges to approximate number of log lines
   // monitor.sh writes every 60 seconds, so 60 lines = 1 hour
@@ -167,28 +167,28 @@
         <button
           class="time-range-btn"
           class:active={selectedTimeRange === '1h'}
-          on:click={() => setTimeRange('1h')}
+          onclick={() => setTimeRange('1h')}
         >
           1h
         </button>
         <button
           class="time-range-btn"
           class:active={selectedTimeRange === '6h'}
-          on:click={() => setTimeRange('6h')}
+          onclick={() => setTimeRange('6h')}
         >
           6h
         </button>
         <button
           class="time-range-btn"
           class:active={selectedTimeRange === '24h'}
-          on:click={() => setTimeRange('24h')}
+          onclick={() => setTimeRange('24h')}
         >
           24h
         </button>
         <button
           class="time-range-btn"
           class:active={selectedTimeRange === 'all'}
-          on:click={() => setTimeRange('all')}
+          onclick={() => setTimeRange('all')}
         >
           All
         </button>
@@ -203,28 +203,28 @@
     <button
       class="tab"
       class:active={activeTab === 'system'}
-      on:click={() => setActiveTab('system')}
+      onclick={() => setActiveTab('system')}
     >
       System Metrics
     </button>
     <button
       class="tab"
       class:active={activeTab === 'processes'}
-      on:click={() => setActiveTab('processes')}
+      onclick={() => setActiveTab('processes')}
     >
       Processes
     </button>
     <button
       class="tab"
       class:active={activeTab === 'top-cpu'}
-      on:click={() => setActiveTab('top-cpu')}
+      onclick={() => setActiveTab('top-cpu')}
     >
       Top CPU
     </button>
     <button
       class="tab"
       class:active={activeTab === 'top-ram'}
-      on:click={() => setActiveTab('top-ram')}
+      onclick={() => setActiveTab('top-ram')}
     >
       Top RAM
     </button>
@@ -239,7 +239,7 @@
     {:else if error}
       <div class="error-state">
         <p>{error}</p>
-        <button on:click={loadAllData}>Retry</button>
+        <button onclick={loadAllData}>Retry</button>
       </div>
     {:else}
       {#if activeTab === 'system'}

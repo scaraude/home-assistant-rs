@@ -28,11 +28,16 @@
     Filler
   );
 
-  export let readings: SensorReading[] = [];
-  export let selectedMetric: "temperature" | "humidity" | null = null;
+  let {
+    readings = [],
+    selectedMetric = null
+  }: {
+    readings?: SensorReading[];
+    selectedMetric?: "temperature" | "humidity" | null;
+  } = $props();
 
-  let canvas: HTMLCanvasElement;
-  let chart: Chart | null = null;
+  let canvas = $state<HTMLCanvasElement>();
+  let chart = $state<Chart | null>(null);
 
   function getDatasets() {
     const timestamps = readings.map((r) => r.timestamp * 1000);
@@ -249,9 +254,11 @@
     }
   });
 
-  $: if (chart && (readings || selectedMetric !== undefined)) {
-    updateChart();
-  }
+  $effect(() => {
+    if (chart && (readings || selectedMetric !== undefined)) {
+      updateChart();
+    }
+  });
 </script>
 
 <div class="graph-container">

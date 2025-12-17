@@ -2,13 +2,18 @@
   import type { ProcessMonitorEntry } from './api';
   import ProcessHistoryGraph from './ProcessHistoryGraph.svelte';
 
-  export let entries: ProcessMonitorEntry[] = [];
-  export let timeRange: '1h' | '6h' | '24h' | 'all' = '24h';
+  let {
+    entries = [],
+    timeRange = '24h'
+  }: {
+    entries?: ProcessMonitorEntry[];
+    timeRange?: '1h' | '6h' | '24h' | 'all';
+  } = $props();
 
-  let expandedProcess: string | null = null;
+  let expandedProcess = $state<string | null>(null);
 
   // Group entries by process and get the latest entry for each
-  $: latestProcesses = getLatestProcesses(entries);
+  let latestProcesses = $derived(getLatestProcesses(entries));
 
   function getLatestProcesses(allEntries: ProcessMonitorEntry[]) {
     const processMap = new Map<string, ProcessMonitorEntry>();
@@ -65,7 +70,7 @@
             <tr
               class="clickable-row"
               class:expanded={isExpanded}
-              on:click={() => toggleExpand(processKey)}
+              onclick={() => toggleExpand(processKey)}
             >
               <td class="process-name">
                 <span class="expand-icon">{isExpanded ? '▼' : '▶'}</span>

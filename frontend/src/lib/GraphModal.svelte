@@ -3,10 +3,17 @@
   import TemperatureGraph from "./TemperatureGraph.svelte";
   import type { SensorReading } from "./api";
 
-  export let isOpen = false;
-  export let readings: SensorReading[] = [];
-  export let selectedMetric: "temperature" | "humidity" | null = null;
-  export let sensorName: string;
+  let {
+    isOpen = $bindable(false),
+    readings,
+    selectedMetric,
+    sensorName
+  }: {
+    isOpen?: boolean;
+    readings: SensorReading[];
+    selectedMetric: "temperature" | "humidity" | null;
+    sensorName: string;
+  } = $props();
 
   function close() {
     isOpen = false;
@@ -35,7 +42,7 @@
 {#if isOpen}
   <div
     class="modal-backdrop"
-    on:click={handleBackdropClick}
+    onclick={handleBackdropClick}
     role="presentation"
   >
     <div class="modal-content">
@@ -43,7 +50,7 @@
         <h2>{sensorName}</h2>
         <button
           class="close-button"
-          on:click={close}
+          onclick={close}
           type="button"
           aria-label="Close modal"
         >
