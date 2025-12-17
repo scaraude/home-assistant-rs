@@ -39,8 +39,11 @@ pub struct DeviceMqttMessage {
 
 impl DeviceMqttMessage {
     /// Extract common device state fields (battery, link quality)
-    pub fn extract_device_state(&self) -> (Option<u8>, Option<u8>) {
-        (self.linkquality, self.battery)
+    pub fn extract_device_state(&self) -> DeviceStateFields {
+        DeviceStateFields {
+            battery_level: self.battery,
+            link_quality: self.linkquality,
+        }
     }
 
     /// Check if this message contains sensor data for the given sensor type
@@ -57,6 +60,13 @@ impl DeviceMqttMessage {
             CommanderType::Switch => self.state.is_some(),
         }
     }
+}
+
+/// Strongly typed container for device state metrics extracted from MQTT payloads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DeviceStateFields {
+    pub battery_level: Option<u8>,
+    pub link_quality: Option<u8>,
 }
 
 /// Switch state enum

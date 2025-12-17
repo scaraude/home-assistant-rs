@@ -39,13 +39,13 @@ pub async fn handle_device_message(
         }
     };
 
-    let (battery, linkquality) = msg.extract_device_state();
+    let device_state_fields = msg.extract_device_state();
     // Publish device state event so downstream services can update stores/DB
     publish_device_state_event(
         event_bus,
         &device_id,
-        battery,
-        linkquality,
+        device_state_fields.battery_level,
+        device_state_fields.link_quality,
         publish_failures,
     );
 
