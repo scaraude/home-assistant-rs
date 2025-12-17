@@ -1,9 +1,10 @@
 use super::event_loop::spawn_event_loop;
 use crate::db::Database;
 use crate::events::bus::EventBus;
-use rumqttc::{AsyncClient, ClientError, MqttOptions, QoS};
 use crate::mqtt::topic::{ZIGBEE_NAMESPACE, ZigbeeTopic};
+use rumqttc::{AsyncClient, ClientError, MqttOptions, QoS};
 use std::sync::Arc;
+use tokio::sync::Mutex;
 use tracing::{debug, error, info};
 
 /// Unified MQTT client for both publishing commands and listening to messages.
@@ -12,6 +13,7 @@ use tracing::{debug, error, info};
 pub struct MqttClient {
     client: AsyncClient,
     event_bus: EventBus,
+    subscriptions: Arc<Mutex<Vec<(String, QoS)>>>,
 }
 
 impl MqttClient {
@@ -48,13 +50,21 @@ impl MqttClient {
         };
         let (async_client, eventloop) = AsyncClient::new(mqtt_options, cap);
         info!(queue_size = cap, "MQTT client created");
+        let subscriptions = Arc::new(Mutex::new(Vec::new()));
 
         // Spawn the event loop handler
-        spawn_event_loop(eventloop, db, event_bus.clone());
+        spawn_event_loop(
+            eventloop,
+            async_client.clone(),
+            db,
+            event_bus.clone(),
+            subscriptions.clone(),
+        );
 
         Self {
             client: async_client,
             event_bus,
+            subscriptions,
         }
     }
 
@@ -68,13 +78,12 @@ impl MqttClient {
             "Subscribing to MQTT topics"
         );
 
-        match self
-            .client
-            .subscribe(&subscription, QoS::AtMostOnce)
-            .await
-        {
+        let qos = QoS::AtMostOnce;
+
+        match self.client.subscribe(&subscription, qos).await {
             Ok(_) => {
                 info!("Successfully subscribed to Zigbee namespace topics");
+                self.remember_subscription(subscription.clone(), qos).await;
                 Ok(())
             }
             Err(e) => {
@@ -108,5 +117,17 @@ impl MqttClient {
                 Err(e)
             }
         }
+    }
+
+    async fn remember_subscription(&self, topic: String, qos: QoS) {
+        let mut guard = self.subscriptions.lock().await;
+        if guard
+            .iter()
+            .any(|(existing_topic, existing_qos)| existing_topic == &topic && *existing_qos == qos)
+        {
+            return;
+        }
+
+        guard.push((topic, qos));
     }
 }

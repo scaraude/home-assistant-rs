@@ -3,12 +3,19 @@ use crate::events::bus::EventBus;
 use crate::models::DeviceMqttMessage;
 use crate::mqtt::handlers::handle_device_message;
 use crate::mqtt::topic::ZigbeeTopic;
-use rumqttc::{Event, EventLoop, Packet};
+use rumqttc::{AsyncClient, Event, EventLoop, Packet, QoS};
 use std::sync::Arc;
+use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 
 /// Spawn the MQTT event loop handler
-pub(super) fn spawn_event_loop(mut eventloop: EventLoop, db: Arc<Database>, event_bus: EventBus) {
+pub(super) fn spawn_event_loop(
+    mut eventloop: EventLoop,
+    client: AsyncClient,
+    db: Arc<Database>,
+    event_bus: EventBus,
+    subscriptions: Arc<Mutex<Vec<(String, QoS)>>>,
+) {
     tokio::spawn(async move {
         info!("MQTT event loop started");
         let mut message_count = 0u64;
@@ -20,6 +27,33 @@ pub(super) fn spawn_event_loop(mut eventloop: EventLoop, db: Arc<Database>, even
 
         loop {
             match eventloop.poll().await {
+                Ok(Event::Incoming(Packet::ConnAck(connack))) => {
+                    info!(
+                        clean_session = !connack.session_present,
+                        "MQTT connection established"
+                    );
+
+                    if !connack.session_present {
+                        info!("MQTT session missing on broker - re-subscribing to topics");
+                        let topics = {
+                            let guard = subscriptions.lock().await;
+                            guard.clone()
+                        };
+
+                        for (topic, qos) in topics {
+                            match client.subscribe(topic.clone(), qos).await {
+                                Ok(_) => {
+                                    info!(topic = %topic, qos = ?qos, "Re-subscribed to MQTT topic")
+                                }
+                                Err(e) => {
+                                    error!(error = %e, topic = %topic, "Failed to re-subscribe to MQTT topic")
+                                }
+                            }
+                        }
+                    }
+
+                    continue;
+                }
                 Ok(Event::Incoming(Packet::Publish(p))) => {
                     message_count += 1;
                     debug!(
