@@ -13,28 +13,30 @@
   import { rulesByDevice } from "./stores/automations";
   import { dataCache } from "./stores/dataCache";
 
-  export let device: SwitchDevice;
+  let { device }: { device: SwitchDevice } = $props();
 
-  let isToggling = false;
-  let error: string | null = null;
-  let isEditingName = false;
-  let editedName = "";
+  let isToggling = $state(false);
+  let error = $state<string | null>(null);
+  let isEditingName = $state(false);
+  let editedName = $state("");
 
   // Automation expansion state
-  let isExpanded = false;
-  let deviceRules: AutomationRule[] = [];
-  let loadingRules = false;
-  let rulesError: string | null = null;
+  let isExpanded = $state(false);
+  let deviceRules = $state<AutomationRule[]>([]);
+  let loadingRules = $state(false);
+  let rulesError = $state<string | null>(null);
 
-  $: displayName = device.name || device.id;
-  $: deviceRulesFromStore = $rulesByDevice[device.id] || [];
-  $: ruleCount = deviceRulesFromStore.length;
-  $: shortId = device.id.slice(0, 16) + (device.id.length > 16 ? "..." : "");
-  $: timeAgo = device.last_seen
-    ? formatDistanceToNow(new Date(device.last_seen * 1000), {
-        addSuffix: true,
-      })
-    : "Never";
+  let displayName = $derived(device.name || device.id);
+  let deviceRulesFromStore = $derived($rulesByDevice[device.id] || []);
+  let ruleCount = $derived(deviceRulesFromStore.length);
+  let shortId = $derived(device.id.slice(0, 16) + (device.id.length > 16 ? "..." : ""));
+  let timeAgo = $derived(
+    device.last_seen
+      ? formatDistanceToNow(new Date(device.last_seen * 1000), {
+          addSuffix: true,
+        })
+      : "Never"
+  );
 
   async function toggleSwitch() {
     if (isToggling) return;
@@ -141,9 +143,11 @@
   }
 
   // Update deviceRules when store changes
-  $: if (isExpanded) {
-    deviceRules = deviceRulesFromStore;
-  }
+  $effect(() => {
+    if (isExpanded) {
+      deviceRules = deviceRulesFromStore;
+    }
+  });
 </script>
 
 <div class="switch-card">
@@ -166,15 +170,15 @@
           type="text"
           class="device-name-input"
           bind:value={editedName}
-          on:keydown={handleNameKeydown}
-          on:blur={saveName}
+          onkeydown={handleNameKeydown}
+          onblur={saveName}
           use:focusOnMount
         />
       {:else}
         <button
           class="device-name editable"
           title={device.id}
-          on:click={startEditingName}
+          onclick={startEditingName}
           type="button"
         >
           {displayName}
@@ -214,7 +218,7 @@
       class:on={device.state}
       class:loading={isToggling}
       disabled={isToggling}
-      on:click={toggleSwitch}
+      onclick={toggleSwitch}
       type="button"
     >
       {#if isToggling}
@@ -264,7 +268,7 @@
   <!-- Automation Rules Toggle Button -->
   <button
     class="automation-toggle-btn"
-    on:click={toggleExpansion}
+    onclick={toggleExpansion}
     aria-expanded={isExpanded}
     type="button"
   >

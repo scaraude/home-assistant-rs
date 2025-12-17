@@ -3,32 +3,33 @@
   import GraphModal from "./GraphModal.svelte";
   import LinkQualityBadge from "./LinkQualityBadge.svelte";
   import BatteryBadge from "./BatteryBadge.svelte";
-  import type { SensorData, DeviceState } from "./api";
+  import type { SensorData } from "./api";
   import { updateDeviceName, fetchDeviceState } from "./api";
   import { dataCache } from "./stores/dataCache";
   import { formatDistanceToNow } from "date-fns";
   import { onMount } from "svelte";
 
-  export let sensorData: SensorData;
-
-  let deviceState: DeviceState | null = null;
+  let { sensorData }: { sensorData: SensorData } = $props();
 
   type Metric = "temperature" | "humidity" | null;
-  let selectedMetric: Metric = null;
-  let isModalOpen = false;
-  let isEditingName = false;
-  let editedName = "";
-  let error: string | null = null;
+  let selectedMetric = $state<Metric>(null);
+  let isModalOpen = $state(false);
+  let isEditingName = $state(false);
+  let editedName = $state("");
+  let error = $state<string | null>(null);
 
-  $: latest = sensorData.latestReading;
-  $: displayName =
-    sensorData.name.slice(0, 16) + (sensorData.name.length > 16 ? "..." : "");
-  $: timeAgo = latest
-    ? formatDistanceToNow(new Date(latest.timestamp * 1000), {
-        addSuffix: true,
-      })
-    : "";
-  $: deviceId = latest?.device_id || "";
+  let latest = $derived(sensorData.latestReading);
+  let displayName = $derived(
+    sensorData.name.slice(0, 16) + (sensorData.name.length > 16 ? "..." : "")
+  );
+  let timeAgo = $derived(
+    latest
+      ? formatDistanceToNow(new Date(latest.timestamp * 1000), {
+          addSuffix: true,
+        })
+      : ""
+  );
+  let deviceId = $derived(latest?.device_id || "");
 
   function toggleMetric(metric: Metric) {
     if (selectedMetric === metric) {
@@ -103,9 +104,9 @@
     node.focus();
   }
 
-  $: deviceState = deviceId
-    ? ($dataCache.deviceStates[deviceId] ?? null)
-    : null;
+  let deviceState = $derived(
+    deviceId ? ($dataCache.deviceStates[deviceId] ?? null) : null
+  );
 
   async function loadDeviceState() {
     if (!deviceId) return;
@@ -125,9 +126,11 @@
   });
 
   // Reload device state when deviceId changes
-  $: if (deviceId) {
-    loadDeviceState();
-  }
+  $effect(() => {
+    if (deviceId) {
+      loadDeviceState();
+    }
+  });
 </script>
 
 <div class="sensor-card">
@@ -150,15 +153,15 @@
           type="text"
           class="sensor-name-input"
           bind:value={editedName}
-          on:keydown={handleNameKeydown}
-          on:blur={saveName}
+          onkeydown={handleNameKeydown}
+          onblur={saveName}
           use:focusOnMount
         />
       {:else}
         <button
           class="sensor-name editable"
           title={sensorData.name}
-          on:click={startEditingName}
+          onclick={startEditingName}
           type="button"
         >
           {displayName}
@@ -190,7 +193,7 @@
       <button
         class="reading-item"
         class:active={selectedMetric === "temperature"}
-        on:click={() => toggleMetric("temperature")}
+        onclick={() => toggleMetric("temperature")}
         type="button"
       >
         <div class="reading-icon">
@@ -215,7 +218,7 @@
         <button
           class="reading-item"
           class:active={selectedMetric === "humidity"}
-          on:click={() => toggleMetric("humidity")}
+          onclick={() => toggleMetric("humidity")}
           type="button"
         >
           <div class="reading-icon">
@@ -240,10 +243,10 @@
 
     <div
       class="graph-section"
-      on:click={openModal}
+      onclick={openModal}
       role="button"
       tabindex="0"
-      on:keydown={(e) => e.key === "Enter" && openModal()}
+      onkeydown={(e) => e.key === "Enter" && openModal()}
     >
       <TemperatureGraph readings={sensorData.history} {selectedMetric} />
       <div class="zoom-hint">
