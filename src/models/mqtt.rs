@@ -128,9 +128,44 @@ impl<'de> Deserialize<'de> for SwitchState {
     where
         D: Deserializer<'de>,
     {
-        let value = String::deserialize(deserializer)?;
-        SwitchState::from_mqtt_string(&value)
-            .ok_or_else(|| de::Error::custom(format!("invalid switch state: {}", value)))
+        struct SwitchStateVisitor;
+
+        impl<'de> de::Visitor<'de> for SwitchStateVisitor {
+            type Value = SwitchState;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a string (ON/OFF) or boolean")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                SwitchState::from_mqtt_string(value).ok_or_else(|| {
+                    de::Error::custom(format!("invalid switch state: {}", value))
+                })
+            }
+
+            fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                self.visit_str(&value)
+            }
+
+            fn visit_bool<E>(self, value: bool) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(if value {
+                    SwitchState::On
+                } else {
+                    SwitchState::Off
+                })
+            }
+        }
+
+        deserializer.deserialize_any(SwitchStateVisitor)
     }
 }
 
@@ -227,6 +262,7 @@ pub struct SwitchCommandMessage {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde::Deserialize;
 
     #[test]
     fn test_switch_state_from_mqtt_string() {
@@ -235,6 +271,20 @@ mod tests {
         assert_eq!(SwitchState::from_mqtt_string("OFF"), Some(SwitchState::Off));
         assert_eq!(SwitchState::from_mqtt_string("off"), Some(SwitchState::Off));
         assert_eq!(SwitchState::from_mqtt_string("invalid"), None);
+    }
+
+    #[test]
+    fn test_switch_state_deserializes_from_bool() {
+        #[derive(Deserialize)]
+        struct Wrapper {
+            state: SwitchState,
+        }
+
+        let on: Wrapper = serde_json::from_str(r#"{"state": true}"#).unwrap();
+        assert_eq!(on.state, SwitchState::On);
+
+        let off: Wrapper = serde_json::from_str(r#"{"state": false}"#).unwrap();
+        assert_eq!(off.state, SwitchState::Off);
     }
 
     #[test]
@@ -257,6 +307,23 @@ mod tests {
 
         assert!(msg.has_sensor_data(&SensorType::TempHumidity));
         assert!(!msg.has_sensor_data(&SensorType::Presence));
+    }
+
+    #[test]
+    fn test_extract_device_state_returns_struct_with_fields() {
+        let msg = DeviceMqttMessage {
+            linkquality: Some(10),
+            battery: Some(90),
+            temperature: None,
+            humidity: None,
+            occupancy: None,
+            state: None,
+            other: Default::default(),
+        };
+
+        let state = msg.extract_device_state();
+        assert_eq!(state.battery_level, Some(90));
+        assert_eq!(state.link_quality, Some(10));
     }
 
     #[test]
