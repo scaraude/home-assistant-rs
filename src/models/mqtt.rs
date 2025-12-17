@@ -141,9 +141,8 @@ impl<'de> Deserialize<'de> for SwitchState {
             where
                 E: de::Error,
             {
-                SwitchState::from_mqtt_string(value).ok_or_else(|| {
-                    de::Error::custom(format!("invalid switch state: {}", value))
-                })
+                SwitchState::from_mqtt_string(value)
+                    .ok_or_else(|| de::Error::custom(format!("invalid switch state: {}", value)))
             }
 
             fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
