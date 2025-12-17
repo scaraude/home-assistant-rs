@@ -15,7 +15,7 @@ export type SensorReadingEvent = {
 export type SwitchStateEvent = {
   event: 'switch_state';
   device_id: string;
-  state: boolean;
+  state: boolean | 'ON' | 'OFF';
   timestamp: number;
 };
 

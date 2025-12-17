@@ -53,6 +53,13 @@
     }
   }
 
+  function normalizeSwitchState(state: boolean | string): boolean {
+    if (typeof state === 'string') {
+      return state.toUpperCase() === 'ON';
+    }
+    return state;
+  }
+
   function handleEvent(event: SystemEvent) {
     switch (event.event) {
       case 'sensor_reading':
@@ -60,7 +67,7 @@
         break;
       case 'switch_state':
         dataCache.updateSwitchState(event.device_id, {
-          state: event.state,
+          state: normalizeSwitchState(event.state),
           last_seen: event.timestamp,
         });
         dataCache.updateDeviceState(event.device_id, { last_seen: event.timestamp });

@@ -1,12 +1,17 @@
 <script lang="ts">
   import type { SwitchDevice, AutomationRule } from "./api";
-  import { executeCommand, updateDeviceName, fetchAutomationRules } from "./api";
+  import {
+    executeCommand,
+    updateDeviceName,
+    fetchAutomationRules,
+  } from "./api";
   import { formatDistanceToNow } from "date-fns";
   import LinkQualityBadge from "./LinkQualityBadge.svelte";
   import BatteryBadge from "./BatteryBadge.svelte";
   import AutomationRulePanel from "./AutomationRulePanel.svelte";
   import { slide } from "svelte/transition";
   import { rulesByDevice } from "./stores/automations";
+  import { dataCache } from "./stores/dataCache";
 
   export let device: SwitchDevice;
 
@@ -25,9 +30,11 @@
   $: deviceRulesFromStore = $rulesByDevice[device.id] || [];
   $: ruleCount = deviceRulesFromStore.length;
   $: shortId = device.id.slice(0, 16) + (device.id.length > 16 ? "..." : "");
-  $: timeAgo = device.last_seen ? formatDistanceToNow(new Date(device.last_seen * 1000), {
-    addSuffix: true,
-  }) : "Never";
+  $: timeAgo = device.last_seen
+    ? formatDistanceToNow(new Date(device.last_seen * 1000), {
+        addSuffix: true,
+      })
+    : "Never";
 
   async function toggleSwitch() {
     if (isToggling) return;
@@ -43,6 +50,7 @@
 
     try {
       await executeCommand(device.id, newState);
+      dataCache.updateSwitchState(device.id, { state: newState });
     } catch (err) {
       // Revert on error
       device.state = previousState;
@@ -84,7 +92,8 @@
       // Revert on error
       device.name = previousName;
       isEditingName = true;
-      error = err instanceof Error ? err.message : "Failed to update device name";
+      error =
+        err instanceof Error ? err.message : "Failed to update device name";
       console.error("Failed to update device name:", err);
     }
   }
@@ -174,7 +183,9 @@
       <div class="device-id">{shortId}</div>
       <div
         class="last-update"
-        title={device.last_seen ? new Date(device.last_seen * 1000).toLocaleString() : 'Never'}
+        title={device.last_seen
+          ? new Date(device.last_seen * 1000).toLocaleString()
+          : "Never"}
       >
         {timeAgo}
       </div>
