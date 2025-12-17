@@ -11,4 +11,6 @@ pub use automation::{
 pub use device::{
     CommanderType, Device, DeviceCapability, DeviceInfo, DeviceState, PowerSource, SensorType,
 };
-pub use mqtt::{DeviceMqttMessage, SensorReading, SwitchCommand, SwitchCommandMessage, SwitchState};
+pub use mqtt::{
+    DeviceMqttMessage, SensorReading, SwitchCommand, SwitchCommandMessage, SwitchState,
+};

@@ -12,9 +12,9 @@ use hyper::{Method, Request, Response, StatusCode};
 use hyper_util::rt::TokioIo;
 use std::sync::Arc;
 use tokio::select;
+use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::tungstenite::handshake::derive_accept_key;
 use tokio_tungstenite::tungstenite::protocol::{Message, Role};
-use tokio_tungstenite::WebSocketStream;
 use tracing::{debug, error, info, warn};
 
 pub async fn handle_websocket_upgrade(
@@ -50,9 +50,7 @@ pub async fn handle_websocket_upgrade(
     Ok(response)
 }
 
-fn validate_websocket_request(
-    req: &Request<Incoming>,
-) -> Result<String, Response<Full<Bytes>>> {
+fn validate_websocket_request(req: &Request<Incoming>) -> Result<String, Response<Full<Bytes>>> {
     if req.method() != Method::GET {
         return Err(responses::bad_request_response(
             "WebSocket upgrade requires GET request",

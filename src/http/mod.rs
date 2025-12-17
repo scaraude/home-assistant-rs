@@ -5,10 +5,10 @@ mod static_files;
 pub mod websocket;
 
 use crate::db::Database;
+use crate::http::query::DeviceStatePath;
 use crate::mqtt::MqttClient;
 use crate::services::WebSocketBroadcaster;
 use crate::state::{DeviceStateStore, SwitchStateStore};
-use crate::http::query::DeviceStatePath;
 use http_body_util::Full;
 use hyper::body::Bytes;
 use hyper::server::conn::http1;

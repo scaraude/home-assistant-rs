@@ -317,8 +317,10 @@ impl AutomationService {
             }
         };
 
-        let payload = serde_json::to_string(&SwitchCommandMessage { state: desired_state })
-            .map_err(|e| format!("MQTT payload serialization error: {}", e))?;
+        let payload = serde_json::to_string(&SwitchCommandMessage {
+            state: desired_state,
+        })
+        .map_err(|e| format!("MQTT payload serialization error: {}", e))?;
 
         self.mqtt_client
             .publish_command(&mqtt_topic, &payload)

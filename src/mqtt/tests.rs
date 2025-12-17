@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod tests {
     use crate::models::{DeviceMqttMessage, SwitchState};
-    use crate::state::{DeviceStateStore, SwitchStateStore};
     use crate::mqtt::topic::ZigbeeTopic;
+    use crate::state::{DeviceStateStore, SwitchStateStore};
 
     // ==================== Message Parsing Tests ====================
 
@@ -208,24 +208,15 @@ mod tests {
 
         // Set to ON
         switch_state.set_state("switch_001".to_string(), SwitchState::On);
-        assert_eq!(
-            switch_state.get_state("switch_001"),
-            Some(SwitchState::On)
-        );
+        assert_eq!(switch_state.get_state("switch_001"), Some(SwitchState::On));
 
         // Toggle to OFF
         switch_state.set_state("switch_001".to_string(), SwitchState::Off);
-        assert_eq!(
-            switch_state.get_state("switch_001"),
-            Some(SwitchState::Off)
-        );
+        assert_eq!(switch_state.get_state("switch_001"), Some(SwitchState::Off));
 
         // Toggle back to ON
         switch_state.set_state("switch_001".to_string(), SwitchState::On);
-        assert_eq!(
-            switch_state.get_state("switch_001"),
-            Some(SwitchState::On)
-        );
+        assert_eq!(switch_state.get_state("switch_001"), Some(SwitchState::On));
     }
 
     #[test]
