@@ -1,8 +1,7 @@
 .PHONY: help build deploy install-deps setup-services start stop restart status logs clean backup restore
 
 # Configuration - Override these with environment variables or create a .env.deploy file
-PI_USER ?= ludovic
-PI_HOST ?= Gholam.local
+# PI_USER and PI_HOST should be set in .env.deploy for local setups.
 PI_IP ?= $(PI_HOST)
 SSH_KEY ?= ~/.ssh/id_rsa
 DEPLOY_DIR ?= /opt/home-automation-rs

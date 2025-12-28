@@ -71,7 +71,7 @@ The frontend performs an initial REST fetch, then stays synchronized via WebSock
 
 ```bash
 # Clone the repository
-git clone <repo-url>
+git clone https://github.com/scaraude/home-automation-rs
 cd home-automation-rs
 
 # Build for Raspberry Pi
@@ -163,8 +163,8 @@ make restore
 Set deployment variables in `.env.deploy` (or use defaults):
 
 ```bash
-PI_HOST=Gholam.local       # Raspberry Pi hostname/IP
-PI_USER=ludovic            # SSH user
+PI_HOST=raspberrypi.local           # SSH user
+PI_USER=pi
 RUST_TARGET=aarch64-unknown-linux-gnu
 DEPLOY_DIR=/opt/home-automation-rs
 ```
@@ -445,16 +445,12 @@ npm run check
 
 ```bash
 make status
-# Or manually:
-ssh <pi-user>@<pi-host> 'sudo systemctl status home-automation-rs'
 ```
 
 ### View Logs
 
 ```bash
 make logs-home-automation
-# Or manually:
-ssh <pi-user>@<pi-host> 'sudo journalctl -u home-automation-rs -f'
 ```
 
 ### Debug MQTT
