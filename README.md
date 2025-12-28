@@ -160,7 +160,13 @@ make restore
 
 ### Configuration
 
-Set deployment variables in `.env.deploy` (or use defaults):
+Copy the deployment template and edit it for your setup:
+
+```bash
+cp .env.deploy.example .env.deploy
+```
+
+Set deployment variables in `.env.deploy`:
 
 ```bash
 PI_HOST=raspberrypi.local           # SSH user

@@ -1,19 +1,7 @@
 .PHONY: help build deploy install-deps setup-services start stop restart status logs clean backup restore
 
-# Configuration - Override these with environment variables or create a .env.deploy file
-# PI_USER and PI_HOST should be set in .env.deploy for local setups.
-PI_IP ?= $(PI_HOST)
-SSH_KEY ?= ~/.ssh/id_rsa
-DEPLOY_DIR ?= /opt/home-automation-rs
-DATA_DIR ?= /var/lib/home-automation-rs
-LOG_DIR ?= /var/log/home-automation-rs
-ZIGBEE_DEVICE ?= /dev/ttyUSB0
-
-# Cross-compilation target for Raspberry Pi (adjust based on your Pi model)
-# For Pi 3/4 (32-bit OS): armv7-unknown-linux-gnueabihf
-# For Pi 3/4/Zero2W (64-bit OS): aarch64-unknown-linux-gnu
-# For Pi Zero/1: arm-unknown-linux-gnueabihf
-RUST_TARGET ?= aarch64-unknown-linux-gnu
+# Configuration - Set these in .env.deploy (see .env.deploy.example)
+PI_IP=$(PI_HOST)
 
 # Binary and service names
 BINARY_NAME = home-automation-rs
