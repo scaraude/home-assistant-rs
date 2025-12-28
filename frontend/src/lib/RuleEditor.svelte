@@ -33,14 +33,17 @@
 
   // Conditions
   interface ConditionForm {
+    id: number;
     device_id: string;
     field: string;
     operator: string;
     value: number;
   }
 
+  let conditionIdCounter = $state(rule?.conditions.length ?? 0);
   let conditions = $state<ConditionForm[]>(
-    rule?.conditions.map((c) => ({
+    rule?.conditions.map((c, i) => ({
+      id: i,
       device_id: c.device_id,
       field: c.field,
       operator: c.operator,
@@ -50,15 +53,20 @@
 
   // Actions
   interface ActionForm {
+    id: number;
     device_id: string;
     action: string;
   }
 
+  let actionIdCounter = $state(
+    rule?.actions.length ?? (targetDeviceId ? 1 : 0)
+  );
   let actions = $state<ActionForm[]>(
-    rule?.actions.map((a) => ({
+    rule?.actions.map((a, i) => ({
+      id: i,
       device_id: a.device_id,
       action: a.action,
-    })) || [{ device_id: targetDeviceId, action: "on" }]
+    })) || [{ id: 0, device_id: targetDeviceId, action: "on" }]
   );
 
   let saving = $state(false);
@@ -90,6 +98,7 @@
     conditions = [
       ...conditions,
       {
+        id: conditionIdCounter++,
         device_id: availableSensors[0]?.device_id || "",
         field: "temperature",
         operator: "greater_than",
@@ -98,22 +107,23 @@
     ];
   }
 
-  function removeCondition(index: number) {
-    conditions = conditions.filter((_, i) => i !== index);
+  function removeCondition(id: number) {
+    conditions = conditions.filter((c) => c.id !== id);
   }
 
   function addAction() {
     actions = [
       ...actions,
       {
+        id: actionIdCounter++,
         device_id: targetDeviceId,
         action: "on",
       },
     ];
   }
 
-  function removeAction(index: number) {
-    actions = actions.filter((_, i) => i !== index);
+  function removeAction(id: number) {
+    actions = actions.filter((a) => a.id !== id);
   }
 
   async function handleSubmit(event: SubmitEvent) {
@@ -151,6 +161,10 @@
     saving = true;
 
     try {
+      // Strip out the temporary id fields before sending to API
+      const conditionsForApi = conditions.map(({ id, ...rest }) => rest);
+      const actionsForApi = actions.map(({ id, ...rest }) => rest);
+
       if (isEditing && rule) {
         // Update existing rule
         const updates: UpdateAutomationRuleRequest = {
@@ -158,8 +172,8 @@
           description: description.trim() || undefined,
           enabled,
           condition_operator: conditionOperator,
-          conditions,
-          actions,
+          conditions: conditionsForApi,
+          actions: actionsForApi,
         };
 
         const updated = await updateAutomationRule(rule.id, updates);
@@ -171,8 +185,8 @@
           description: description.trim() || undefined,
           enabled,
           condition_operator: conditionOperator,
-          conditions,
-          actions,
+          conditions: conditionsForApi,
+          actions: actionsForApi,
         };
 
         const created = await createAutomationRule(newRule);
@@ -291,18 +305,18 @@
           </p>
 
           <div class="conditions-list">
-            {#each conditions as condition, index (index)}
+            {#each conditions as condition (condition.id)}
               <div class="condition-row">
                 <div class="condition-inputs">
                   <div class="input-group">
-                    <label for="condition-sensor-{index}">Sensor</label>
+                    <label for="condition-sensor-{condition.id}">Sensor</label>
                     <select
-                      id="condition-sensor-{index}"
+                      id="condition-sensor-{condition.id}"
                       bind:value={condition.device_id}
                       required
                     >
                       <option value="">Select sensor...</option>
-                      {#each availableSensors as sensor}
+                      {#each availableSensors as sensor (sensor.device_id)}
                         <option value={sensor.device_id}>
                           {sensor.name || sensor.device_id}
                         </option>
@@ -311,35 +325,35 @@
                   </div>
 
                   <div class="input-group">
-                    <label for="condition-field-{index}">Field</label>
+                    <label for="condition-field-{condition.id}">Field</label>
                     <select
-                      id="condition-field-{index}"
+                      id="condition-field-{condition.id}"
                       bind:value={condition.field}
                       required
                     >
-                      {#each fieldOptions as field}
+                      {#each fieldOptions as field (field.value)}
                         <option value={field.value}>{field.label}</option>
                       {/each}
                     </select>
                   </div>
 
                   <div class="input-group">
-                    <label for="condition-operator-{index}">Operator</label>
+                    <label for="condition-operator-{condition.id}">Operator</label>
                     <select
-                      id="condition-operator-{index}"
+                      id="condition-operator-{condition.id}"
                       bind:value={condition.operator}
                       required
                     >
-                      {#each operatorOptions as op}
+                      {#each operatorOptions as op (op.value)}
                         <option value={op.value}>{op.label}</option>
                       {/each}
                     </select>
                   </div>
 
                   <div class="input-group">
-                    <label for="condition-value-{index}">Value</label>
+                    <label for="condition-value-{condition.id}">Value</label>
                     <input
-                      id="condition-value-{index}"
+                      id="condition-value-{condition.id}"
                       type="number"
                       step="0.1"
                       bind:value={condition.value}
@@ -351,8 +365,9 @@
                 <button
                   type="button"
                   class="remove-btn"
-                  onclick={() => removeCondition(index)}
+                  onclick={() => removeCondition(condition.id)}
                   title="Remove condition"
+                  aria-label="Remove condition"
                   disabled={conditions.length === 1}
                 >
                   <svg
@@ -391,31 +406,31 @@
           </p>
 
           <div class="actions-list">
-            {#each actions as action, index (index)}
+            {#each actions as action (action.id)}
               <div class="action-row">
                 <div class="action-inputs">
                   <div class="input-group">
-                    <label for="action-switch-{index}">Switch</label>
+                    <label for="action-switch-{action.id}">Switch</label>
                     <select
-                      id="action-switch-{index}"
+                      id="action-switch-{action.id}"
                       bind:value={action.device_id}
                       required
                     >
                       <option value="">Select switch...</option>
-                      {#each availableSwitches as sw}
+                      {#each availableSwitches as sw (sw.id)}
                         <option value={sw.id}>{sw.name || sw.id}</option>
                       {/each}
                     </select>
                   </div>
 
                   <div class="input-group">
-                    <label for="action-type-{index}">Action</label>
+                    <label for="action-type-{action.id}">Action</label>
                     <select
-                      id="action-type-{index}"
+                      id="action-type-{action.id}"
                       bind:value={action.action}
                       required
                     >
-                      {#each actionOptions as act}
+                      {#each actionOptions as act (act.value)}
                         <option value={act.value}>{act.label}</option>
                       {/each}
                     </select>
@@ -425,8 +440,9 @@
                 <button
                   type="button"
                   class="remove-btn"
-                  onclick={() => removeAction(index)}
+                  onclick={() => removeAction(action.id)}
                   title="Remove action"
+                  aria-label="Remove action"
                   disabled={actions.length === 1}
                 >
                   <svg

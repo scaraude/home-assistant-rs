@@ -25,16 +25,22 @@
     Legend
   );
 
-  export let processName: string;
-  export let pid: string;
-  export let timeRange: '1h' | '6h' | '24h' | 'all' = '24h';
+  let {
+    processName,
+    pid,
+    timeRange = '24h'
+  }: {
+    processName: string;
+    pid: string;
+    timeRange?: '1h' | '6h' | '24h' | 'all';
+  } = $props();
 
-  let canvas: HTMLCanvasElement;
-  let chart: Chart | null = null;
-  let allEntries: ProcessMonitorEntry[] = [];
-  let filteredEntries: ProcessMonitorEntry[] = [];
-  let loading = true;
-  let error: string | null = null;
+  let canvas = $state<HTMLCanvasElement>();
+  let chart = $state<Chart | null>(null);
+  let allEntries = $state<ProcessMonitorEntry[]>([]);
+  let filteredEntries = $state<ProcessMonitorEntry[]>([]);
+  let loading = $state(true);
+  let error = $state<string | null>(null);
 
   // Map time ranges to hours
   const timeRangeToHours: Record<typeof timeRange, number> = {
@@ -54,8 +60,10 @@
     return entries.filter(e => new Date(e.timestamp).getTime() >= cutoffTime);
   }
 
-  // Reactive statement to filter entries when timeRange changes
-  $: filteredEntries = filterEntriesByTimeRange(allEntries);
+  // Filter entries when timeRange or allEntries changes
+  $effect(() => {
+    filteredEntries = filterEntriesByTimeRange(allEntries);
+  });
 
   // Load process history from backend on mount
   async function loadProcessHistory() {
@@ -93,10 +101,12 @@
     chart.update('none'); // Update without animation for instant response
   }
 
-  // Reactive statement to update chart when filtered data changes
-  $: if (chart && filteredEntries.length > 0) {
-    updateChartData();
-  }
+  // Update chart when filtered data changes
+  $effect(() => {
+    if (chart && filteredEntries.length > 0) {
+      updateChartData();
+    }
+  });
 
   function createChart() {
     if (!canvas || filteredEntries.length === 0) return;

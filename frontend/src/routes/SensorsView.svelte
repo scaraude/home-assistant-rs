@@ -23,10 +23,9 @@
     week: 168, // 7 days
   };
 
-  let selectedTimeRange: TimeRange = "24h";
-  let sensorData: SensorData[] = [];
-  let loading = true;
-  let error: string | null = null;
+  let selectedTimeRange = $state<TimeRange>("24h");
+  let loading = $state(true);
+  let error = $state<string | null>(null);
 
   // Build sensor data from readings
   function buildSensorData(
@@ -105,10 +104,10 @@
     void loadData(selectedTimeRange);
   });
 
-  $: sensorData = buildSensorData(
+  let sensorData = $derived(buildSensorData(
     $dataCache.sensors.devices,
     $dataCache.sensors.readings
-  );
+  ));
 </script>
 
 <div class="sensor-view">
@@ -119,28 +118,28 @@
       <button
         class="time-range-btn"
         class:active={selectedTimeRange === "1h"}
-        on:click={() => setTimeRange("1h")}
+        onclick={() => setTimeRange("1h")}
       >
         1h
       </button>
       <button
         class="time-range-btn"
         class:active={selectedTimeRange === "6h"}
-        on:click={() => setTimeRange("6h")}
+        onclick={() => setTimeRange("6h")}
       >
         6h
       </button>
       <button
         class="time-range-btn"
         class:active={selectedTimeRange === "24h"}
-        on:click={() => setTimeRange("24h")}
+        onclick={() => setTimeRange("24h")}
       >
         24h
       </button>
       <button
         class="time-range-btn"
         class:active={selectedTimeRange === "week"}
-        on:click={() => setTimeRange("week")}
+        onclick={() => setTimeRange("week")}
       >
         Week
       </button>
@@ -155,7 +154,7 @@
   {:else if error}
     <div class="error">
       <p>Error: {error}</p>
-      <button on:click={retryLoad}>Retry</button>
+      <button onclick={retryLoad}>Retry</button>
     </div>
   {:else if sensorData.length === 0}
     <div class="no-sensors">

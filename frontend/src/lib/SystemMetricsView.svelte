@@ -27,11 +27,15 @@
     zoomPlugin
   );
 
-  export let entries: SystemMonitorEntry[] = [];
+  let {
+    entries = []
+  }: {
+    entries?: SystemMonitorEntry[];
+  } = $props();
 
-  let combinedCanvas: HTMLCanvasElement;
-  let combinedChart: Chart | null = null;
-  let previousEntriesLength = 0;
+  let combinedCanvas = $state<HTMLCanvasElement>();
+  let combinedChart = $state<Chart | null>(null);
+  let previousEntriesLength = $state(0);
 
   function parseTimestamps() {
     return entries.map((e) => new Date(e.timestamp).getTime());
@@ -215,27 +219,29 @@
     if (combinedChart) combinedChart.destroy();
   });
 
-  $: if (entries && entries.length > 0) {
-    // If data length changed significantly (>20%), recreate chart to reset zoom
-    const lengthChangeRatio = Math.abs(entries.length - previousEntriesLength) / Math.max(previousEntriesLength, 1);
-    const significantChange = lengthChangeRatio > 0.2;
+  $effect(() => {
+    if (entries && entries.length > 0) {
+      // If data length changed significantly (>20%), recreate chart to reset zoom
+      const lengthChangeRatio = Math.abs(entries.length - previousEntriesLength) / Math.max(previousEntriesLength, 1);
+      const significantChange = lengthChangeRatio > 0.2;
 
-    if (!combinedChart) {
-      createCombinedChart();
-      previousEntriesLength = entries.length;
-    } else if (significantChange) {
-      // Destroy and recreate chart on significant data changes (time range change)
-      combinedChart.destroy();
-      combinedChart = null;
-      createCombinedChart();
-      previousEntriesLength = entries.length;
-    } else {
-      updateChart();
-      previousEntriesLength = entries.length;
+      if (!combinedChart) {
+        createCombinedChart();
+        previousEntriesLength = entries.length;
+      } else if (significantChange) {
+        // Destroy and recreate chart on significant data changes (time range change)
+        combinedChart.destroy();
+        combinedChart = null;
+        createCombinedChart();
+        previousEntriesLength = entries.length;
+      } else {
+        updateChart();
+        previousEntriesLength = entries.length;
+      }
     }
-  }
+  });
 
-  $: latestEntry = entries.length > 0 ? entries[entries.length - 1] : null;
+  let latestEntry = $derived(entries.length > 0 ? entries[entries.length - 1] : null);
 </script>
 
 <div class="system-metrics">
@@ -263,7 +269,7 @@
     <h3>System Metrics</h3>
     <div class="zoom-hint">Scroll to zoom • Drag to pan • Double-click to reset</div>
     <div class="graph-container-large">
-      <canvas bind:this={combinedCanvas} on:dblclick={handleCanvasDoubleClick}></canvas>
+      <canvas bind:this={combinedCanvas} ondblclick={handleCanvasDoubleClick}></canvas>
     </div>
   </div>
 </div>

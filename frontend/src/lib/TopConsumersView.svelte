@@ -2,13 +2,18 @@
   import type { TopConsumerEntry } from './api';
   import ProcessHistoryGraph from './ProcessHistoryGraph.svelte';
 
-  export let entries: TopConsumerEntry[] = [];
-  export let type: 'cpu' | 'ram' = 'cpu';
+  let {
+    entries = [],
+    type = 'cpu'
+  }: {
+    entries?: TopConsumerEntry[];
+    type?: 'cpu' | 'ram';
+  } = $props();
 
-  let expandedProcess: string | null = null;
+  let expandedProcess = $state<string | null>(null);
 
   // Get the latest snapshot (most recent timestamp)
-  $: latestEntries = getLatestSnapshot(entries);
+  let latestEntries = $derived(getLatestSnapshot(entries));
 
   function getLatestSnapshot(allEntries: TopConsumerEntry[]) {
     if (allEntries.length === 0) return [];
@@ -43,8 +48,8 @@
     return `${entry.process}-${entry.pid}`;
   }
 
-  $: maxCpu = latestEntries.length > 0 ? Math.max(...latestEntries.map((e) => e.cpu)) : 100;
-  $: maxRam = latestEntries.length > 0 ? Math.max(...latestEntries.map((e) => e.ram)) : 100;
+  let maxCpu = $derived(latestEntries.length > 0 ? Math.max(...latestEntries.map((e) => e.cpu)) : 100);
+  let maxRam = $derived(latestEntries.length > 0 ? Math.max(...latestEntries.map((e) => e.ram)) : 100);
 </script>
 
 <div class="top-consumers-container">
@@ -79,7 +84,7 @@
             <tr
               class="clickable-row"
               class:expanded={isExpanded}
-              on:click={() => toggleExpand(processKey)}
+              onclick={() => toggleExpand(processKey)}
             >
               <td>
                 <span class="rank-badge {getRankBadgeClass(entry.rank)}">

@@ -17,9 +17,9 @@
   };
 
   const DEFAULT_SENSOR_HOURS = 24;
-  let initializing = true;
-  let initError: string | null = null;
-  let initialLoadInFlight = false;
+  let initializing = $state(true);
+  let initError = $state<string | null>(null);
+  let initialLoadInFlight = $state(false);
 
   async function loadInitialData() {
     if (initialLoadInFlight) {
@@ -107,10 +107,10 @@
   });
 
   // Track current route for active state
-  $: currentPath = $location;
-  $: isOnSensors = currentPath === '/' || currentPath === '/sensors';
-  $: isOnCommander = currentPath === '/commander';
-  $: isOnLogs = currentPath === '/logs';
+  let currentPath = $derived($location);
+  let isOnSensors = $derived(currentPath === '/' || currentPath === '/sensors');
+  let isOnCommander = $derived(currentPath === '/commander');
+  let isOnLogs = $derived(currentPath === '/logs');
 </script>
 
 <main>
@@ -159,7 +159,7 @@
   {#if initError}
     <div class="init-error">
       <span>Failed to load initial data: {initError}</span>
-      <button type="button" on:click={retryInitialLoad}>Retry</button>
+      <button type="button" onclick={retryInitialLoad}>Retry</button>
     </div>
   {/if}
 

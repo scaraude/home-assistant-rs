@@ -1,17 +1,16 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import SwitchCard from '../lib/SwitchCard.svelte';
-  import { fetchSwitches, fetchAutomationRules, type SwitchDevice } from '../lib/api';
+  import { fetchSwitches, fetchAutomationRules } from '../lib/api';
   import { automationStore } from '../lib/stores/automations';
   import { dataCache } from '../lib/stores/dataCache';
   import { get } from 'svelte/store';
 
-  let switches: SwitchDevice[] = [];
-  let loading = true;
-  let error: string | null = null;
-  let isFetchingSwitches = false;
+  let loading = $state(true);
+  let error = $state<string | null>(null);
+  let isFetchingSwitches = $state(false);
 
-  $: switches = $dataCache.switches.devices.map((device) => ({ ...device }));
+  let switches = $derived($dataCache.switches.devices.map((device) => ({ ...device })));
 
   async function loadSwitches(force = false) {
     if (isFetchingSwitches) {
@@ -84,7 +83,7 @@
         </svg>
       </div>
       <p>Error: {error}</p>
-      <button on:click={() => loadSwitches(true)}>Retry</button>
+      <button onclick={() => loadSwitches(true)}>Retry</button>
     </div>
   {:else if switches.length === 0}
     <div class="no-switches">
