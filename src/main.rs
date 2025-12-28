@@ -26,7 +26,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    info!("🏠 Home Assistant RS - Starting...");
+    info!("🏠 Home Automation RS - Starting...");
 
     // Configuration from environment variables with defaults
     let mqtt_broker = std::env::var("MQTT_BROKER").unwrap_or_else(|_| "localhost".to_string());
@@ -37,7 +37,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let http_addr = std::env::var("HTTP_ADDR")
         .unwrap_or_else(|_| "0.0.0.0:8080".to_string())
         .parse()?;
-    let db_path = std::env::var("DB_PATH").unwrap_or_else(|_| "home_assistant.db".to_string());
+    let db_path = std::env::var("DB_PATH").unwrap_or_else(|_| "home_automation.db".to_string());
 
     debug!(
         mqtt_broker = %mqtt_broker,
@@ -79,7 +79,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mqtt_client = MqttClient::new(
         &mqtt_broker,
         mqtt_port,
-        "home-assistant-rs",
+        "home-automation-rs",
         Some(20),
         db.clone(),
         event_bus.clone(),

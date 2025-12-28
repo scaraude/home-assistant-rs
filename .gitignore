@@ -20,7 +20,7 @@ Thumbs.db
 
 # Docker & Deployment
 *.tar.gz
-home-assistant-rs
+home-automation-rs
 deploy/
 
 # Deployment artifacts

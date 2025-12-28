@@ -1,6 +1,6 @@
-# Home Assistant Frontend
+# Home Automation Frontend
 
-Lightweight Svelte frontend for the home-assistant-rs Raspberry Pi project.
+Lightweight Svelte frontend for the home-automation-rs Raspberry Pi project.
 
 ## Features
 
@@ -40,7 +40,7 @@ frontend/
 ### Prerequisites
 
 - Node.js 18+ and npm
-- Running home-assistant-rs backend (on Pi or localhost:8082)
+- Running home-automation-rs backend (on Pi or localhost:8082)
 
 ### Setup
 
@@ -115,7 +115,7 @@ proxy: {
 
 1. Build on Mac: `npm run build`
 2. Files are automatically placed in `../static/`
-3. Rebuild Docker image: `docker compose build home-assistant-rs`
+3. Rebuild Docker image: `docker compose build home-automation-rs`
 4. Deploy: `docker compose up -d`
 
 ### Automated Deployment (Future)

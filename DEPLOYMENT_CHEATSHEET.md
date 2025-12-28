@@ -55,7 +55,7 @@ make start
 make logs
 
 # Specific service logs
-make logs-home-assistant
+make logs-home-automation
 make logs-mosquitto
 make logs-zigbee2mqtt
 
@@ -101,19 +101,19 @@ If you SSH into the Pi (`make pi-shell`):
 
 ```bash
 # Check status
-sudo systemctl status home-assistant-rs
+sudo systemctl status home-automation-rs
 sudo systemctl status mosquitto
 sudo systemctl status zigbee2mqtt
 
 # Restart specific service
-sudo systemctl restart home-assistant-rs
+sudo systemctl restart home-automation-rs
 
 # View logs
-sudo journalctl -u home-assistant-rs -f
+sudo journalctl -u home-automation-rs -f
 
 # Enable/disable service
-sudo systemctl enable home-assistant-rs
-sudo systemctl disable home-assistant-rs
+sudo systemctl enable home-automation-rs
+sudo systemctl disable home-automation-rs
 ```
 
 ## USB Zigbee Device
@@ -141,13 +141,13 @@ Generated configs are in `configs/`:
 
 Systemd services are in `systemd/`:
 
-- `home-assistant-rs.service`
+- `home-automation-rs.service`
 - `mosquitto.service`
 - `zigbee2mqtt.service`
 
 ## URLs After Deployment
 
-- Home Assistant RS: `http://raspberrypi.local:8080`
+- Home Automation RS: `http://raspberrypi.local:8080`
 - Zigbee2MQTT UI: `http://raspberrypi.local:8081`
 
 ## Full Command Reference

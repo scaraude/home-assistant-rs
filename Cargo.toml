@@ -1,5 +1,5 @@
 [package]
-name = "home-assistant-rs"
+name = "home-automation-rs"
 version = "0.1.0"
 edition = "2024"
 

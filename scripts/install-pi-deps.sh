@@ -5,7 +5,7 @@
 set -e  # Exit on error
 
 echo "=================================="
-echo "Installing Home Assistant RS Dependencies"
+echo "Installing Home Automation RS Dependencies"
 echo "=================================="
 
 # Update system

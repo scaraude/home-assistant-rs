@@ -13,7 +13,7 @@
 
   type TimeRange = "1h" | "6h" | "24h" | "week";
 
-  const TIME_RANGE_KEY = "homeAssistant:sensorTimeRange";
+  const TIME_RANGE_KEY = "homeAutomation:sensorTimeRange";
 
   // Map time ranges to hours
   const timeRangeToHours: Record<TimeRange, number> = {

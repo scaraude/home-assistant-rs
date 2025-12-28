@@ -5,9 +5,9 @@ PI_USER ?= ludovic
 PI_HOST ?= Gholam.local
 PI_IP ?= $(PI_HOST)
 SSH_KEY ?= ~/.ssh/id_rsa
-DEPLOY_DIR ?= /opt/home-assistant-rs
-DATA_DIR ?= /var/lib/home-assistant-rs
-LOG_DIR ?= /var/log/home-assistant-rs
+DEPLOY_DIR ?= /opt/home-automation-rs
+DATA_DIR ?= /var/lib/home-automation-rs
+LOG_DIR ?= /var/log/home-automation-rs
 ZIGBEE_DEVICE ?= /dev/ttyUSB0
 
 # Cross-compilation target for Raspberry Pi (adjust based on your Pi model)
@@ -17,8 +17,8 @@ ZIGBEE_DEVICE ?= /dev/ttyUSB0
 RUST_TARGET ?= aarch64-unknown-linux-gnu
 
 # Binary and service names
-BINARY_NAME = home-assistant-rs
-SERVICE_FILES = home-assistant-rs.service mosquitto.service zigbee2mqtt.service system-monitor.service
+BINARY_NAME = home-automation-rs
+SERVICE_FILES = home-automation-rs.service mosquitto.service zigbee2mqtt.service system-monitor.service
 
 # Colors for output
 COLOR_RESET = \033[0m
@@ -28,7 +28,7 @@ COLOR_YELLOW = \033[33m
 COLOR_BLUE = \033[34m
 
 help: ## Show this help message
-	@echo "$(COLOR_BOLD)Home Assistant RS - Deployment Makefile$(COLOR_RESET)"
+	@echo "$(COLOR_BOLD)Home Automation RS - Deployment Makefile$(COLOR_RESET)"
 	@echo ""
 	@echo "$(COLOR_BLUE)Configuration:$(COLOR_RESET)"
 	@echo "  PI_USER=$(PI_USER)"
@@ -130,16 +130,16 @@ setup-services: check-ssh ## Install and enable systemd services
 		sudo systemctl daemon-reload && \
 		sudo systemctl enable mosquitto.service && \
 		sudo systemctl enable zigbee2mqtt.service && \
-		sudo systemctl enable home-assistant-rs.service && \
+		sudo systemctl enable home-automation-rs.service && \
 		sudo systemctl enable system-monitor.service"
 	@echo "$(COLOR_GREEN)✓ Services configured$(COLOR_RESET)"
 
 generate-service-files: ## Generate systemd service files
 	@echo "$(COLOR_BLUE)Generating systemd service files...$(COLOR_RESET)"
 	@mkdir -p systemd
-	# Home Assistant RS service
+	# Home Automation RS service
 	@echo "[Unit]\n\
-Description=Home Assistant RS - Rust-based Home Automation\n\
+Description=Home Automation RS - Rust-based Home Automation\n\
 After=mosquitto.service\n\
 Requires=mosquitto.service\n\
 \n\
@@ -151,11 +151,11 @@ EnvironmentFile=$(DEPLOY_DIR)/.env\n\
 ExecStart=$(DEPLOY_DIR)/bin/$(BINARY_NAME)\n\
 Restart=always\n\
 RestartSec=10\n\
-StandardOutput=append:$(LOG_DIR)/home-assistant-rs.log\n\
-StandardError=append:$(LOG_DIR)/home-assistant-rs-error.log\n\
+StandardOutput=append:$(LOG_DIR)/home-automation-rs.log\n\
+StandardError=append:$(LOG_DIR)/home-automation-rs-error.log\n\
 \n\
 [Install]\n\
-WantedBy=multi-user.target" > systemd/home-assistant-rs.service
+WantedBy=multi-user.target" > systemd/home-automation-rs.service
 	# Mosquitto service (override default if needed)
 	@echo "[Unit]\n\
 Description=Mosquitto MQTT Broker\n\
@@ -217,9 +217,7 @@ persistence_location $(DATA_DIR)/mosquitto/data/\n\
 log_dest file $(DATA_DIR)/mosquitto/log/mosquitto.log\n\
 log_dest stdout" > configs/mosquitto.conf
 	# Zigbee2MQTT config
-	@echo "homeassistant:\n\
-  enabled: false\n\
-mqtt:\n\
+	@echo "mqtt:\n\
   server: mqtt://localhost:1883\n\
 serial:\n\
   port: $(ZIGBEE_DEVICE)\n\
@@ -233,7 +231,7 @@ data_path: $(DATA_DIR)/zigbee2mqtt" > configs/zigbee2mqtt-config.yaml
 	@echo "MQTT_BROKER=localhost\n\
 MQTT_PORT=1883\n\
 HTTP_ADDR=0.0.0.0:8082\n\
-DB_PATH=$(DATA_DIR)/database/home_assistant.db" > configs/pi.env
+DB_PATH=$(DATA_DIR)/database/home_automation.db" > configs/pi.env
 	@echo "$(COLOR_GREEN)✓ Configuration files generated in configs/$(COLOR_RESET)"
 
 install-zigbee2mqtt: check-ssh ## Install Zigbee2MQTT on Raspberry Pi
@@ -263,14 +261,14 @@ deploy-full: ## Full deployment (build, transfer, configure, and start services)
 
 deploy: deploy-full ## Alias for deploy-full
 
-quick-deploy: 
+quick-deploy:
 	@echo "$(COLOR_BLUE)Stopping services...$(COLOR_RESET)"
-	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "sudo systemctl stop home-assistant-rs.service"
+	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "sudo systemctl stop home-automation-rs.service"
 	@echo "$(COLOR_GREEN)✓ Service stopped$(COLOR_RESET)"
-	$(MAKE) build transfer-binary restart-home-assistant ## Quick deploy: build, transfer binary, and restart service
+	$(MAKE) build transfer-binary restart-home-automation ## Quick deploy: build, transfer binary, and restart service
 	@echo "$(COLOR_GREEN)✓ Quick deployment complete$(COLOR_RESET)"
 
-quick-deploy-frontend: check-ssh transfer-frontend restart-home-assistant ## Quick deploy frontend only
+quick-deploy-frontend: check-ssh transfer-frontend restart-home-automation ## Quick deploy frontend only
 	@echo "$(COLOR_GREEN)✓ Frontend quick deployment complete$(COLOR_RESET)"
 	
 start: check-ssh ## Start all services on Raspberry Pi
@@ -278,7 +276,7 @@ start: check-ssh ## Start all services on Raspberry Pi
 	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "\
 		sudo systemctl start mosquitto.service && \
 		sudo systemctl start zigbee2mqtt.service && \
-		sudo systemctl start home-assistant-rs.service && \
+		sudo systemctl start home-automation-rs.service && \
 		sudo systemctl start system-monitor.service"
 	@echo "$(COLOR_GREEN)✓ Services started$(COLOR_RESET)"
 	@sleep 2
@@ -287,7 +285,7 @@ start: check-ssh ## Start all services on Raspberry Pi
 stop: check-ssh ## Stop all services on Raspberry Pi
 	@echo "$(COLOR_BLUE)Stopping services...$(COLOR_RESET)"
 	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "\
-		sudo systemctl stop home-assistant-rs.service; \
+		sudo systemctl stop home-automation-rs.service; \
 		sudo systemctl stop zigbee2mqtt.service; \
 		sudo systemctl stop mosquitto.service; \
 		sudo systemctl stop system-monitor.service"
@@ -298,20 +296,20 @@ restart: check-ssh ## Restart all services on Raspberry Pi
 	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "\
 		sudo systemctl restart mosquitto.service && \
 		sudo systemctl restart zigbee2mqtt.service && \
-		sudo systemctl restart home-assistant-rs.service && \
+		sudo systemctl restart home-automation-rs.service && \
 		sudo systemctl restart system-monitor.service"
 	@echo "$(COLOR_GREEN)✓ Services restarted$(COLOR_RESET)"
 	@sleep 2
 	$(MAKE) status
 
-restart-home-assistant: check-ssh ## Restart all services on Raspberry Pi
+restart-home-automation: check-ssh ## Restart home automation service on Raspberry Pi
 	@echo "$(COLOR_BLUE)Restarting services...$(COLOR_RESET)"
 	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "\
-		sudo systemctl restart home-assistant-rs.service"
+		sudo systemctl restart home-automation-rs.service"
 	@echo "$(COLOR_GREEN)✓ Services restarted$(COLOR_RESET)"
 	@ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "\
-		echo '$(COLOR_BOLD)Home Assistant RS:$(COLOR_RESET)' && \
-		sudo systemctl status home-assistant-rs.service --no-pager -l | head -n 10"
+		echo '$(COLOR_BOLD)Home Automation RS:$(COLOR_RESET)' && \
+		sudo systemctl status home-automation-rs.service --no-pager -l | head -n 10"
 
 status: check-ssh ## Check status of all services
 	@echo "$(COLOR_BLUE)Service Status:$(COLOR_RESET)"
@@ -322,8 +320,8 @@ status: check-ssh ## Check status of all services
 		echo '$(COLOR_BOLD)Zigbee2MQTT:$(COLOR_RESET)' && \
 		sudo systemctl status zigbee2mqtt.service --no-pager -l | head -n 10 && \
 		echo '' && \
-		echo '$(COLOR_BOLD)Home Assistant RS:$(COLOR_RESET)' && \
-		sudo systemctl status home-assistant-rs.service --no-pager -l | head -n 10 && \
+		echo '$(COLOR_BOLD)Home Automation RS:$(COLOR_RESET)' && \
+		sudo systemctl status home-automation-rs.service --no-pager -l | head -n 10 && \
 		echo '' && \
 		echo '$(COLOR_BOLD)System Monitor:$(COLOR_RESET)' && \
 		sudo systemctl status system-monitor.service --no-pager -l | head -n 10"
@@ -331,16 +329,16 @@ status: check-ssh ## Check status of all services
 logs: check-ssh ## Tail all service logs
 	@echo "$(COLOR_BLUE)Tailing logs (Ctrl+C to exit)...$(COLOR_RESET)"
 	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "\
-		sudo journalctl -f -u mosquitto.service -u zigbee2mqtt.service -u home-assistant-rs.service -u system-monitor.service"
+		sudo journalctl -f -u mosquitto.service -u zigbee2mqtt.service -u home-automation-rs.service -u system-monitor.service"
 
-logs-home-assistant: check-ssh ## Tail Home Assistant RS logs only
-	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "sudo tail -f -n 20 /var/log/home-assistant-rs/home-assistant-rs.log"
+logs-home-automation: check-ssh ## Tail Home Automation RS logs only
+	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "sudo tail -f -n 20 /var/log/home-automation-rs/home-automation-rs.log"
 
 logs-mosquitto: check-ssh ## Tail Mosquitto logs only
 	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "sudo journalctl -f -u mosquitto.service"
 
 logs-zigbee2mqtt: check-ssh ## Tail Zigbee2MQTT logs only
-	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "sudo tail -f -n 20 /var/log/home-assistant-rs/zigbee2mqtt.log"
+	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "sudo tail -f -n 20 /var/log/home-automation-rs/zigbee2mqtt.log"
 
 logs-monitor: check-ssh ## Tail System Monitor logs only
 	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "sudo journalctl -f -u system-monitor.service"
@@ -364,12 +362,12 @@ restore: check-ssh ## Restore from backup (usage: make restore BACKUP_FILE=backu
 	@echo "$(COLOR_BLUE)Restoring from $(BACKUP_FILE)...$(COLOR_RESET)"
 	scp -i $(SSH_KEY) $(BACKUP_FILE) $(PI_USER)@$(PI_IP):/tmp/restore.tar.gz
 	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "\
-		sudo systemctl stop home-assistant-rs.service zigbee2mqtt.service mosquitto.service && \
+		sudo systemctl stop home-automation-rs.service zigbee2mqtt.service mosquitto.service && \
 		cd $(DATA_DIR) && \
 		sudo tar -xzf /tmp/restore.tar.gz && \
 		sudo chown -R $(PI_USER):$(PI_USER) $(DATA_DIR) && \
 		rm /tmp/restore.tar.gz && \
-		sudo systemctl start mosquitto.service zigbee2mqtt.service home-assistant-rs.service"
+		sudo systemctl start mosquitto.service zigbee2mqtt.service home-automation-rs.service"
 	@echo "$(COLOR_GREEN)✓ Restore complete$(COLOR_RESET)"
 
 clean: ## Clean local build artifacts
@@ -382,9 +380,9 @@ clean-pi: check-ssh ## Remove all deployed files from Raspberry Pi (WARNING: des
 	@echo "$(COLOR_YELLOW)WARNING: This will remove all deployed files and data from the Pi$(COLOR_RESET)"
 	@echo -n "Are you sure? [y/N] " && read ans && [ $${ans:-N} = y ]
 	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "\
-		sudo systemctl stop home-assistant-rs.service zigbee2mqtt.service mosquitto.service && \
-		sudo systemctl disable home-assistant-rs.service zigbee2mqtt.service && \
-		sudo rm -f /etc/systemd/system/home-assistant-rs.service && \
+		sudo systemctl stop home-automation-rs.service zigbee2mqtt.service mosquitto.service && \
+		sudo systemctl disable home-automation-rs.service zigbee2mqtt.service && \
+		sudo rm -f /etc/systemd/system/home-automation-rs.service && \
 		sudo rm -f /etc/systemd/system/zigbee2mqtt.service && \
 		sudo systemctl daemon-reload && \
 		sudo rm -rf $(DEPLOY_DIR) $(DATA_DIR) $(LOG_DIR)"

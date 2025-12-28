@@ -1,4 +1,4 @@
-# Home Assistant RS
+# Home Automation RS
 
 A lightweight home automation service written in Rust, optimized for Raspberry Pi Zero 2W.
 
@@ -20,7 +20,7 @@ A lightweight home automation service written in Rust, optimized for Raspberry P
 
 ```
         ┌───────────────┐         ┌─────────────┐         ┌─────────────────┐
-        │  zigbee2mqtt  │         │  mosquitto  │         │ home-assistant  │
+        │  zigbee2mqtt  │         │  mosquitto  │         │ home-automation │
         │   (systemd)   │◄───────►│   (broker)  │◄───────►│      -rs        │
         │               │  pub/sub│  port 1883  │  pub/sub│   (systemd)     │
         │  Web: 8080    │         └─────────────┘         │   Web: 8082     │
@@ -72,7 +72,7 @@ The frontend performs an initial REST fetch, then stays synchronized via WebSock
 ```bash
 # Clone the repository
 git clone <repo-url>
-cd home-assistant-rs
+cd home-automation-rs
 
 # Build for Raspberry Pi
 make build
@@ -119,7 +119,7 @@ make build
 # Or manually with cross
 cross build --release --target aarch64-unknown-linux-gnu
 
-# Binary will be at: target/aarch64-unknown-linux-gnu/release/home-assistant-rs
+# Binary will be at: target/aarch64-unknown-linux-gnu/release/home-automation-rs
 ```
 
 The release build uses aggressive optimization for embedded systems:
@@ -148,10 +148,10 @@ make quick-deploy-frontend
 # Service management
 make start          # Start all services
 make stop           # Stop all services
-make restart        # Restart home-assistant-rs
+make restart        # Restart home-automation-rs
 make status         # Check service status
 make logs           # Tail all logs
-make logs-home-assistant  # Tail only home-assistant-rs logs
+make logs-home-automation  # Tail only home-automation-rs logs
 
 # Database backup
 make backup
@@ -166,7 +166,7 @@ Set deployment variables in `.env.deploy` (or use defaults):
 PI_HOST=Gholam.local       # Raspberry Pi hostname/IP
 PI_USER=ludovic            # SSH user
 RUST_TARGET=aarch64-unknown-linux-gnu
-DEPLOY_DIR=/opt/home-assistant-rs
+DEPLOY_DIR=/opt/home-automation-rs
 ```
 
 ### Services
@@ -175,7 +175,7 @@ The Makefile sets up 4 systemd services on the Pi:
 
 1. **mosquitto** - MQTT broker (port 1883)
 2. **zigbee2mqtt** - Zigbee coordinator bridge (front on port 8080)
-3. **home-assistant-rs** - This application (port 8082)
+3. **home-automation-rs** - This application (port 8082)
 4. **system-monitor** - System metrics collector (runs `monitor.sh`)
 
 All services start automatically on boot and communicate via MQTT on localhost.
@@ -300,7 +300,7 @@ CREATE TABLE automation_execution_log (
 New Zigbee devices are automatically discovered and registered:
 
 1. zigbee2mqtt publishes device announcement
-2. home-assistant-rs detects new device
+2. home-automation-rs detects new device
 3. Device is stored in database with capability metadata
 4. Appears in web UI immediately
 
@@ -446,15 +446,15 @@ npm run check
 ```bash
 make status
 # Or manually:
-ssh <pi-user>@<pi-host> 'sudo systemctl status home-assistant-rs'
+ssh <pi-user>@<pi-host> 'sudo systemctl status home-automation-rs'
 ```
 
 ### View Logs
 
 ```bash
-make logs-home-assistant
+make logs-home-automation
 # Or manually:
-ssh <pi-user>@<pi-host> 'sudo journalctl -u home-assistant-rs -f'
+ssh <pi-user>@<pi-host> 'sudo journalctl -u home-automation-rs -f'
 ```
 
 ### Debug MQTT
@@ -472,7 +472,7 @@ make backup
 
 # SSH to Pi and inspect
 ssh <pi-user>@<pi-host>
-sqlite3 /var/lib/home-assistant-rs/database/home_assistant.db
+sqlite3 /var/lib/home-automation-rs/database/home_automation.db
 ```
 
 ## Future Enhancements

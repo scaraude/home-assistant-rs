@@ -1,6 +1,6 @@
 # Deployment Guide for Raspberry Pi
 
-This guide covers deploying Home Assistant RS to a Raspberry Pi without Docker, using native systemd services.
+This guide covers deploying Home Automation RS to a Raspberry Pi without Docker, using native systemd services.
 
 ## Prerequisites
 
@@ -157,7 +157,7 @@ Run `make help` to see all available commands:
 ### Monitoring
 
 - `make logs` - Tail all service logs
-- `make logs-home-assistant` - Tail Home Assistant RS logs only
+- `make logs-home-automation` - Tail Home Automation RS logs only
 - `make logs-mosquitto` - Tail Mosquitto logs only
 - `make logs-zigbee2mqtt` - Tail Zigbee2MQTT logs only
 
@@ -197,7 +197,7 @@ make logs
 Or for a specific service:
 
 ```bash
-make logs-home-assistant
+make logs-home-automation
 ```
 
 ### Testing MQTT
@@ -218,31 +218,31 @@ The deployment sets up three systemd services:
 
    - Runs as `mosquitto` user
    - Listens on port 1883
-   - Data: `/var/lib/home-assistant-rs/mosquitto/`
+   - Data: `/var/lib/home-automation-rs/mosquitto/`
 
 2. **zigbee2mqtt.service** - Zigbee bridge
 
    - Runs as `pi` user (needs USB access)
    - Web UI on port 8081
-   - Config: `/var/lib/home-assistant-rs/zigbee2mqtt/`
+   - Config: `/var/lib/home-automation-rs/zigbee2mqtt/`
 
-3. **home-assistant-rs.service** - Your Rust application
+3. **home-automation-rs.service** - Your Rust application
    - Runs as `pi` user
    - Web UI on port 8080
-   - Binary: `/opt/home-assistant-rs/bin/home-assistant-rs`
+   - Binary: `/opt/home-automation-rs/bin/home-automation-rs`
 
 ### Directory Structure on Pi
 
 ```
-/opt/home-assistant-rs/          # Application directory
+/opt/home-automation-rs/          # Application directory
 ├── bin/
-│   └── home-assistant-rs        # Rust binary
+│   └── home-automation-rs        # Rust binary
 ├── static/                      # Frontend files
 └── .env                         # Environment variables
 
-/var/lib/home-assistant-rs/      # Data directory
+/var/lib/home-automation-rs/      # Data directory
 ├── database/
-│   └── home_assistant.db        # SQLite database
+│   └── home_automation.db       # SQLite database
 ├── mosquitto/
 │   ├── data/                    # Mosquitto persistence
 │   └── log/                     # Mosquitto logs
@@ -250,8 +250,8 @@ The deployment sets up three systemd services:
     ├── configuration.yaml       # Zigbee2MQTT config
     └── database.db             # Zigbee2MQTT database
 
-/var/log/home-assistant-rs/      # Log directory
-├── home-assistant-rs.log
+/var/log/home-automation-rs/      # Log directory
+├── home-automation-rs.log
 ├── zigbee2mqtt.log
 └── mosquitto.log
 
@@ -290,7 +290,7 @@ View detailed logs:
 
 ```bash
 ssh pi@raspberrypi.local
-sudo journalctl -u home-assistant-rs.service -n 50
+sudo journalctl -u home-automation-rs.service -n 50
 ```
 
 ### Zigbee Adapter Not Found
@@ -357,8 +357,8 @@ Generated automatically, but you can customize:
 listener 1883
 allow_anonymous true
 persistence true
-persistence_location /var/lib/home-assistant-rs/mosquitto/data/
-log_dest file /var/lib/home-assistant-rs/mosquitto/log/mosquitto.log
+persistence_location /var/lib/home-automation-rs/mosquitto/data/
+log_dest file /var/lib/home-automation-rs/mosquitto/log/mosquitto.log
 ```
 
 ### Zigbee2MQTT (`configs/zigbee2mqtt-config.yaml`)
@@ -372,7 +372,7 @@ serial:
   port: /dev/ttyUSB0
 frontend:
   port: 8081
-data_path: /var/lib/home-assistant-rs/zigbee2mqtt
+data_path: /var/lib/home-automation-rs/zigbee2mqtt
 ```
 
 ### Environment (`configs/pi.env`)
@@ -383,7 +383,7 @@ Application environment variables:
 MQTT_BROKER=localhost
 MQTT_PORT=1883
 HTTP_ADDR=0.0.0.0:8082
-DB_PATH=/var/lib/home-assistant-rs/database/home_assistant.db
+DB_PATH=/var/lib/home-automation-rs/database/home_automation.db
 ```
 
 ## Performance Optimization
@@ -426,7 +426,7 @@ This produces a small, efficient binary suitable for Raspberry Pi.
 3. **Firewall configuration**:
 
    ```bash
-   sudo ufw allow 8080/tcp  # Home Assistant RS
+   sudo ufw allow 8080/tcp  # Home Automation RS
    sudo ufw allow 8081/tcp  # Zigbee2MQTT (optional)
    sudo ufw enable
    ```
@@ -435,7 +435,7 @@ This produces a small, efficient binary suitable for Raspberry Pi.
 
 ## Next Steps
 
-- Access Home Assistant RS: `http://raspberrypi.local:8080`
+- Access Home Automation RS: `http://raspberrypi.local:8080`
 - Access Zigbee2MQTT UI: `http://raspberrypi.local:8081`
 - Pair Zigbee devices through Zigbee2MQTT interface
 - Monitor with `make logs`

@@ -1,4 +1,4 @@
-// API client for home-assistant-rs backend
+// API client for home-automation-rs backend
 
 export interface SensorReading {
   device_id: string;
@@ -245,7 +245,7 @@ export async function fetchLogViewSince(
 
 /**
  * Fetch full history for a specific process/PID combination
- * @param processName - The process name (e.g., "home-assistant-rs")
+ * @param processName - The process name (e.g., "home-automation-rs")
  * @param pid - The process ID
  * @param maxLines - Maximum number of lines to fetch (default: 10000)
  * @returns Process history entries

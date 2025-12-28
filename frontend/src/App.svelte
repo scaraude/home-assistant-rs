@@ -121,7 +121,7 @@
           <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
         </svg>
       </div>
-      <h1>Home Assistant</h1>
+      <h1>Home Automation</h1>
 
       <nav class="nav-buttons">
         <a

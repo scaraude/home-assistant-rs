@@ -135,7 +135,7 @@ mod tests {
 
     #[test]
     fn test_topic_not_zigbee2mqtt() {
-        let topic = "homeassistant/sensor/temp1";
+        let topic = "some/other/topic";
         assert!(!topic.starts_with("zigbee2mqtt/"));
         assert!(topic.strip_prefix("zigbee2mqtt/").is_none());
     }

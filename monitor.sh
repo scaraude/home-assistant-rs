@@ -7,7 +7,7 @@ TOP_RAM_CONSUMERS_LOG="$HOME/top_ram_consumers.log"
 INTERVAL=60  # seconds between measurements
 
 # Processes to monitor
-MONITORED_PROCESSES=("monitor.sh" "home-assistant-rs" "zigbee2mqtt" "mosquitto")
+MONITORED_PROCESSES=("monitor.sh" "home-automation-rs" "zigbee2mqtt" "mosquitto")
 
 # Create system log file with header if it doesn't exist
 if [ ! -f "$LOG_FILE" ]; then
