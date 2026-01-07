@@ -1,0 +1,48 @@
+<script lang="ts">
+  import GraphToolbar from "./GraphToolbar.svelte";
+  import UnifiedChart from "./UnifiedChart.svelte";
+  import { graphConfig } from "./stores/graphConfig";
+
+  let sensors = $derived($graphConfig.sensors);
+  let metric = $derived($graphConfig.metric);
+  let timeRange = $derived($graphConfig.timeRange);
+  let someHidden = $derived(sensors.some((s) => !s.visible));
+</script>
+
+<div class="graph-panel">
+  <div class="panel-header">
+    <GraphToolbar {someHidden} />
+  </div>
+
+  <div class="chart-wrapper">
+    <UnifiedChart {sensors} {metric} {timeRange} />
+  </div>
+</div>
+
+<style>
+  .graph-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    height: 100%;
+  }
+
+  .panel-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .chart-wrapper {
+    flex: 1;
+    min-height: 400px;
+    max-height: 800px;
+  }
+
+  @media (max-width: 768px) {
+    .chart-wrapper {
+      min-height: 300px;
+      max-height: 50vh;
+    }
+  }
+</style>

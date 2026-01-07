@@ -1,53 +1,15 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import SensorCard from "../lib/SensorCard.svelte";
-  import {
-    fetchSensors,
-    fetchReadings,
-    type SensorData,
-    type SensorReading,
-    type DeviceInfo,
-  } from "../lib/api";
+  import UnifiedGraphPanel from "../lib/UnifiedGraphPanel.svelte";
+  import SensorListPanel from "../lib/SensorListPanel.svelte";
+  import { fetchSensors, fetchReadings } from "../lib/api";
   import { dataCache } from "../lib/stores/dataCache";
+  import { graphConfig, TIME_RANGE_HOURS } from "../lib/stores/graphConfig";
   import { get } from "svelte/store";
 
-  type TimeRange = "1h" | "6h" | "24h" | "week";
-
-  const TIME_RANGE_KEY = "homeAutomation:sensorTimeRange";
-
-  // Map time ranges to hours
-  const timeRangeToHours: Record<TimeRange, number> = {
-    "1h": 1,
-    "6h": 6,
-    "24h": 24,
-    week: 168, // 7 days
-  };
-
-  let selectedTimeRange = $state<TimeRange>("24h");
   let loading = $state(true);
   let error = $state<string | null>(null);
 
-  // Build sensor data from readings
-  function buildSensorData(
-    sensors: DeviceInfo[],
-    readings: SensorReading[]
-  ): SensorData[] {
-    return sensors.map(({ device_id, name }) => {
-      const sensorReadings = readings
-        .filter((r) => r.device_id === device_id)
-        .sort((a, b) => a.timestamp - b.timestamp);
-
-      return {
-        device_id,
-        name,
-        latestReading: sensorReadings[sensorReadings.length - 1] || null,
-        history: sensorReadings,
-      };
-    });
-  }
-
-  async function loadData(range: TimeRange, force = false) {
-    const hours = timeRangeToHours[range];
+  async function loadData(hours: number, force = false) {
     const sensorState = get(dataCache).sensors;
 
     if (!force && sensorState.loaded && sensorState.rangeHours === hours) {
@@ -70,6 +32,13 @@
         readingsResult.latestTimestamp ?? 0,
         hours
       );
+
+      // Initialize graphConfig sensors if not already done
+      const sensorIds = sensors.map(s => s.device_id);
+      if ($graphConfig.sensors.length === 0 ||
+          $graphConfig.sensors.length !== sensorIds.length) {
+        graphConfig.initializeSensors(sensorIds);
+      }
     } catch (err) {
       error = err instanceof Error ? err.message : "Failed to load sensor data";
     } finally {
@@ -77,75 +46,29 @@
     }
   }
 
-  function setTimeRange(range: TimeRange) {
-    if (selectedTimeRange === range) {
-      return;
-    }
-    selectedTimeRange = range;
-    localStorage.setItem(TIME_RANGE_KEY, range);
-    void loadData(range, true);
-  }
-
   function retryLoad() {
-    void loadData(selectedTimeRange, true);
+    const currentHours = TIME_RANGE_HOURS[$graphConfig.timeRange];
+    void loadData(currentHours, true);
   }
 
-  onMount(() => {
-    const savedTimeRange = localStorage.getItem(TIME_RANGE_KEY);
-    if (
-      savedTimeRange === "1h" ||
-      savedTimeRange === "6h" ||
-      savedTimeRange === "24h" ||
-      savedTimeRange === "week"
-    ) {
-      selectedTimeRange = savedTimeRange;
+  let previousTimeRange = $state($graphConfig.timeRange);
+
+  // Load data when time range changes
+  $effect(() => {
+    const currentHours = TIME_RANGE_HOURS[$graphConfig.timeRange];
+    const isInitialLoad = !get(dataCache).sensors.loaded;
+    const hasTimeRangeChanged = $graphConfig.timeRange !== previousTimeRange;
+
+    if (isInitialLoad) {
+      void loadData(currentHours);
+    } else if (hasTimeRangeChanged) {
+      previousTimeRange = $graphConfig.timeRange;
+      void loadData(currentHours, true);
     }
-
-    void loadData(selectedTimeRange);
   });
-
-  let sensorData = $derived(buildSensorData(
-    $dataCache.sensors.devices,
-    $dataCache.sensors.readings
-  ));
 </script>
 
 <div class="sensor-view">
-  <div class="sensor-header">
-    <h2>Sensors</h2>
-    <div class="time-range-selector">
-      <span class="time-range-label">Time range:</span>
-      <button
-        class="time-range-btn"
-        class:active={selectedTimeRange === "1h"}
-        onclick={() => setTimeRange("1h")}
-      >
-        1h
-      </button>
-      <button
-        class="time-range-btn"
-        class:active={selectedTimeRange === "6h"}
-        onclick={() => setTimeRange("6h")}
-      >
-        6h
-      </button>
-      <button
-        class="time-range-btn"
-        class:active={selectedTimeRange === "24h"}
-        onclick={() => setTimeRange("24h")}
-      >
-        24h
-      </button>
-      <button
-        class="time-range-btn"
-        class:active={selectedTimeRange === "week"}
-        onclick={() => setTimeRange("week")}
-      >
-        Week
-      </button>
-    </div>
-  </div>
-
   {#if loading}
     <div class="loading">
       <div class="spinner"></div>
@@ -156,15 +79,14 @@
       <p>Error: {error}</p>
       <button onclick={retryLoad}>Retry</button>
     </div>
-  {:else if sensorData.length === 0}
-    <div class="no-sensors">
-      <p>No sensors found</p>
-    </div>
   {:else}
-    <div class="sensor-grid">
-      {#each sensorData as sensor (sensor.name)}
-        <SensorCard sensorData={sensor} />
-      {/each}
+    <div class="unified-layout">
+      <div class="graph-section">
+        <UnifiedGraphPanel />
+      </div>
+      <div class="sensors-section">
+        <SensorListPanel />
+      </div>
     </div>
   {/if}
 </div>
@@ -172,61 +94,26 @@
 <style>
   .sensor-view {
     width: 100%;
+    height: 100%;
   }
 
-  .sensor-header {
+  .unified-layout {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1.5rem;
-    flex-wrap: wrap;
-    gap: 1rem;
+    flex-direction: column;
+    gap: 2rem;
+    height: 100%;
   }
 
-  .sensor-header h2 {
-    margin: 0;
-    font-size: 1.5rem;
-    font-weight: 600;
-    color: #111827;
+  .graph-section {
+    flex: 0 0 auto;
+    height: 60vh;
+    min-height: 400px;
+    max-height: 800px;
   }
 
-  .time-range-selector {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    background-color: #f9fafb;
-    padding: 0.25rem;
-    border-radius: 6px;
-    border: 1px solid #e5e7eb;
-  }
-
-  .time-range-label {
-    font-size: 0.8125rem;
-    color: #6b7280;
-    font-weight: 500;
-    padding: 0 0.5rem;
-  }
-
-  .time-range-btn {
-    padding: 0.375rem 0.75rem;
-    background: transparent;
-    border: none;
-    border-radius: 4px;
-    font-size: 0.8125rem;
-    font-weight: 500;
-    color: #6b7280;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-
-  .time-range-btn:hover {
-    background: #e5e7eb;
-    color: #111827;
-  }
-
-  .time-range-btn.active {
-    background: #3b82f6;
-    color: white;
+  .sensors-section {
+    flex: 1;
+    min-height: 0;
   }
 
   .loading {
@@ -280,39 +167,14 @@
     background: #2563eb;
   }
 
-  .no-sensors {
-    text-align: center;
-    padding: 4rem 0;
-    color: #6b7280;
-  }
-
-  .sensor-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 1.5rem;
-  }
-
-  @media (max-width: 640px) {
-    .sensor-grid {
-      grid-template-columns: 1fr;
+  @media (max-width: 768px) {
+    .graph-section {
+      height: 50vh;
+      min-height: 300px;
     }
 
-    .sensor-header {
-      flex-direction: column;
-      align-items: flex-start;
-    }
-
-    .sensor-header h2 {
-      font-size: 1.25rem;
-    }
-
-    .time-range-selector {
-      width: 100%;
-      justify-content: space-between;
-    }
-
-    .time-range-btn {
-      flex: 1;
+    .unified-layout {
+      gap: 1.5rem;
     }
   }
 </style>
