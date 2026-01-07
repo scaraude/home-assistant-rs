@@ -475,6 +475,86 @@ pub async fn execute_command(
 }
 
 #[derive(serde::Deserialize)]
+struct PermitJoinRequest {
+    value: bool,
+    time: Option<u64>,
+}
+
+#[derive(serde::Serialize)]
+struct PermitJoinPayload {
+    value: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    time: Option<u64>,
+}
+
+pub async fn permit_join(
+    req: Request<hyper::body::Incoming>,
+    mqtt: &Arc<Mutex<MqttClient>>,
+) -> Response<Full<Bytes>> {
+    debug!("Parsing permit join request body");
+
+    let body_bytes = match req.into_body().collect().await {
+        Ok(collected) => collected.to_bytes(),
+        Err(e) => {
+            error!(error = %e, "Failed to read request body");
+            return bad_request_response("Failed to read request body");
+        }
+    };
+
+    let request: PermitJoinRequest = match serde_json::from_slice::<PermitJoinRequest>(&body_bytes)
+    {
+        Ok(req) => {
+            debug!(
+                value = req.value,
+                time = req.time,
+                "Parsed permit join request"
+            );
+            req
+        }
+        Err(e) => {
+            error!(error = %e, "Failed to parse permit join JSON");
+            return bad_request_response(format!("Invalid JSON: {}", e).as_str());
+        }
+    };
+
+    let payload = PermitJoinPayload {
+        value: request.value,
+        time: if request.value {
+            Some(request.time.unwrap_or(180))
+        } else {
+            None
+        },
+    };
+
+    let payload_json = match serde_json::to_string(&payload) {
+        Ok(json) => json,
+        Err(e) => {
+            error!(error = %e, "Failed to serialize permit join payload");
+            return internal_error_response("Failed to serialize payload");
+        }
+    };
+
+    info!(
+        value = request.value,
+        time = payload.time,
+        payload = %payload_json,
+        "Publishing Zigbee2MQTT permit_join request"
+    );
+
+    let mqtt_guard = mqtt.lock().await;
+    match mqtt_guard
+        .publish_bridge_request("permit_join", &payload_json)
+        .await
+    {
+        Ok(_) => json_response(r#"{"status":"ok"}"#.into()),
+        Err(e) => {
+            error!(error = %e, "Failed to publish permit_join to MQTT");
+            internal_error_response(e.to_string().as_str())
+        }
+    }
+}
+
+#[derive(serde::Deserialize)]
 struct DeviceUpdate {
     name: String,
 }

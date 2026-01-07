@@ -4,6 +4,8 @@
 pub const ZIGBEE_NAMESPACE: &str = "zigbee2mqtt/";
 /// Bridge topics are emitted by Zigbee2MQTT itself and should be ignored.
 pub const BRIDGE_PREFIX: &str = "bridge/";
+/// Bridge request topics for Zigbee2MQTT (e.g. permit_join).
+pub const BRIDGE_REQUEST_PREFIX: &str = "bridge/request/";
 /// Suffix used for command topics (publish-only).
 pub const COMMAND_SUFFIX: &str = "/set";
 
@@ -44,5 +46,10 @@ impl<'a> ZigbeeTopic<'a> {
     /// Build a command topic for a device.
     pub fn command_topic(device_id: &str) -> String {
         format!("{ZIGBEE_NAMESPACE}{device_id}{COMMAND_SUFFIX}")
+    }
+
+    /// Build a bridge request topic (e.g. "permit_join").
+    pub fn bridge_request_topic(request: &str) -> String {
+        format!("{ZIGBEE_NAMESPACE}{BRIDGE_REQUEST_PREFIX}{request}")
     }
 }

@@ -308,6 +308,31 @@ export async function executeCommand(deviceId: string, state: boolean): Promise<
 }
 
 /**
+ * Open or close Zigbee permit join on Zigbee2MQTT.
+ * @param value - true to open the network, false to close it
+ * @param time - Optional duration in seconds when opening
+ */
+export async function setZigbeePermitJoin(value: boolean, time?: number): Promise<void> {
+  const payload: { value: boolean; time?: number } = { value };
+  if (value && time) {
+    payload.time = time;
+  }
+
+  const response = await fetch('/api/zigbee/permit_join', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(errorData.error || `Failed to update Zigbee permit join: ${response.statusText}`);
+  }
+}
+
+/**
  * Update a device name
  * @param deviceId - Device ID (e.g., "0x7cc6b6fffec90892")
  * @param name - New device name

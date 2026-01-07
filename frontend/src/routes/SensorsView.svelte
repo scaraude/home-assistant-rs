@@ -4,13 +4,13 @@
   import { fetchSensors, fetchReadings, fetchDeviceState } from "../lib/api";
   import { dataCache } from "../lib/stores/dataCache";
   import { graphConfig, TIME_RANGE_HOURS } from "../lib/stores/graphConfig";
-  import { get } from "svelte/store";
+  import { onMount } from "svelte";
 
   let loading = $state(true);
   let error = $state<string | null>(null);
 
   async function loadData(hours: number, force = false) {
-    const sensorState = get(dataCache).sensors;
+    const sensorState = $dataCache.sensors;
 
     if (!force && sensorState.loaded && sensorState.rangeHours === hours) {
       loading = false;
@@ -65,20 +65,24 @@
     void loadData(currentHours, true);
   }
 
-  let previousTimeRange = $state($graphConfig.timeRange);
-
-  // Load data when time range changes
-  $effect(() => {
+  // Load data on mount and when time range changes
+  onMount(() => {
     const currentHours = TIME_RANGE_HOURS[$graphConfig.timeRange];
-    const isInitialLoad = !get(dataCache).sensors.loaded;
-    const hasTimeRangeChanged = $graphConfig.timeRange !== previousTimeRange;
+    void loadData(currentHours);
+  });
 
-    if (isInitialLoad) {
-      void loadData(currentHours);
-    } else if (hasTimeRangeChanged) {
-      previousTimeRange = $graphConfig.timeRange;
+  // Watch for time range changes using $effect.pre for tracking
+  let previousTimeRange: string | undefined = $state(undefined);
+  $effect.pre(() => {
+    const currentTimeRange = $graphConfig.timeRange;
+
+    // Skip the initial run when previousTimeRange is undefined
+    if (previousTimeRange !== undefined && currentTimeRange !== previousTimeRange) {
+      const currentHours = TIME_RANGE_HOURS[currentTimeRange];
       void loadData(currentHours, true);
     }
+
+    previousTimeRange = currentTimeRange;
   });
 </script>
 

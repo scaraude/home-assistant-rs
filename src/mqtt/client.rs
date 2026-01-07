@@ -119,6 +119,36 @@ impl MqttClient {
         }
     }
 
+    /// Publish a bridge request (e.g. permit_join) to Zigbee2MQTT.
+    pub async fn publish_bridge_request(
+        &self,
+        request: &str,
+        payload: &str,
+    ) -> Result<(), ClientError> {
+        let topic = ZigbeeTopic::bridge_request_topic(request);
+
+        info!(
+            topic = %topic,
+            payload = %payload,
+            "Publishing MQTT bridge request"
+        );
+
+        match self
+            .client
+            .publish(&topic, QoS::AtLeastOnce, false, payload.as_bytes())
+            .await
+        {
+            Ok(_) => {
+                info!(topic = %topic, "Successfully published bridge request");
+                Ok(())
+            }
+            Err(e) => {
+                error!(error = %e, topic = %topic, "Failed to publish bridge request");
+                Err(e)
+            }
+        }
+    }
+
     async fn remember_subscription(&self, topic: String, qos: QoS) {
         let mut guard = self.subscriptions.lock().await;
         if guard
