@@ -25,6 +25,8 @@
     Legend
   );
 
+  type TimeRange = '24h' | '1w' | '1m' | '1y';
+
   let {
     processName,
     pid,
@@ -32,7 +34,7 @@
   }: {
     processName: string;
     pid: string;
-    timeRange?: '1h' | '6h' | '24h' | 'all';
+    timeRange?: TimeRange;
   } = $props();
 
   let canvas = $state<HTMLCanvasElement>();
@@ -42,21 +44,17 @@
   let loading = $state(true);
   let error = $state<string | null>(null);
 
-  // Map time ranges to hours
-  const timeRangeToHours: Record<typeof timeRange, number> = {
-    '1h': 1,
-    '6h': 6,
-    '24h': 24,
-    'all': Infinity,
+  // Map time ranges to milliseconds
+  const timeRangeToMs: Record<TimeRange, number> = {
+    '24h': 24 * 60 * 60 * 1000,
+    '1w': 7 * 24 * 60 * 60 * 1000,
+    '1m': 30 * 24 * 60 * 60 * 1000,
+    '1y': 365 * 24 * 60 * 60 * 1000,
   };
 
   // Filter entries based on time range
   function filterEntriesByTimeRange(entries: ProcessMonitorEntry[]): ProcessMonitorEntry[] {
-    if (timeRange === 'all') return entries;
-
-    const hoursToShow = timeRangeToHours[timeRange];
-    const cutoffTime = Date.now() - (hoursToShow * 60 * 60 * 1000);
-
+    const cutoffTime = Date.now() - timeRangeToMs[timeRange];
     return entries.filter(e => new Date(e.timestamp).getTime() >= cutoffTime);
   }
 

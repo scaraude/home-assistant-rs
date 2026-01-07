@@ -7,7 +7,7 @@
     timeRange = '24h'
   }: {
     entries?: ProcessMonitorEntry[];
-    timeRange?: '1h' | '6h' | '24h' | 'all';
+    timeRange?: '24h' | '1w' | '1m' | '1y';
   } = $props();
 
   let expandedProcess = $state<string | null>(null);

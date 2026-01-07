@@ -1,23 +1,22 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy } from "svelte";
   import {
     fetchLogView,
-    fetchLogViewSince,
     type SystemMonitorEntry,
     type ProcessMonitorEntry,
     type TopConsumerEntry,
     type LogEntry,
-  } from './api';
-  import SystemMetricsView from './SystemMetricsView.svelte';
-  import ProcessTableView from './ProcessTableView.svelte';
-  import TopConsumersView from './TopConsumersView.svelte';
-  import { cache } from './stores/cache';
+  } from "./api";
+  import SystemMetricsView from "./SystemMetricsView.svelte";
+  import ProcessTableView from "./ProcessTableView.svelte";
+  import TopConsumersView from "./TopConsumersView.svelte";
+  import { cache } from "./stores/cache";
 
-  type Tab = 'system' | 'processes' | 'top-cpu' | 'top-ram';
-  type TimeRange = '1h' | '6h' | '24h' | 'all';
+  type Tab = "system" | "processes" | "top-cpu" | "top-ram";
+  type TimeRange = "24h" | "1w" | "1m" | "1y";
 
-  let activeTab = $state<Tab>('system');
-  let selectedTimeRange = $state<TimeRange>('24h');
+  let activeTab = $state<Tab>("system");
+  let selectedTimeRange = $state<TimeRange>("24h");
   let systemEntries = $state<SystemMonitorEntry[]>([]);
   let processEntries = $state<ProcessMonitorEntry[]>([]);
   let topCpuEntries = $state<TopConsumerEntry[]>([]);
@@ -25,97 +24,97 @@
   let loading = $state(true);
   let error = $state<string | null>(null);
   let pollInterval = $state<number | null>(null);
-  let isFirstLoad = $state(true);
 
   // Map time ranges to approximate number of log lines
   // monitor.sh writes every 60 seconds, so 60 lines = 1 hour
   const timeRangeToLines: Record<TimeRange, number> = {
-    '1h': 60,      // 1 hour
-    '6h': 360,     // 6 hours
-    '24h': 1440,   // 24 hours
-    'all': 10000,  // All available data
+    "24h": 1440, // 24 hours
+    "1w": 10080, // 7 days
+    "1m": 43200, // 30 days
+    "1y": 525600, // 365 days
   };
+
+  // Time range in milliseconds for client-side filtering
+  const timeRangeToMs: Record<TimeRange, number> = {
+    "24h": 24 * 60 * 60 * 1000,
+    "1w": 7 * 24 * 60 * 60 * 1000,
+    "1m": 30 * 24 * 60 * 60 * 1000,
+    "1y": 365 * 24 * 60 * 60 * 1000,
+  };
+
+  // Filter entries by time range
+  function filterByTimeRange(entries: LogEntry[]): LogEntry[] {
+    const cutoff = Date.now() - timeRangeToMs[selectedTimeRange];
+    return entries.filter((e) => {
+      const ts = "timestamp" in e ? e.timestamp : "";
+      return new Date(ts).getTime() >= cutoff;
+    });
+  }
 
   async function loadLogFile(
     filename: string,
     filterFn: (e: any) => boolean
   ): Promise<LogEntry[]> {
-    const totalLines = cache.getLogTotalLines(filename);
+    // Always fetch based on time range (line count approximation)
+    const maxLines = timeRangeToLines[selectedTimeRange];
+    const result = await fetchLogView(filename, maxLines);
+    cache.setLogEntries(filename, result.entries, result.totalLines);
 
-    if (isFirstLoad || totalLines === 0) {
-      // Full load
-      const maxLines = timeRangeToLines[selectedTimeRange];
-      const result = await fetchLogView(filename, maxLines);
-      cache.setLogEntries(filename, result.entries, result.totalLines);
-      return result.entries.filter(filterFn);
-    } else {
-      // Delta load
-      const result = await fetchLogViewSince(filename, totalLines);
-      if (result.entries.length > 0) {
-        cache.mergeLogEntries(filename, result.entries, result.totalLines);
-      }
-
-      // Get all entries from cache
-      let allEntries: LogEntry[] = [];
-      cache.subscribe((state) => {
-        allEntries = state.logs[filename]?.entries || [];
-      })();
-
-      return allEntries.filter(filterFn);
-    }
+    // Apply type filter and time-based filter
+    const typeFiltered = result.entries.filter(filterFn) as LogEntry[];
+    return filterByTimeRange(typeFiltered);
   }
 
   async function loadSystemMetrics() {
     try {
       systemEntries = (await loadLogFile(
-        'system_monitor.log',
-        (e: any) => 'cpu_usage' in e
+        "system_monitor.log",
+        (e: any) => "cpu_usage" in e
       )) as SystemMonitorEntry[];
     } catch (e) {
-      console.error('Failed to load system metrics:', e);
-      error = 'Failed to load system metrics';
+      console.error("Failed to load system metrics:", e);
+      error = "Failed to load system metrics";
     }
   }
 
   async function loadProcessMetrics() {
     try {
       processEntries = (await loadLogFile(
-        'process_monitor.log',
-        (e: any) => 'process' in e && 'status' in e
+        "process_monitor.log",
+        (e: any) => "process" in e && "status" in e
       )) as ProcessMonitorEntry[];
     } catch (e) {
-      console.error('Failed to load process metrics:', e);
-      error = 'Failed to load process metrics';
+      console.error("Failed to load process metrics:", e);
+      error = "Failed to load process metrics";
     }
   }
 
   async function loadTopCpuConsumers() {
     try {
       topCpuEntries = (await loadLogFile(
-        'top_cpu_consumers.log',
-        (e: any) => 'rank' in e
+        "top_cpu_consumers.log",
+        (e: any) => "rank" in e
       )) as TopConsumerEntry[];
     } catch (e) {
-      console.error('Failed to load top CPU consumers:', e);
-      error = 'Failed to load top CPU consumers';
+      console.error("Failed to load top CPU consumers:", e);
+      error = "Failed to load top CPU consumers";
     }
   }
 
   async function loadTopRamConsumers() {
     try {
       topRamEntries = (await loadLogFile(
-        'top_ram_consumers.log',
-        (e: any) => 'rank' in e
+        "top_ram_consumers.log",
+        (e: any) => "rank" in e
       )) as TopConsumerEntry[];
     } catch (e) {
-      console.error('Failed to load top RAM consumers:', e);
-      error = 'Failed to load top RAM consumers';
+      console.error("Failed to load top RAM consumers:", e);
+      error = "Failed to load top RAM consumers";
     }
   }
 
-  async function loadAllData() {
-    // Only show loading spinner on first load
-    if (isFirstLoad) {
+  async function loadAllData(showSpinner = false) {
+    if (showSpinner) {
       loading = true;
     }
     error = null;
@@ -127,21 +126,19 @@
       loadTopRamConsumers(),
     ]);
 
-    if (isFirstLoad) {
-      loading = false;
-      isFirstLoad = false;
-    }
+    loading = false;
   }
 
   function setActiveTab(tab: Tab) {
     activeTab = tab;
   }
 
-  function setTimeRange(range: TimeRange) {
+  async function setTimeRange(range: TimeRange) {
+    if (range === selectedTimeRange) return;
     selectedTimeRange = range;
-    // Note: We don't clear cache or reload data anymore.
-    // Process graphs will filter client-side, and other views
-    // already show all data with time-based filtering in the graphs.
+    // Clear cache and reload with new time range
+    cache.clearAll();
+    await loadAllData(true);
   }
 
   onMount(() => {
@@ -164,34 +161,15 @@
     <div class="header-controls">
       <div class="time-range-selector">
         <span class="time-range-label">Time range:</span>
-        <button
-          class="time-range-btn"
-          class:active={selectedTimeRange === '1h'}
-          onclick={() => setTimeRange('1h')}
-        >
-          1h
-        </button>
-        <button
-          class="time-range-btn"
-          class:active={selectedTimeRange === '6h'}
-          onclick={() => setTimeRange('6h')}
-        >
-          6h
-        </button>
-        <button
-          class="time-range-btn"
-          class:active={selectedTimeRange === '24h'}
-          onclick={() => setTimeRange('24h')}
-        >
-          24h
-        </button>
-        <button
-          class="time-range-btn"
-          class:active={selectedTimeRange === 'all'}
-          onclick={() => setTimeRange('all')}
-        >
-          All
-        </button>
+        {#each ["24h", "1w", "1m", "1y"] as range (range)}
+          <button
+            class="time-range-btn"
+            class:active={selectedTimeRange === range}
+            onclick={() => setTimeRange(range as TimeRange)}
+          >
+            {range}
+          </button>
+        {/each}
       </div>
       {#if !loading && !error}
         <div class="refresh-indicator">Auto-refresh: 15s</div>
@@ -202,29 +180,29 @@
   <div class="tabs">
     <button
       class="tab"
-      class:active={activeTab === 'system'}
-      onclick={() => setActiveTab('system')}
+      class:active={activeTab === "system"}
+      onclick={() => setActiveTab("system")}
     >
       System Metrics
     </button>
     <button
       class="tab"
-      class:active={activeTab === 'processes'}
-      onclick={() => setActiveTab('processes')}
+      class:active={activeTab === "processes"}
+      onclick={() => setActiveTab("processes")}
     >
       Processes
     </button>
     <button
       class="tab"
-      class:active={activeTab === 'top-cpu'}
-      onclick={() => setActiveTab('top-cpu')}
+      class:active={activeTab === "top-cpu"}
+      onclick={() => setActiveTab("top-cpu")}
     >
       Top CPU
     </button>
     <button
       class="tab"
-      class:active={activeTab === 'top-ram'}
-      onclick={() => setActiveTab('top-ram')}
+      class:active={activeTab === "top-ram"}
+      onclick={() => setActiveTab("top-ram")}
     >
       Top RAM
     </button>
@@ -239,18 +217,19 @@
     {:else if error}
       <div class="error-state">
         <p>{error}</p>
-        <button onclick={loadAllData}>Retry</button>
+        <button onclick={() => loadAllData(true)}>Retry</button>
       </div>
-    {:else}
-      {#if activeTab === 'system'}
-        <SystemMetricsView entries={systemEntries} />
-      {:else if activeTab === 'processes'}
-        <ProcessTableView entries={processEntries} timeRange={selectedTimeRange} />
-      {:else if activeTab === 'top-cpu'}
-        <TopConsumersView entries={topCpuEntries} type="cpu" />
-      {:else if activeTab === 'top-ram'}
-        <TopConsumersView entries={topRamEntries} type="ram" />
-      {/if}
+    {:else if activeTab === "system"}
+      <SystemMetricsView entries={systemEntries} />
+    {:else if activeTab === "processes"}
+      <ProcessTableView
+        entries={processEntries}
+        timeRange={selectedTimeRange}
+      />
+    {:else if activeTab === "top-cpu"}
+      <TopConsumersView entries={topCpuEntries} type="cpu" />
+    {:else if activeTab === "top-ram"}
+      <TopConsumersView entries={topRamEntries} type="ram" />
     {/if}
   </div>
 </div>
