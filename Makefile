@@ -336,7 +336,7 @@ backup: check-ssh ## Backup database and configurations from Raspberry Pi
 	@BACKUP_NAME=backup-$$(date +%Y%m%d-%H%M%S).tar.gz && \
 	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "\
 		cd $(DATA_DIR) && \
-		tar -czf /tmp/$$BACKUP_NAME database/ zigbee2mqtt/configuration.yaml zigbee2mqtt/database.db mosquitto/data/" && \
+		sudo tar -czf /tmp/$$BACKUP_NAME database/ zigbee2mqtt/configuration.yaml zigbee2mqtt/database.db mosquitto/data/" && \
 	scp -i $(SSH_KEY) $(PI_USER)@$(PI_IP):/tmp/$$BACKUP_NAME backups/ && \
 	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "rm /tmp/$$BACKUP_NAME" && \
 	echo "$(COLOR_GREEN)✓ Backup saved to backups/$$BACKUP_NAME$(COLOR_RESET)"
