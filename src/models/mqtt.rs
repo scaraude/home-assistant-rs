@@ -60,6 +60,16 @@ impl DeviceMqttMessage {
             CommanderType::Switch => self.state.is_some(),
         }
     }
+
+    /// Heuristic for switch devices that publish config-only payloads before state changes.
+    pub fn has_switch_config_hint(&self) -> bool {
+        self.other.keys().any(|key| {
+            matches!(
+                key.as_str(),
+                "inching_control" | "inching_time" | "inching_mode" | "inching_control_set"
+            )
+        })
+    }
 }
 
 /// Strongly typed container for device state metrics extracted from MQTT payloads.

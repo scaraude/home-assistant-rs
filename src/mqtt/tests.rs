@@ -122,6 +122,23 @@ mod tests {
         assert_eq!(msg.humidity, Some(45.0));
     }
 
+    #[test]
+    fn test_switch_config_message_hint() {
+        let json = r#"{
+            "delayed_power_on_state": false,
+            "delayed_power_on_time": 27.5,
+            "detach_relay_mode": false,
+            "external_trigger_mode": "edge",
+            "linkquality": 105,
+            "network_indicator": true,
+            "turbo_mode": false
+        }"#;
+
+        let msg: DeviceMqttMessage = serde_json::from_str(json).unwrap();
+        assert_eq!(msg.state, None);
+        assert!(msg.has_switch_config_hint());
+    }
+
     // ==================== Topic Filtering Tests ====================
 
     #[test]
