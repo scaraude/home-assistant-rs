@@ -9,7 +9,7 @@ use crate::models::{
 };
 use crate::mqtt::MqttClient;
 use crate::state::{DeviceStateStore, SwitchStateStore};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Datelike, Local, Timelike, Utc};
 use tokio::sync::{RwLock, broadcast};
 use tracing::{debug, error, info, warn};
 
@@ -147,6 +147,15 @@ impl AutomationService {
                 continue;
             }
 
+            if !self.is_within_time_window(&rule) {
+                debug!(
+                    rule_id = %rule.id,
+                    rule_name = %rule.name,
+                    "Automation rule skipped due to time window"
+                );
+                continue;
+            }
+
             if self.evaluate_conditions(&rule).await {
                 info!(
                     rule_id = %rule.id,
@@ -186,6 +195,62 @@ impl AutomationService {
     async fn mark_triggered(&self, rule_id: &str) {
         let mut guard = self.last_triggered.write().await;
         guard.insert(rule_id.to_string(), Utc::now());
+    }
+
+    fn is_within_time_window(&self, rule: &AutomationRule) -> bool {
+        Self::is_within_time_window_at(rule, Local::now())
+    }
+
+    fn is_within_time_window_at(rule: &AutomationRule, now: DateTime<Local>) -> bool {
+        let window = &rule.time_window;
+        if !window.enabled {
+            return true;
+        }
+
+        let start_minutes = match window
+            .start_time
+            .as_deref()
+            .and_then(parse_time_minutes)
+        {
+            Some(minutes) => minutes,
+            None => {
+                error!(
+                    rule_id = %rule.id,
+                    rule_name = %rule.name,
+                    "Time window enabled but start_time is missing or invalid"
+                );
+                return false;
+            }
+        };
+
+        let end_minutes = match window.end_time.as_deref().and_then(parse_time_minutes) {
+            Some(minutes) => minutes,
+            None => {
+                error!(
+                    rule_id = %rule.id,
+                    rule_name = %rule.name,
+                    "Time window enabled but end_time is missing or invalid"
+                );
+                return false;
+            }
+        };
+
+        if let Some(active_days) = &window.active_days {
+            if active_days.is_empty() {
+                return false;
+            }
+            let today = now.weekday().num_days_from_sunday() as u8;
+            if !active_days.contains(&today) {
+                return false;
+            }
+        }
+
+        let now_minutes = now.hour() * 60 + now.minute();
+        if start_minutes <= end_minutes {
+            now_minutes >= start_minutes && now_minutes <= end_minutes
+        } else {
+            now_minutes >= start_minutes || now_minutes <= end_minutes
+        }
     }
 
     fn rule_targets_device(rule: &AutomationRule, device_id: &str) -> bool {
@@ -344,5 +409,97 @@ impl AutomationService {
                 "Failed to publish automation event"
             );
         }
+    }
+}
+
+fn parse_time_minutes(value: &str) -> Option<u32> {
+    let mut parts = value.split(':');
+    let hours = parts.next()?;
+    let minutes = parts.next()?;
+    if parts.next().is_some() {
+        return None;
+    }
+
+    let hours: u32 = hours.parse().ok()?;
+    let minutes: u32 = minutes.parse().ok()?;
+    if hours > 23 || minutes > 59 {
+        return None;
+    }
+
+    Some(hours * 60 + minutes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{AutomationRule, LogicalOperator, TimeWindow};
+    use chrono::TimeZone;
+
+    fn rule_with_window(window: TimeWindow) -> AutomationRule {
+        AutomationRule {
+            id: "rule1".to_string(),
+            name: "Test Rule".to_string(),
+            description: None,
+            enabled: true,
+            condition_operator: LogicalOperator::And,
+            conditions: vec![],
+            actions: vec![],
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            last_triggered_at: None,
+            trigger_count: 0,
+            time_window: window,
+        }
+    }
+
+    #[test]
+    fn time_window_disabled_allows() {
+        let rule = rule_with_window(TimeWindow::default());
+        let now = Local.with_ymd_and_hms(2024, 4, 5, 12, 0, 0).unwrap();
+        assert!(AutomationService::is_within_time_window_at(&rule, now));
+    }
+
+    #[test]
+    fn time_window_same_day_range() {
+        let rule = rule_with_window(TimeWindow {
+            enabled: true,
+            start_time: Some("08:00".to_string()),
+            end_time: Some("10:00".to_string()),
+            active_days: None,
+        });
+        let in_window = Local.with_ymd_and_hms(2024, 4, 5, 9, 0, 0).unwrap();
+        let out_window = Local.with_ymd_and_hms(2024, 4, 5, 11, 0, 0).unwrap();
+        assert!(AutomationService::is_within_time_window_at(&rule, in_window));
+        assert!(!AutomationService::is_within_time_window_at(&rule, out_window));
+    }
+
+    #[test]
+    fn time_window_overnight_range() {
+        let rule = rule_with_window(TimeWindow {
+            enabled: true,
+            start_time: Some("22:00".to_string()),
+            end_time: Some("06:00".to_string()),
+            active_days: None,
+        });
+        let late = Local.with_ymd_and_hms(2024, 4, 5, 23, 0, 0).unwrap();
+        let early = Local.with_ymd_and_hms(2024, 4, 6, 5, 0, 0).unwrap();
+        let midday = Local.with_ymd_and_hms(2024, 4, 5, 12, 0, 0).unwrap();
+        assert!(AutomationService::is_within_time_window_at(&rule, late));
+        assert!(AutomationService::is_within_time_window_at(&rule, early));
+        assert!(!AutomationService::is_within_time_window_at(&rule, midday));
+    }
+
+    #[test]
+    fn time_window_active_days() {
+        let rule = rule_with_window(TimeWindow {
+            enabled: true,
+            start_time: Some("08:00".to_string()),
+            end_time: Some("20:00".to_string()),
+            active_days: Some(vec![1, 3, 5]),
+        });
+        let monday = Local.with_ymd_and_hms(2024, 4, 1, 12, 0, 0).unwrap();
+        let tuesday = Local.with_ymd_and_hms(2024, 4, 2, 12, 0, 0).unwrap();
+        assert!(AutomationService::is_within_time_window_at(&rule, monday));
+        assert!(!AutomationService::is_within_time_window_at(&rule, tuesday));
     }
 }

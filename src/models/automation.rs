@@ -195,6 +195,9 @@ pub struct AutomationRule {
 
     /// Count of how many times the rule has been triggered
     pub trigger_count: i64,
+
+    /// Optional time window constraints for rule evaluation
+    pub time_window: TimeWindow,
 }
 
 impl AutomationRule {
@@ -218,8 +221,17 @@ impl AutomationRule {
             updated_at: now,
             last_triggered_at: None,
             trigger_count: 0,
+            time_window: TimeWindow::default(),
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct TimeWindow {
+    pub enabled: bool,
+    pub start_time: Option<String>,
+    pub end_time: Option<String>,
+    pub active_days: Option<Vec<u8>>,
 }
 
 /// Request payload for creating a new automation rule
@@ -231,6 +243,7 @@ pub struct CreateAutomationRuleRequest {
     pub condition_operator: LogicalOperator,
     pub conditions: Vec<CreateConditionRequest>,
     pub actions: Vec<CreateActionRequest>,
+    pub time_window: Option<TimeWindowRequest>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -256,6 +269,15 @@ pub struct UpdateAutomationRuleRequest {
     pub condition_operator: Option<LogicalOperator>,
     pub conditions: Option<Vec<CreateConditionRequest>>,
     pub actions: Option<Vec<CreateActionRequest>>,
+    pub time_window: Option<TimeWindowRequest>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct TimeWindowRequest {
+    pub enabled: Option<bool>,
+    pub start_time: Option<String>,
+    pub end_time: Option<String>,
+    pub active_days: Option<Vec<u8>>,
 }
 
 /// Execution log entry for an automation rule

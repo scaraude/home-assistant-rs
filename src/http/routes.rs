@@ -4,7 +4,7 @@ use crate::http::responses::*;
 use crate::logs::{self, LogFile};
 use crate::models::{
     AutomationAction, AutomationCondition, AutomationRule, CreateAutomationRuleRequest,
-    SwitchCommand, SwitchCommandMessage, UpdateAutomationRuleRequest,
+    SwitchCommand, SwitchCommandMessage, TimeWindowRequest, UpdateAutomationRuleRequest,
 };
 use crate::mqtt::MqttClient;
 use crate::state::{DeviceStateStore, SwitchStateStore};
@@ -878,6 +878,10 @@ pub async fn create_automation_rule(
         rule.enabled = enabled;
     }
 
+    if let Some(time_window) = request.time_window {
+        apply_time_window_update(&mut rule, time_window);
+    }
+
     // Insert into database
     match db.insert_automation_rule(&rule) {
         Ok(_) => {
@@ -972,6 +976,10 @@ pub async fn update_automation_rule(
             .collect();
     }
 
+    if let Some(time_window) = update.time_window {
+        apply_time_window_update(&mut rule, time_window);
+    }
+
     // Update timestamp
     rule.updated_at = chrono::Utc::now();
 
@@ -991,6 +999,24 @@ pub async fn update_automation_rule(
             error!(error = %e, rule_id = %rule_id, "Failed to update automation rule");
             internal_error_response(e.to_string().as_str())
         }
+    }
+}
+
+fn apply_time_window_update(rule: &mut AutomationRule, update: TimeWindowRequest) {
+    if let Some(enabled) = update.enabled {
+        rule.time_window.enabled = enabled;
+    }
+
+    if let Some(start_time) = update.start_time {
+        rule.time_window.start_time = Some(start_time);
+    }
+
+    if let Some(end_time) = update.end_time {
+        rule.time_window.end_time = Some(end_time);
+    }
+
+    if let Some(active_days) = update.active_days {
+        rule.time_window.active_days = Some(active_days);
     }
 }
 

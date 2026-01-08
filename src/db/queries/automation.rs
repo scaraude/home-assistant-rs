@@ -4,6 +4,7 @@ use crate::models::{
     ComparisonOperator, LogicalOperator, SensorField, SwitchAction,
 };
 use rusqlite::{Result, params};
+use serde_json;
 use tracing::{debug, error, info};
 
 use super::super::connection::{Database, MutexExt, Transaction};
@@ -25,9 +26,17 @@ impl Database {
         let tx = Transaction::begin(&conn)?;
 
         // Insert the rule
+        let active_days_json = match &rule.time_window.active_days {
+            Some(days) => Some(
+                serde_json::to_string(days)
+                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?,
+            ),
+            None => None,
+        };
+
         conn.execute(
-            "INSERT INTO automation_rules (id, name, description, enabled, condition_operator, created_at, updated_at, last_triggered_at, trigger_count)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            "INSERT INTO automation_rules (id, name, description, enabled, condition_operator, created_at, updated_at, last_triggered_at, trigger_count, time_window_enabled, time_window_start, time_window_end, active_days)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             params![
                 rule.id,
                 rule.name,
@@ -37,7 +46,11 @@ impl Database {
                 rule.created_at.timestamp(),
                 rule.updated_at.timestamp(),
                 rule.last_triggered_at.map(|dt| dt.timestamp()),
-                rule.trigger_count
+                rule.trigger_count,
+                if rule.time_window.enabled { 1 } else { 0 },
+                rule.time_window.start_time.clone(),
+                rule.time_window.end_time.clone(),
+                active_days_json
             ],
         )?;
 
@@ -93,7 +106,7 @@ impl Database {
 
         // Get all rules
         let mut stmt = conn.prepare(
-            "SELECT id, name, description, enabled, condition_operator, created_at, updated_at, last_triggered_at, trigger_count
+            "SELECT id, name, description, enabled, condition_operator, created_at, updated_at, last_triggered_at, trigger_count, time_window_enabled, time_window_start, time_window_end, active_days
              FROM automation_rules
              ORDER BY name",
         )?;
@@ -112,6 +125,10 @@ impl Database {
                 row.get::<_, i64>(6)?,         // updated_at
                 row.get::<_, Option<i64>>(7)?, // last_triggered_at
                 row.get::<_, i64>(8)?,         // trigger_count
+                row.get::<_, Option<i32>>(9)?, // time_window_enabled
+                row.get::<_, Option<String>>(10)?, // time_window_start
+                row.get::<_, Option<String>>(11)?, // time_window_end
+                row.get::<_, Option<String>>(12)?, // active_days
             ))
         })?;
 
@@ -128,6 +145,10 @@ impl Database {
                 updated_at,
                 last_triggered_at,
                 trigger_count,
+                time_window_enabled,
+                time_window_start,
+                time_window_end,
+                active_days_json,
             ) = rule_row_result?;
 
             let condition_operator = LogicalOperator::from_db_string(&condition_operator_str)
@@ -177,6 +198,24 @@ impl Database {
                 })?
                 .collect::<Result<Vec<_>>>()?;
 
+            let active_days = match active_days_json {
+                Some(json) => Some(
+                    serde_json::from_str::<Vec<u8>>(&json).map_err(|e| {
+                        error!(
+                            error = %e,
+                            rule_id = %id,
+                            "Failed to parse active_days JSON"
+                        );
+                        rusqlite::Error::FromSqlConversionFailure(
+                            12,
+                            rusqlite::types::Type::Text,
+                            Box::new(e),
+                        )
+                    })?,
+                ),
+                None => None,
+            };
+
             rules.push(AutomationRule {
                 id,
                 name,
@@ -190,6 +229,12 @@ impl Database {
                 last_triggered_at: last_triggered_at
                     .and_then(|ts| chrono::DateTime::from_timestamp(ts, 0)),
                 trigger_count,
+                time_window: crate::models::TimeWindow {
+                    enabled: time_window_enabled.unwrap_or(0) == 1,
+                    start_time: time_window_start,
+                    end_time: time_window_end,
+                    active_days,
+                },
             });
         }
 
@@ -222,16 +267,28 @@ impl Database {
         let tx = Transaction::begin(&conn)?;
 
         // Update the rule metadata
+        let active_days_json = match &rule.time_window.active_days {
+            Some(days) => Some(
+                serde_json::to_string(days)
+                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?,
+            ),
+            None => None,
+        };
+
         conn.execute(
             "UPDATE automation_rules
-             SET name = ?1, description = ?2, enabled = ?3, condition_operator = ?4, updated_at = ?5
-             WHERE id = ?6",
+             SET name = ?1, description = ?2, enabled = ?3, condition_operator = ?4, updated_at = ?5, time_window_enabled = ?6, time_window_start = ?7, time_window_end = ?8, active_days = ?9
+             WHERE id = ?10",
             params![
                 rule.name,
                 rule.description,
                 if rule.enabled { 1 } else { 0 },
                 rule.condition_operator.to_db_string(),
                 rule.updated_at.timestamp(),
+                if rule.time_window.enabled { 1 } else { 0 },
+                rule.time_window.start_time.clone(),
+                rule.time_window.end_time.clone(),
+                active_days_json,
                 rule.id
             ],
         )?;

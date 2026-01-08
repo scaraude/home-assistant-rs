@@ -407,10 +407,25 @@ export interface AutomationRule {
   condition_operator: 'and' | 'or';
   conditions: AutomationCondition[];
   actions: AutomationAction[];
+  time_window: TimeWindow;
   created_at: string;
   updated_at: string;
   last_triggered_at: string | null;
   trigger_count: number;
+}
+
+export interface TimeWindow {
+  enabled: boolean;
+  start_time: string | null;
+  end_time: string | null;
+  active_days: number[] | null;
+}
+
+export interface TimeWindowRequest {
+  enabled?: boolean;
+  start_time?: string;
+  end_time?: string;
+  active_days?: number[];
 }
 
 export interface CreateAutomationRuleRequest {
@@ -428,6 +443,7 @@ export interface CreateAutomationRuleRequest {
     device_id: string;
     action: string;
   }>;
+  time_window?: TimeWindowRequest;
 }
 
 export interface UpdateAutomationRuleRequest {
@@ -445,6 +461,7 @@ export interface UpdateAutomationRuleRequest {
     device_id: string;
     action: string;
   }>;
+  time_window?: TimeWindowRequest;
 }
 
 export interface AutomationExecutionLog {

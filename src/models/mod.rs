@@ -6,7 +6,7 @@ mod mqtt;
 pub use automation::{
     AutomationAction, AutomationCondition, AutomationExecutionLog, AutomationRule,
     ComparisonOperator, CreateAutomationRuleRequest, LogicalOperator, SensorField, SwitchAction,
-    UpdateAutomationRuleRequest,
+    TimeWindow, TimeWindowRequest, UpdateAutomationRuleRequest,
 };
 pub use device::{
     CommanderType, Device, DeviceCapability, DeviceInfo, DeviceState, PowerSource, SensorType,

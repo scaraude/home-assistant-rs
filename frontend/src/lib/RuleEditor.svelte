@@ -30,6 +30,11 @@
   let description = $state(rule?.description || "");
   let enabled = $state(rule?.enabled ?? true);
   let conditionOperator = $state<"and" | "or">(rule?.condition_operator || "and");
+  let timeWindowEnabled = $state(rule?.time_window?.enabled ?? false);
+  let timeWindowStart = $state(rule?.time_window?.start_time || "");
+  let timeWindowEnd = $state(rule?.time_window?.end_time || "");
+  let limitDays = $state(!!rule?.time_window?.active_days?.length);
+  let activeDays = $state<number[]>(rule?.time_window?.active_days ?? []);
 
   // Conditions
   interface ConditionForm {
@@ -94,6 +99,16 @@
     { value: "toggle", label: "Toggle" },
   ];
 
+  const dayOptions = [
+    { value: 0, label: "Sun" },
+    { value: 1, label: "Mon" },
+    { value: 2, label: "Tue" },
+    { value: 3, label: "Wed" },
+    { value: 4, label: "Thu" },
+    { value: 5, label: "Fri" },
+    { value: 6, label: "Sat" },
+  ];
+
   function addCondition() {
     conditions = [
       ...conditions,
@@ -124,6 +139,16 @@
 
   function removeAction(id: number) {
     actions = actions.filter((a) => a.id !== id);
+  }
+
+  function isValidTime(value: string) {
+    const match = /^(\d{2}):(\d{2})$/.exec(value);
+    if (!match) {
+      return false;
+    }
+    const hours = Number(match[1]);
+    const minutes = Number(match[2]);
+    return hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59;
   }
 
   async function handleSubmit(event: SubmitEvent) {
@@ -158,6 +183,18 @@
       return;
     }
 
+    if (timeWindowEnabled) {
+      if (!isValidTime(timeWindowStart) || !isValidTime(timeWindowEnd)) {
+        error = "Time window requires valid start and end times (HH:MM)";
+        return;
+      }
+
+      if (limitDays && activeDays.length === 0) {
+        error = "Select at least one active day or disable day filtering";
+        return;
+      }
+    }
+
     saving = true;
 
     try {
@@ -167,6 +204,9 @@
 
       if (isEditing && rule) {
         // Update existing rule
+        const activeDaysPayload = limitDays
+          ? activeDays.map((day) => Number(day))
+          : undefined;
         const updates: UpdateAutomationRuleRequest = {
           name: name.trim(),
           description: description.trim() || undefined,
@@ -174,12 +214,21 @@
           condition_operator: conditionOperator,
           conditions: conditionsForApi,
           actions: actionsForApi,
+          time_window: {
+            enabled: timeWindowEnabled,
+            start_time: timeWindowStart.trim() || undefined,
+            end_time: timeWindowEnd.trim() || undefined,
+            active_days: activeDaysPayload,
+          },
         };
 
         const updated = await updateAutomationRule(rule.id, updates);
         automationStore.updateRule(rule.id, updated);
       } else {
         // Create new rule
+        const activeDaysPayload = limitDays
+          ? activeDays.map((day) => Number(day))
+          : undefined;
         const newRule: CreateAutomationRuleRequest = {
           name: name.trim(),
           description: description.trim() || undefined,
@@ -187,6 +236,12 @@
           condition_operator: conditionOperator,
           conditions: conditionsForApi,
           actions: actionsForApi,
+          time_window: {
+            enabled: timeWindowEnabled,
+            start_time: timeWindowStart.trim() || undefined,
+            end_time: timeWindowEnd.trim() || undefined,
+            active_days: activeDaysPayload,
+          },
         };
 
         const created = await createAutomationRule(newRule);
@@ -270,6 +325,67 @@
               <span class="checkbox-text">Enable this rule immediately</span>
             </label>
           </div>
+        </div>
+
+        <!-- Time Window -->
+        <div class="form-section">
+          <h3 class="section-title">Time Window</h3>
+          <p class="section-description">
+            Limit when this rule can trigger. Times use the browser's local
+            timezone.
+          </p>
+
+          <div class="form-group checkbox-group">
+            <label class="checkbox-label">
+              <input type="checkbox" bind:checked={timeWindowEnabled} />
+              <span class="checkbox-text">Enable time window</span>
+            </label>
+          </div>
+
+          {#if timeWindowEnabled}
+            <div class="time-window-grid">
+              <div class="input-group">
+                <label for="time-window-start">Start time</label>
+                <input
+                  id="time-window-start"
+                  type="time"
+                  bind:value={timeWindowStart}
+                  required
+                />
+              </div>
+
+              <div class="input-group">
+                <label for="time-window-end">End time</label>
+                <input
+                  id="time-window-end"
+                  type="time"
+                  bind:value={timeWindowEnd}
+                  required
+                />
+              </div>
+            </div>
+
+            <div class="form-group checkbox-group">
+              <label class="checkbox-label">
+                <input type="checkbox" bind:checked={limitDays} />
+                <span class="checkbox-text">Limit to specific days</span>
+              </label>
+            </div>
+
+            {#if limitDays}
+              <div class="day-picker">
+                {#each dayOptions as day (day.value)}
+                  <label
+                    class="day-pill"
+                    class:active={activeDays.includes(day.value)}
+                  >
+                    <input type="checkbox" bind:group={activeDays} value={day.value} />
+                    <span>{day.label}</span>
+                  </label>
+                {/each}
+              </div>
+            {/if}
+          {/if}
         </div>
 
         <!-- Conditions -->
@@ -687,6 +803,7 @@
   }
 
   .form-group input[type="text"],
+  .form-group input[type="time"],
   .form-group textarea {
     width: 100%;
     padding: 0.75rem;
@@ -699,6 +816,7 @@
   }
 
   .form-group input[type="text"]:focus,
+  .form-group input[type="time"]:focus,
   .form-group textarea:focus {
     outline: none;
     border-color: #3b82f6;
@@ -781,7 +899,8 @@
   }
 
   .input-group select,
-  .input-group input[type="number"] {
+  .input-group input[type="number"],
+  .input-group input[type="time"] {
     padding: 0.625rem;
     border: 1px solid #d1d5db;
     border-radius: 6px;
@@ -792,10 +911,58 @@
   }
 
   .input-group select:focus,
-  .input-group input[type="number"]:focus {
+  .input-group input[type="number"]:focus,
+  .input-group input[type="time"]:focus {
     outline: none;
     border-color: #3b82f6;
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  }
+
+  .time-window-grid {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-bottom: 1.25rem;
+  }
+
+  .day-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+  }
+
+  .day-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 999px;
+    background: white;
+    color: #374151;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .day-pill input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .day-pill:hover {
+    border-color: #94a3b8;
+    color: #111827;
+  }
+
+  .day-pill.active {
+    background: #eff6ff;
+    border-color: #3b82f6;
+    color: #1d4ed8;
   }
 
   .remove-btn {
@@ -953,6 +1120,10 @@
     }
 
     .action-inputs {
+      grid-template-columns: 1fr;
+    }
+
+    .time-window-grid {
       grid-template-columns: 1fr;
     }
 

@@ -104,6 +104,27 @@
       deletingRuleId = null;
     }
   }
+
+  const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+  function formatActiveDays(days: number[] | null) {
+    if (!days || days.length === 0) {
+      return "Every day";
+    }
+    const unique = Array.from(new Set(days)).sort((a, b) => a - b);
+    return unique.map((day) => dayLabels[day] ?? String(day)).join(", ");
+  }
+
+  function formatTimeWindow(rule: AutomationRule) {
+    if (!rule.time_window?.enabled) {
+      return "Always active";
+    }
+
+    const start = rule.time_window.start_time || "??:??";
+    const end = rule.time_window.end_time || "??:??";
+    const daysLabel = formatActiveDays(rule.time_window.active_days);
+    return `${start}–${end} · ${daysLabel}`;
+  }
 </script>
 
 {#if showEditor}
@@ -265,6 +286,22 @@
                     </li>
                   {/each}
                 </ul>
+              </div>
+
+              <div class="rule-section">
+                <div class="section-header">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <path
+                      d="M12 7a1 1 0 0 1 1 1v4.38l2.44 1.41a1 1 0 1 1-1 1.74l-2.94-1.7A1 1 0 0 1 11 13V8a1 1 0 0 1 1-1zm0-5a10 10 0 1 1 0 20 10 10 0 0 1 0-20zm0 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16z"
+                    />
+                  </svg>
+                  <span class="section-label">Time Window</span>
+                </div>
+                <div class="time-window-summary">{formatTimeWindow(rule)}</div>
               </div>
 
               {#if rule.last_triggered_at}
@@ -702,6 +739,19 @@
 
   .action-type.on {
     color: #16a34a;
+  }
+
+  .time-window-summary {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #475569;
+    width: fit-content;
   }
 
   .rule-meta {

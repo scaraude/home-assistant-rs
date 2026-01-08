@@ -189,10 +189,15 @@ impl Database {
                 created_at INTEGER NOT NULL,
                 updated_at INTEGER NOT NULL,
                 last_triggered_at INTEGER,
-                trigger_count INTEGER DEFAULT 0
+                trigger_count INTEGER DEFAULT 0,
+                time_window_enabled INTEGER DEFAULT 0,
+                time_window_start TEXT,
+                time_window_end TEXT,
+                active_days TEXT
             )",
             [],
         )?;
+        self.ensure_automation_rule_columns(conn)?;
 
         // Create automation_conditions table
         debug!("Creating automation_conditions table if not exists");
@@ -255,5 +260,53 @@ impl Database {
         )?;
 
         Ok(())
+    }
+
+    fn ensure_automation_rule_columns(&self, conn: &rusqlite::Connection) -> Result<()> {
+        self.add_column_if_missing(
+            conn,
+            "automation_rules",
+            "time_window_enabled",
+            "INTEGER DEFAULT 0",
+        )?;
+        self.add_column_if_missing(conn, "automation_rules", "time_window_start", "TEXT")?;
+        self.add_column_if_missing(conn, "automation_rules", "time_window_end", "TEXT")?;
+        self.add_column_if_missing(conn, "automation_rules", "active_days", "TEXT")?;
+        Ok(())
+    }
+
+    fn add_column_if_missing(
+        &self,
+        conn: &rusqlite::Connection,
+        table: &str,
+        column: &str,
+        definition: &str,
+    ) -> Result<()> {
+        if self.column_exists(conn, table, column)? {
+            return Ok(());
+        }
+
+        debug!(table = %table, column = %column, "Adding missing column");
+        let sql = format!("ALTER TABLE {} ADD COLUMN {} {}", table, column, definition);
+        conn.execute(&sql, [])?;
+        Ok(())
+    }
+
+    fn column_exists(
+        &self,
+        conn: &rusqlite::Connection,
+        table: &str,
+        column: &str,
+    ) -> Result<bool> {
+        let pragma = format!("PRAGMA table_info({})", table);
+        let mut stmt = conn.prepare(&pragma)?;
+        let mut rows = stmt.query([])?;
+        while let Some(row) = rows.next()? {
+            let name: String = row.get(1)?;
+            if name == column {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 }

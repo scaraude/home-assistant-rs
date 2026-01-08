@@ -6,7 +6,7 @@ mod tests {
     use crate::models::{
         AutomationAction, AutomationCondition, AutomationExecutionLog, AutomationRule,
         CommanderType, ComparisonOperator, Device, DeviceCapability, LogicalOperator, PowerSource,
-        SensorField, SensorReading, SensorType, SwitchAction,
+        SensorField, SensorReading, SensorType, SwitchAction, TimeWindow,
     };
     use chrono::Utc;
     use tempfile::TempDir;
@@ -413,6 +413,7 @@ mod tests {
             updated_at: Utc::now(),
             last_triggered_at: None,
             trigger_count: 0,
+            time_window: TimeWindow::default(),
         };
 
         db.insert_automation_rule(&rule).unwrap();
@@ -443,6 +444,7 @@ mod tests {
             updated_at: Utc::now(),
             last_triggered_at: None,
             trigger_count: 0,
+            time_window: TimeWindow::default(),
         };
 
         let rule2 = AutomationRule {
@@ -457,6 +459,7 @@ mod tests {
             updated_at: Utc::now(),
             last_triggered_at: None,
             trigger_count: 0,
+            time_window: TimeWindow::default(),
         };
 
         db.insert_automation_rule(&rule1).unwrap();
@@ -482,6 +485,7 @@ mod tests {
             updated_at: Utc::now(),
             last_triggered_at: None,
             trigger_count: 0,
+            time_window: TimeWindow::default(),
         };
 
         db.insert_automation_rule(&rule).unwrap();
@@ -531,6 +535,7 @@ mod tests {
             updated_at: Utc::now(),
             last_triggered_at: None,
             trigger_count: 0,
+            time_window: TimeWindow::default(),
         };
 
         db.insert_automation_rule(&rule).unwrap();
@@ -556,6 +561,7 @@ mod tests {
             updated_at: Utc::now(),
             last_triggered_at: None,
             trigger_count: 0,
+            time_window: TimeWindow::default(),
         };
 
         db.insert_automation_rule(&rule).unwrap();
@@ -918,6 +924,7 @@ mod tests {
             updated_at: Utc::now(),
             last_triggered_at: None,
             trigger_count: 0,
+            time_window: TimeWindow::default(),
         };
 
         db.insert_automation_rule(&rule).unwrap();
