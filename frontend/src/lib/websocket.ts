@@ -1,9 +1,11 @@
 import { writable, type Readable } from 'svelte/store';
-import type { AutomationAction, SensorReading } from './api';
+import type { AutomationAction, SensorReading, LogEntry } from './api';
 
 type DeviceCapability =
   | { type: 'sensor'; sensor_type: 'temp_humidity' | 'presence' }
   | { type: 'commander'; commander_type: 'switch' };
+
+export type LogFile = 'system_monitor' | 'process_monitor' | 'top_cpu_consumers' | 'top_ram_consumers';
 
 export type SensorReadingEvent = {
   event: 'sensor_reading';
@@ -50,13 +52,21 @@ export type AutomationExecutedEvent = {
   timestamp: number;
 };
 
+export type LogEntriesEvent = {
+  event: 'log_entries';
+  log_file: LogFile;
+  entries: LogEntry[];
+  timestamp: number;
+};
+
 export type SystemEvent =
   | SensorReadingEvent
   | SwitchStateEvent
   | DeviceStateEvent
   | DeviceDiscoveredEvent
   | AutomationTriggeredEvent
-  | AutomationExecutedEvent;
+  | AutomationExecutedEvent
+  | LogEntriesEvent;
 
 class EventStreamClient {
   private socket: WebSocket | null = null;

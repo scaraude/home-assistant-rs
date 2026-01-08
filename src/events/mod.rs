@@ -2,6 +2,7 @@
 
 pub mod bus;
 
+use crate::logs::{LogEntry, LogFile};
 use crate::models::{AutomationAction, DeviceCapability, SensorReading, SwitchState};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -49,6 +50,13 @@ pub enum SystemEvent {
         #[serde(with = "chrono::serde::ts_seconds")]
         timestamp: DateTime<Utc>,
     },
+    /// New log entries from monitor.sh log files
+    LogEntries {
+        log_file: LogFile,
+        entries: Vec<LogEntry>,
+        #[serde(with = "chrono::serde::ts_seconds")]
+        timestamp: DateTime<Utc>,
+    },
 }
 
 impl SystemEvent {
@@ -61,6 +69,7 @@ impl SystemEvent {
             SystemEvent::DeviceDiscovered { .. } => "device_discovered",
             SystemEvent::AutomationTriggered { .. } => "automation_triggered",
             SystemEvent::AutomationExecuted { .. } => "automation_executed",
+            SystemEvent::LogEntries { .. } => "log_entries",
         }
     }
 }

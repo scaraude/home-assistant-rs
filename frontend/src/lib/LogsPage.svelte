@@ -1,19 +1,27 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import {
-    fetchLogView,
+    fetchLogsSince,
     type SystemMonitorEntry,
     type ProcessMonitorEntry,
     type TopConsumerEntry,
-    type LogEntry,
+    type TimeRange,
   } from "./api";
   import SystemMetricsView from "./SystemMetricsView.svelte";
   import ProcessTableView from "./ProcessTableView.svelte";
   import TopConsumersView from "./TopConsumersView.svelte";
   import { cache } from "./stores/cache";
+  import { eventStream, type LogEntriesEvent } from "./websocket";
 
   type Tab = "system" | "processes" | "top-cpu" | "top-ram";
-  type TimeRange = "24h" | "1w" | "1m" | "1y";
+
+  // Map tabs to log filenames
+  const TAB_TO_FILE: Record<Tab, string> = {
+    system: "system_monitor.log",
+    processes: "process_monitor.log",
+    "top-cpu": "top_cpu_consumers.log",
+    "top-ram": "top_ram_consumers.log",
+  };
 
   let activeTab = $state<Tab>("system");
   let selectedTimeRange = $state<TimeRange>("24h");
@@ -23,16 +31,9 @@
   let topRamEntries = $state<TopConsumerEntry[]>([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
-  let pollInterval = $state<number | null>(null);
 
-  // Map time ranges to approximate number of log lines
-  // monitor.sh writes every 60 seconds, so 60 lines = 1 hour
-  const timeRangeToLines: Record<TimeRange, number> = {
-    "24h": 1440, // 24 hours
-    "1w": 10080, // 7 days
-    "1m": 43200, // 30 days
-    "1y": 525600, // 365 days
-  };
+  // Track which tabs have been loaded for the current time range
+  let loadedTabs = $state<Set<Tab>>(new Set());
 
   // Time range in milliseconds for client-side filtering
   const timeRangeToMs: Record<TimeRange, number> = {
@@ -42,115 +43,147 @@
     "1y": 365 * 24 * 60 * 60 * 1000,
   };
 
-  // Filter entries by time range
-  function filterByTimeRange(entries: LogEntry[]): LogEntry[] {
+  // Filter entries by time range (for when we have cached data from a wider range)
+  function filterByTimeRange<T extends { timestamp: string }>(entries: T[]): T[] {
     const cutoff = Date.now() - timeRangeToMs[selectedTimeRange];
-    return entries.filter((e) => {
-      const ts = "timestamp" in e ? e.timestamp : "";
-      return new Date(ts).getTime() >= cutoff;
-    });
+    return entries.filter((e) => new Date(e.timestamp).getTime() >= cutoff);
   }
 
-  async function loadLogFile(
-    filename: string,
-    filterFn: (e: any) => boolean
-  ): Promise<LogEntry[]> {
-    // Always fetch based on time range (line count approximation)
-    const maxLines = timeRangeToLines[selectedTimeRange];
-    const result = await fetchLogView(filename, maxLines);
-    cache.setLogEntries(filename, result.entries, result.totalLines);
+  // Load data for a specific tab using the new efficient API
+  async function loadTabData(tab: Tab): Promise<void> {
+    const filename = TAB_TO_FILE[tab];
 
-    // Apply type filter and time-based filter
-    const typeFiltered = result.entries.filter(filterFn) as LogEntry[];
-    return filterByTimeRange(typeFiltered);
-  }
+    // Check if already loaded for this time range
+    if (cache.isLogLoaded(filename, selectedTimeRange)) {
+      // Use cached data
+      updateEntriesFromCache(tab);
+      return;
+    }
 
-  async function loadSystemMetrics() {
     try {
-      systemEntries = (await loadLogFile(
-        "system_monitor.log",
-        (e: any) => "cpu_usage" in e
-      )) as SystemMonitorEntry[];
+      const entries = await fetchLogsSince(filename, selectedTimeRange);
+      cache.setLogEntries(filename, entries, selectedTimeRange);
+      updateEntriesFromCache(tab);
     } catch (e) {
-      console.error("Failed to load system metrics:", e);
-      error = "Failed to load system metrics";
+      console.error(`Failed to load ${tab}:`, e);
+      throw e;
     }
   }
 
-  async function loadProcessMetrics() {
-    try {
-      processEntries = (await loadLogFile(
-        "process_monitor.log",
-        (e: any) => "process" in e && "status" in e
-      )) as ProcessMonitorEntry[];
-    } catch (e) {
-      console.error("Failed to load process metrics:", e);
-      error = "Failed to load process metrics";
+  // Update component state from cache
+  function updateEntriesFromCache(tab: Tab): void {
+    const filename = TAB_TO_FILE[tab];
+    const entries = cache.getLogEntries(filename);
+
+    switch (tab) {
+      case "system":
+        systemEntries = filterByTimeRange(
+          entries.filter((e): e is SystemMonitorEntry => "cpu_usage" in e)
+        );
+        break;
+      case "processes":
+        processEntries = filterByTimeRange(
+          entries.filter((e): e is ProcessMonitorEntry => "status" in e)
+        );
+        break;
+      case "top-cpu":
+        topCpuEntries = filterByTimeRange(
+          entries.filter((e): e is TopConsumerEntry => "rank" in e)
+        );
+        break;
+      case "top-ram":
+        topRamEntries = filterByTimeRange(
+          entries.filter((e): e is TopConsumerEntry => "rank" in e)
+        );
+        break;
     }
   }
 
-  async function loadTopCpuConsumers() {
-    try {
-      topCpuEntries = (await loadLogFile(
-        "top_cpu_consumers.log",
-        (e: any) => "rank" in e
-      )) as TopConsumerEntry[];
-    } catch (e) {
-      console.error("Failed to load top CPU consumers:", e);
-      error = "Failed to load top CPU consumers";
-    }
-  }
-
-  async function loadTopRamConsumers() {
-    try {
-      topRamEntries = (await loadLogFile(
-        "top_ram_consumers.log",
-        (e: any) => "rank" in e
-      )) as TopConsumerEntry[];
-    } catch (e) {
-      console.error("Failed to load top RAM consumers:", e);
-      error = "Failed to load top RAM consumers";
-    }
-  }
-
-  async function loadAllData(showSpinner = false) {
+  // Load data for the active tab only (lazy loading)
+  async function loadActiveTab(showSpinner = false): Promise<void> {
     if (showSpinner) {
       loading = true;
     }
     error = null;
 
-    await Promise.all([
-      loadSystemMetrics(),
-      loadProcessMetrics(),
-      loadTopCpuConsumers(),
-      loadTopRamConsumers(),
-    ]);
-
-    loading = false;
+    try {
+      await loadTabData(activeTab);
+      loadedTabs.add(activeTab);
+      loadedTabs = loadedTabs; // Trigger reactivity
+    } catch (e) {
+      console.error("Failed to load tab data:", e);
+      error = `Failed to load ${activeTab} data`;
+    } finally {
+      loading = false;
+    }
   }
 
-  function setActiveTab(tab: Tab) {
+  function setActiveTab(tab: Tab): void {
+    if (tab === activeTab) return;
     activeTab = tab;
+
+    // Load data for new tab if not already loaded
+    if (!loadedTabs.has(tab)) {
+      loadActiveTab(true);
+    } else {
+      // Refresh from cache (applies current time range filter)
+      updateEntriesFromCache(tab);
+    }
   }
 
-  async function setTimeRange(range: TimeRange) {
+  async function setTimeRange(range: TimeRange): Promise<void> {
     if (range === selectedTimeRange) return;
     selectedTimeRange = range;
-    // Clear cache and reload with new time range
-    cache.clearAll();
-    await loadAllData(true);
+
+    // Clear loaded tabs tracking - need to reload for new time range
+    loadedTabs.clear();
+    loadedTabs = loadedTabs;
+
+    // Clear cache and reload current tab
+    cache.clearAllLogs();
+    await loadActiveTab(true);
   }
 
-  onMount(() => {
-    loadAllData();
+  // Handle WebSocket log events
+  function handleLogEvent(event: LogEntriesEvent): void {
+    // Append new entries to cache
+    cache.appendLogEntries(event.log_file, event.entries);
 
-    // Poll every 15 seconds (using delta updates)
-    pollInterval = window.setInterval(loadAllData, 15000);
+    // Update UI if this is the active tab
+    const activeFilename = TAB_TO_FILE[activeTab];
+    const eventFilenames: Record<string, string> = {
+      system_monitor: "system_monitor.log",
+      process_monitor: "process_monitor.log",
+      top_cpu_consumers: "top_cpu_consumers.log",
+      top_ram_consumers: "top_ram_consumers.log",
+    };
+
+    if (eventFilenames[event.log_file] === activeFilename) {
+      updateEntriesFromCache(activeTab);
+    }
+  }
+
+  // WebSocket subscription
+  let unsubscribe: (() => void) | null = null;
+
+  onMount(() => {
+    // Initial load of active tab
+    loadActiveTab(true);
+
+    // Connect to WebSocket for real-time updates
+    eventStream.connect();
+
+    // Subscribe to events
+    unsubscribe = eventStream.events.subscribe((event) => {
+      if (event?.event === "log_entries") {
+        handleLogEvent(event as LogEntriesEvent);
+      }
+    });
   });
 
   onDestroy(() => {
-    if (pollInterval !== null) {
-      clearInterval(pollInterval);
+    if (unsubscribe) {
+      unsubscribe();
     }
   });
 </script>
@@ -172,7 +205,7 @@
         {/each}
       </div>
       {#if !loading && !error}
-        <div class="refresh-indicator">Auto-refresh: 15s</div>
+        <div class="refresh-indicator">Live updates via WebSocket</div>
       {/if}
     </div>
   </div>
@@ -217,7 +250,7 @@
     {:else if error}
       <div class="error-state">
         <p>{error}</p>
-        <button onclick={() => loadAllData(true)}>Retry</button>
+        <button onclick={() => loadActiveTab(true)}>Retry</button>
       </div>
     {:else if activeTab === "system"}
       <SystemMetricsView entries={systemEntries} />
@@ -302,10 +335,11 @@
 
   .refresh-indicator {
     font-size: 0.875rem;
-    color: #6b7280;
+    color: #059669;
     padding: 0.5rem 1rem;
-    background-color: #f3f4f6;
+    background-color: #ecfdf5;
     border-radius: 6px;
+    border: 1px solid #d1fae5;
   }
 
   .tabs {

@@ -1,12 +1,14 @@
+use chrono::{DateTime, NaiveDateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::PathBuf;
 use std::str::FromStr;
 use tracing::debug;
 
 /// Enumerates supported log files, preventing stringly-typed lookups.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum LogFile {
     SystemMonitor,
     ProcessMonitor,
@@ -15,7 +17,7 @@ pub enum LogFile {
 }
 
 impl LogFile {
-    const ALL: [LogFile; 4] = [
+    pub const ALL: [LogFile; 4] = [
         LogFile::SystemMonitor,
         LogFile::ProcessMonitor,
         LogFile::TopCpuConsumers,
@@ -61,7 +63,7 @@ pub struct LogFileInfo {
 }
 
 /// System monitor log entry
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct SystemMonitorEntry {
     pub timestamp: String,
     pub cpu_usage: f32,
@@ -72,7 +74,7 @@ pub struct SystemMonitorEntry {
 }
 
 /// Process monitor log entry
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct ProcessMonitorEntry {
     pub timestamp: String,
     pub process: String,
@@ -83,7 +85,7 @@ pub struct ProcessMonitorEntry {
 }
 
 /// Top consumer log entry (CPU or RAM)
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct TopConsumerEntry {
     pub timestamp: String,
     pub rank: i32,
@@ -94,7 +96,7 @@ pub struct TopConsumerEntry {
 }
 
 /// Generic log entry for JSON response
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(untagged)]
 pub enum LogEntry {
     SystemMonitor(SystemMonitorEntry),
@@ -124,7 +126,128 @@ fn get_log_dir() -> PathBuf {
     PathBuf::from(".")
 }
 
-/// Read log file with offset support for delta updates
+/// Read log file entries since a specific timestamp (efficient reverse-read from end of file)
+/// Returns entries from `since_timestamp` up to now, reading backwards from file end.
+pub fn read_log_file_since(
+    filename: &str,
+    since_timestamp: DateTime<Utc>,
+) -> Result<Vec<LogEntry>, String> {
+    let log_file =
+        LogFile::from_str(filename).map_err(|_| format!("Invalid log file name: {}", filename))?;
+
+    let log_dir = get_log_dir();
+    let file_path = log_dir.join(log_file.filename());
+
+    if !file_path.exists() {
+        return Err(format!("Log file not found: {}", filename));
+    }
+
+    // Read lines from end of file until we hit the cutoff timestamp
+    let lines = read_lines_from_end_until(&file_path, since_timestamp)?;
+
+    // Parse based on file type
+    let entries = match log_file {
+        LogFile::SystemMonitor => parse_system_monitor_log(&lines)?,
+        LogFile::ProcessMonitor => parse_process_monitor_log(&lines)?,
+        LogFile::TopCpuConsumers | LogFile::TopRamConsumers => parse_top_consumers_log(&lines)?,
+    };
+
+    Ok(entries)
+}
+
+/// Efficiently read lines from end of file until timestamp cutoff
+/// Uses reverse reading with chunked I/O to avoid loading entire file
+fn read_lines_from_end_until(
+    file_path: &PathBuf,
+    cutoff: DateTime<Utc>,
+) -> Result<Vec<String>, String> {
+    let mut file = File::open(file_path).map_err(|e| format!("Failed to open log file: {}", e))?;
+    let file_size = file
+        .metadata()
+        .map_err(|e| format!("Failed to get file metadata: {}", e))?
+        .len();
+
+    if file_size == 0 {
+        return Ok(Vec::new());
+    }
+
+    const CHUNK_SIZE: u64 = 64 * 1024; // 64KB chunks
+    let mut result_lines: Vec<String> = Vec::new();
+    let mut position = file_size;
+    let mut leftover = String::new();
+
+    while position > 0 {
+        // Calculate chunk to read
+        let chunk_start = position.saturating_sub(CHUNK_SIZE);
+        let chunk_len = (position - chunk_start) as usize;
+
+        // Seek and read chunk
+        file.seek(SeekFrom::Start(chunk_start))
+            .map_err(|e| format!("Failed to seek: {}", e))?;
+
+        let mut buffer = vec![0u8; chunk_len];
+        file.read_exact(&mut buffer)
+            .map_err(|e| format!("Failed to read: {}", e))?;
+
+        // Convert to string and prepend leftover from previous chunk
+        let chunk_str = String::from_utf8_lossy(&buffer);
+        let combined = format!("{}{}", chunk_str, leftover);
+
+        // Split into lines (in reverse since we're reading backwards)
+        let mut lines: Vec<&str> = combined.lines().collect();
+
+        // If we're not at the start of file, the first line might be partial
+        if chunk_start > 0 && !lines.is_empty() {
+            leftover = lines.remove(0).to_string();
+        } else {
+            leftover.clear();
+        }
+
+        // Process lines in reverse order (newest first in our result)
+        for line in lines.into_iter().rev() {
+            // Skip header and empty lines
+            if line.starts_with("Timestamp") || line.trim().is_empty() {
+                continue;
+            }
+
+            // Parse timestamp from line to check cutoff
+            if let Some(ts) = parse_timestamp_from_line(line) {
+                if ts < cutoff {
+                    // We've gone past our cutoff, reverse result and return
+                    result_lines.reverse();
+                    return Ok(result_lines);
+                }
+            }
+
+            result_lines.push(line.to_string());
+        }
+
+        position = chunk_start;
+    }
+
+    // Handle any remaining leftover at the start of file
+    if !leftover.is_empty() && !leftover.starts_with("Timestamp") && !leftover.trim().is_empty() {
+        if let Some(ts) = parse_timestamp_from_line(&leftover) {
+            if ts >= cutoff {
+                result_lines.push(leftover);
+            }
+        }
+    }
+
+    // Reverse to get chronological order
+    result_lines.reverse();
+    Ok(result_lines)
+}
+
+/// Parse timestamp from the start of a CSV log line
+/// Format: "YYYY-MM-DD HH:MM:SS,..."
+fn parse_timestamp_from_line(line: &str) -> Option<DateTime<Utc>> {
+    let timestamp_str = line.split(',').next()?;
+    let naive = NaiveDateTime::parse_from_str(timestamp_str, "%Y-%m-%d %H:%M:%S").ok()?;
+    Some(DateTime::<Utc>::from_naive_utc_and_offset(naive, Utc))
+}
+
+/// Read log file with offset support for delta updates (legacy API for compatibility)
 /// Returns (entries, total_line_count)
 pub fn read_log_file_with_offset(
     filename: &str,
@@ -143,44 +266,42 @@ pub fn read_log_file_with_offset(
         return Err(format!("Log file not found: {}", filename));
     }
 
-    // Read file and collect lines
-    let file = File::open(&file_path).map_err(|e| format!("Failed to open log file: {}", e))?;
-    let reader = BufReader::new(file);
+    // For delta mode with since_line, use the legacy full-read approach
+    // This is rarely used now that frontend uses timestamp-based fetching
+    if since_line.is_some() {
+        let file = File::open(&file_path).map_err(|e| format!("Failed to open log file: {}", e))?;
+        let reader = BufReader::new(file);
 
-    // Collect all lines (skip header if present)
-    let all_lines: Vec<String> = reader
-        .lines()
-        .filter_map(|line| line.ok())
-        .filter(|line| !line.starts_with("Timestamp") && !line.trim().is_empty())
-        .collect();
+        let all_lines: Vec<String> = reader
+            .lines()
+            .filter_map(|line| line.ok())
+            .filter(|line| !line.starts_with("Timestamp") && !line.trim().is_empty())
+            .collect();
 
-    let total_lines = all_lines.len();
-
-    // Apply offset and limit
-    let lines = if let Some(offset) = since_line {
-        // Delta mode: return lines after offset
-        if offset < all_lines.len() {
+        let total_lines = all_lines.len();
+        let offset = since_line.unwrap();
+        let lines = if offset < all_lines.len() {
             all_lines[offset..].to_vec()
         } else {
-            // Offset beyond file size, return empty
             Vec::new()
-        }
-    } else {
-        // Full mode: take last N lines
-        let start_index = if all_lines.len() > max_lines {
-            all_lines.len() - max_lines
-        } else {
-            0
         };
-        all_lines[start_index..].to_vec()
-    };
 
-    // Parse based on file type
-    let entries = match log_file {
-        LogFile::SystemMonitor => parse_system_monitor_log(&lines)?,
-        LogFile::ProcessMonitor => parse_process_monitor_log(&lines)?,
-        LogFile::TopCpuConsumers | LogFile::TopRamConsumers => parse_top_consumers_log(&lines)?,
-    };
+        let entries = match log_file {
+            LogFile::SystemMonitor => parse_system_monitor_log(&lines)?,
+            LogFile::ProcessMonitor => parse_process_monitor_log(&lines)?,
+            LogFile::TopCpuConsumers | LogFile::TopRamConsumers => parse_top_consumers_log(&lines)?,
+        };
+
+        return Ok((entries, total_lines));
+    }
+
+    // For initial load, use efficient reverse-read
+    // Calculate cutoff based on max_lines (assuming 1 line per minute)
+    let hours = (max_lines as f64 / 60.0).ceil() as i64;
+    let cutoff = Utc::now() - chrono::Duration::hours(hours);
+
+    let entries = read_log_file_since(filename, cutoff)?;
+    let total_lines = entries.len();
 
     Ok((entries, total_lines))
 }

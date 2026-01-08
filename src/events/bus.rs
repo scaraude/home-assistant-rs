@@ -32,6 +32,11 @@ impl EventBus {
     pub fn receiver_count(&self) -> usize {
         self.sender.receiver_count()
     }
+
+    /// Get a clone of the sender for services that need to emit events.
+    pub fn sender(&self) -> broadcast::Sender<SystemEvent> {
+        self.sender.clone()
+    }
 }
 
 #[cfg(test)]

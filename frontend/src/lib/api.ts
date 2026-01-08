@@ -188,7 +188,35 @@ export async function fetchLogFiles(): Promise<LogFileInfo[]> {
 }
 
 /**
- * Fetch log file content
+ * Time range type for log queries
+ */
+export type TimeRange = '24h' | '1w' | '1m' | '1y';
+
+/**
+ * Fetch log file entries since a specific time range (efficient reverse-read)
+ * Uses the new /api/logs/since endpoint that reads from end of file
+ * @param filename - Log file name (e.g., "system_monitor.log")
+ * @param since - Time range like "24h", "1w", "1m", "1y"
+ * @returns Log entries from the specified time range
+ */
+export async function fetchLogsSince(
+  filename: string,
+  since: TimeRange = '24h'
+): Promise<LogEntry[]> {
+  const params = new URLSearchParams();
+  params.append('file', filename);
+  params.append('since', since);
+
+  const response = await fetch(`/api/logs/since?${params.toString()}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch logs: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Fetch log file content (legacy API - use fetchLogsSince for better performance)
  * @param filename - Log file name (e.g., "system_monitor.log")
  * @param maxLines - Maximum number of lines to fetch (default: 1000)
  * @returns Log entries and total lines from X-Total-Lines header
@@ -204,34 +232,6 @@ export async function fetchLogView(
   const response = await fetch(`/api/logs/view?${params.toString()}`);
   if (!response.ok) {
     throw new Error(`Failed to fetch log view: ${response.statusText}`);
-  }
-
-  const entries = await response.json();
-  const totalLines = response.headers.get('X-Total-Lines');
-
-  return {
-    entries,
-    totalLines: totalLines ? parseInt(totalLines, 10) : 0,
-  };
-}
-
-/**
- * Fetch log file content since a specific line number (delta update)
- * @param filename - Log file name
- * @param sinceLine - Line number to fetch entries after
- * @returns New log entries and updated total lines
- */
-export async function fetchLogViewSince(
-  filename: string,
-  sinceLine: number
-): Promise<{ entries: LogEntry[]; totalLines: number }> {
-  const params = new URLSearchParams();
-  params.append('file', filename);
-  params.append('since_line', sinceLine.toString());
-
-  const response = await fetch(`/api/logs/view?${params.toString()}`);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch log view delta: ${response.statusText}`);
   }
 
   const entries = await response.json();

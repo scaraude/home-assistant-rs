@@ -217,6 +217,10 @@ async fn handle_request(
             debug!(query = ?query, "Serving log file view");
             routes::serve_log_view(query.as_deref())
         }),
+        ("GET", "/api/logs/since") => Ok({
+            debug!(query = ?query, "Serving log file since timestamp");
+            routes::serve_log_since(query.as_deref())
+        }),
         ("GET", "/api/logs/process") => Ok({
             debug!(query = ?query, "Serving process history");
             routes::serve_process_history(query.as_deref())

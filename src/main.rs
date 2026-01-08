@@ -11,7 +11,10 @@ use db::Database;
 use events::bus::EventBus;
 use http::HttpServer;
 use mqtt::MqttClient;
-use services::{AutomationService, DbWriterService, StateManagerService, WebSocketBroadcaster};
+use services::{
+    AutomationService, DbWriterService, LogWatcherService, StateManagerService,
+    WebSocketBroadcaster,
+};
 use state::{DeviceStateStore, SwitchStateStore};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -114,6 +117,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tokio::spawn(async move {
         automation_service.run().await;
     });
+
+    // Spawn log watcher service to monitor log files and emit events
+    let log_watcher = LogWatcherService::new(event_bus.sender());
+    tokio::spawn(async move {
+        log_watcher.run().await;
+    });
+    info!("LogWatcherService task spawned");
 
     // Wrap MQTT client in Arc<Mutex> for sharing with HTTP server
     let mqtt_client = Arc::new(Mutex::new(mqtt_client));
