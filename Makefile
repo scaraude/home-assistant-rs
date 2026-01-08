@@ -210,6 +210,8 @@ log_dest stdout" > configs/mosquitto.conf
 serial:\n\
   port: $(ZIGBEE_DEVICE)\n\
 frontend: false\n\
+availability:\n\
+    enabled: true\n\
 advanced:\n\
   log_level: info\n\
   log_directory: $(LOG_DIR)\n\
