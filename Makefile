@@ -172,6 +172,7 @@ RestartSec=10\n\
 StandardOutput=append:$(LOG_DIR)/zigbee2mqtt.log\n\
 StandardError=append:$(LOG_DIR)/zigbee2mqtt-error.log\n\
 Environment=\"NODE_ENV=production\"\n\
+Environment=\"ZIGBEE2MQTT_DATA=$(DATA_DIR)/zigbee2mqtt\"\n\
 \n\
 [Install]\n\
 WantedBy=multi-user.target" > systemd/zigbee2mqtt.service
@@ -208,8 +209,7 @@ log_dest stdout" > configs/mosquitto.conf
   server: mqtt://localhost:1883\n\
 serial:\n\
   port: $(ZIGBEE_DEVICE)\n\
-frontend:\n\
-  port: 8081\n\
+frontend: false\n\
 advanced:\n\
   log_level: info\n\
   log_directory: $(LOG_DIR)\n\
