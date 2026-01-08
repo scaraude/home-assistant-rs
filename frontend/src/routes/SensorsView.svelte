@@ -1,6 +1,7 @@
 <script lang="ts">
   import UnifiedGraphPanel from "../lib/UnifiedGraphPanel.svelte";
   import SensorListPanel from "../lib/SensorListPanel.svelte";
+  import PageState from "../lib/PageState.svelte";
   import { fetchSensors, fetchReadings, fetchDeviceStates } from "../lib/api";
   import { dataCache } from "../lib/stores/dataCache";
   import { graphConfig, TIME_RANGE_HOURS } from "../lib/stores/graphConfig";
@@ -33,7 +34,6 @@
         hours
       );
 
-      // Initialize graphConfig sensors if not already done
       const sensorIds = sensors.map(s => s.device_id);
       if ($graphConfig.sensors.length === 0 ||
           $graphConfig.sensors.length !== sensorIds.length) {
@@ -60,39 +60,24 @@
     void loadData(currentHours, true);
   }
 
-  // Load data on mount and when time range changes
   onMount(() => {
     const currentHours = TIME_RANGE_HOURS[$graphConfig.timeRange];
     void loadData(currentHours);
   });
 
-  // Watch for time range changes using $effect.pre for tracking
   let previousTimeRange: string | undefined = $state(undefined);
   $effect.pre(() => {
     const currentTimeRange = $graphConfig.timeRange;
-
-    // Skip the initial run when previousTimeRange is undefined
     if (previousTimeRange !== undefined && currentTimeRange !== previousTimeRange) {
       const currentHours = TIME_RANGE_HOURS[currentTimeRange];
       void loadData(currentHours, true);
     }
-
     previousTimeRange = currentTimeRange;
   });
 </script>
 
 <div class="sensor-view">
-  {#if loading}
-    <div class="loading">
-      <div class="spinner"></div>
-      <p>Loading sensors...</p>
-    </div>
-  {:else if error}
-    <div class="error">
-      <p>Error: {error}</p>
-      <button onclick={retryLoad}>Retry</button>
-    </div>
-  {:else}
+  <PageState {loading} {error} loadingText="Loading sensors..." onRetry={retryLoad}>
     <div class="unified-layout">
       <div class="graph-section">
         <UnifiedGraphPanel />
@@ -101,7 +86,7 @@
         <SensorListPanel />
       </div>
     </div>
-  {/if}
+  </PageState>
 </div>
 
 <style>
@@ -127,57 +112,6 @@
   .sensors-section {
     flex: 1;
     min-height: 0;
-  }
-
-  .loading {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 4rem 0;
-    color: #6b7280;
-  }
-
-  .spinner {
-    width: 40px;
-    height: 40px;
-    border: 3px solid #e5e7eb;
-    border-top-color: #3b82f6;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin-bottom: 1rem;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
-  .error {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 4rem 0;
-    color: #dc2626;
-  }
-
-  .error button {
-    margin-top: 1rem;
-    padding: 0.5rem 1rem;
-    background: #3b82f6;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 0.875rem;
-    font-weight: 500;
-    transition: background 0.2s;
-  }
-
-  .error button:hover {
-    background: #2563eb;
   }
 
   @media (max-width: 768px) {

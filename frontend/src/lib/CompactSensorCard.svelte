@@ -1,8 +1,8 @@
 <script lang="ts">
   import ColorPickerModal from "./ColorPickerModal.svelte";
+  import EditableDeviceName from "./EditableDeviceName.svelte";
   import { graphConfig } from "./stores/graphConfig";
   import { dataCache } from "./stores/dataCache";
-  import { updateDeviceName } from "./api";
   import { formatDistanceToNow } from "date-fns";
   import type { SensorUIConfig } from "./stores/graphConfig";
   import type { SensorReading } from "./api";
@@ -17,29 +17,20 @@
     editMode?: boolean;
   } = $props();
 
-  let isEditing = $state(false);
-  let editedName = $state("");
   let showColorPicker = $state(false);
+  let isEditing = $state(false);
 
-  // Sync isEditing with editMode prop
   $effect(() => {
     isEditing = editMode;
-    if (editMode) {
-      editedName = deviceName;
-    }
   });
 
-  // Get device name from cache
   let deviceInfo = $derived(
     $dataCache.sensors.devices.find((d) => d.device_id === sensor.deviceId)
   );
 
   let deviceName = $derived(deviceInfo?.name || sensor.deviceId);
-
-  // Get device state from cache (updated via WebSocket)
   let deviceState = $derived($dataCache.deviceStates[sensor.deviceId] || null);
 
-  // Time ago display
   let timeAgo = $derived(
     latestReading
       ? formatDistanceToNow(new Date(latestReading.timestamp * 1000), {
@@ -58,30 +49,6 @@
 
   function handleCardClick() {
     graphConfig.toggleSensor(sensor.deviceId);
-  }
-
-  async function handleNameSubmit() {
-    if (editedName.trim() && editedName !== deviceName) {
-      try {
-        await updateDeviceName(sensor.deviceId, editedName.trim());
-        dataCache.updateDeviceName(sensor.deviceId, editedName.trim());
-      } catch (err) {
-        console.error("Failed to update device name:", err);
-      }
-    }
-    isEditing = false;
-  }
-
-  function handleNameBlur() {
-    void handleNameSubmit();
-  }
-
-  function handleNameKeydown(e: KeyboardEvent) {
-    if (e.key === "Enter") {
-      void handleNameSubmit();
-    } else if (e.key === "Escape") {
-      isEditing = false;
-    }
   }
 </script>
 
@@ -102,16 +69,16 @@
           class:battery-low={deviceState.battery_level < 20}
           title="Battery: {deviceState.battery_level}%"
         >
-          🔋 {deviceState.battery_level}
+          {deviceState.battery_level}%
         </span>
       {/if}
       {#if deviceState.link_quality !== null && deviceState.link_quality !== undefined}
         <span
           class="corner-badge"
           class:link-weak={deviceState.link_quality < 50}
-          title="Link quality: {deviceState.link_quality}%"
+          title="Link quality: {deviceState.link_quality}"
         >
-          📶 {deviceState.link_quality}
+          {deviceState.link_quality}
         </span>
       {/if}
     </div>
@@ -131,13 +98,10 @@
       ></button>
 
       {#if isEditing}
-        <input
-          type="text"
-          class="name-input"
-          bind:value={editedName}
-          onblur={handleNameBlur}
-          onkeydown={handleNameKeydown}
-          onclick={(e) => e.stopPropagation()}
+        <EditableDeviceName
+          deviceId={sensor.deviceId}
+          name={deviceName}
+          onSaved={() => isEditing = false}
         />
       {:else}
         <div class="name-time">
@@ -154,9 +118,7 @@
     {#if latestReading}
       <div class="reading">
         <span class="reading-label">Temp</span>
-        <span class="reading-value"
-          >{latestReading.temperature.toFixed(1)}°C</span
-        >
+        <span class="reading-value">{latestReading.temperature.toFixed(1)}°C</span>
       </div>
       <div class="reading">
         <span class="reading-label">Humidity</span>
@@ -290,22 +252,6 @@
   .time-ago {
     font-size: 0.625rem;
     color: #9ca3af;
-  }
-
-  .name-input {
-    flex: 1;
-    padding: 0.25rem 0.5rem;
-    border: 1px solid #3b82f6;
-    border-radius: 4px;
-    font-size: 0.9375rem;
-    font-weight: 600;
-    color: #111827;
-    background: white;
-  }
-
-  .name-input:focus {
-    outline: none;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
 
   .sensor-readings {

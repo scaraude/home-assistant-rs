@@ -1,14 +1,11 @@
 <script lang="ts">
   import type { SwitchDevice, AutomationRule } from "./api";
-  import {
-    executeCommand,
-    updateDeviceName,
-    fetchAutomationRules,
-  } from "./api";
+  import { executeCommand, fetchAutomationRules } from "./api";
   import { formatDistanceToNow } from "date-fns";
-  import LinkQualityBadge from "./LinkQualityBadge.svelte";
-  import BatteryBadge from "./BatteryBadge.svelte";
+  import StatusBadge from "./StatusBadge.svelte";
+  import EditableDeviceName from "./EditableDeviceName.svelte";
   import AutomationRulePanel from "./AutomationRulePanel.svelte";
+  import { icons } from "./icons";
   import { slide } from "svelte/transition";
   import { rulesByDevice } from "./stores/automations";
   import { dataCache } from "./stores/dataCache";
@@ -17,8 +14,6 @@
 
   let isToggling = $state(false);
   let error = $state<string | null>(null);
-  let isEditingName = $state(false);
-  let editedName = $state("");
 
   // Automation expansion state
   let isExpanded = $state(false);
@@ -49,75 +44,18 @@
     const newState = !device.state;
     const previousState = device.state;
 
-    // Optimistic update
     device.state = newState;
 
     try {
       await executeCommand(device.id, newState);
       dataCache.updateSwitchState(device.id, { state: newState });
     } catch (err) {
-      // Revert on error
       device.state = previousState;
       error = err instanceof Error ? err.message : "Failed to toggle switch";
       console.error("Failed to toggle switch:", err);
     } finally {
       isToggling = false;
     }
-  }
-
-  function startEditingName() {
-    editedName = device.name;
-    isEditingName = true;
-  }
-
-  async function saveName() {
-    const trimmedName = editedName.trim();
-
-    if (!trimmedName) {
-      error = "Device name cannot be empty";
-      return;
-    }
-
-    if (trimmedName === device.name) {
-      isEditingName = false;
-      return;
-    }
-
-    error = null;
-    const previousName = device.name;
-
-    try {
-      // Optimistic update
-      device.name = trimmedName;
-      isEditingName = false;
-
-      dataCache.updateDeviceName(device.id, trimmedName);
-      await updateDeviceName(device.id, trimmedName);
-    } catch (err) {
-      // Revert on error
-      device.name = previousName;
-      isEditingName = true;
-      error =
-        err instanceof Error ? err.message : "Failed to update device name";
-      console.error("Failed to update device name:", err);
-    }
-  }
-
-  function cancelEdit() {
-    isEditingName = false;
-    error = null;
-  }
-
-  function handleNameKeydown(e: KeyboardEvent) {
-    if (e.key === "Enter") {
-      saveName();
-    } else if (e.key === "Escape") {
-      cancelEdit();
-    }
-  }
-
-  function focusOnMount(node: HTMLElement) {
-    node.focus();
   }
 
   async function toggleExpansion() {
@@ -134,7 +72,6 @@
 
     try {
       const allRules = await fetchAutomationRules();
-      // Filter rules that have actions for this device
       deviceRules = allRules.filter((rule) =>
         rule.actions.some((action) => action.device_id === device.id)
       );
@@ -145,7 +82,6 @@
     }
   }
 
-  // Update deviceRules when store changes
   $effect(() => {
     if (isExpanded) {
       deviceRules = deviceRulesFromStore;
@@ -156,53 +92,26 @@
 <div class="switch-card">
   <div class="card-header">
     <div class="device-icon" class:on={device.state}>
-      <!-- Light Bulb Icon -->
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill="currentColor"
-      >
-        <path
-          d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"
-        />
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+        <path d={icons.lightbulb}/>
       </svg>
     </div>
     <div class="device-info">
-      {#if isEditingName}
-        <input
-          type="text"
-          class="device-name-input"
-          bind:value={editedName}
-          onkeydown={handleNameKeydown}
-          onblur={saveName}
-          use:focusOnMount
-        />
-      {:else}
-        <button
-          class="device-name editable"
-          title={device.id}
-          onclick={startEditingName}
-          type="button"
-        >
-          {displayName}
-        </button>
-      {/if}
+      <EditableDeviceName deviceId={device.id} name={displayName} />
       <div class="device-id">{shortId}</div>
       <div
         class="last-update"
-        title={device.last_seen
-          ? new Date(device.last_seen * 1000).toLocaleString()
-          : "Never"}
+        title={device.last_seen ? new Date(device.last_seen * 1000).toLocaleString() : "Never"}
       >
         {timeAgo}
       </div>
     </div>
     <div class="badges">
       {#if device.battery_level != null}
-        <BatteryBadge battery={device.battery_level} />
+        <StatusBadge type="battery" value={device.battery_level} />
       {/if}
       {#if device.link_quality != null}
-        <LinkQualityBadge linkQuality={device.link_quality} />
+        <StatusBadge type="signal" value={device.link_quality} />
       {/if}
     </div>
   </div>
@@ -228,25 +137,13 @@
         <div class="spinner"></div>
         Switching...
       {:else if device.state}
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-        >
-          <path
-            d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"
-          />
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+          <path d={icons.check}/>
         </svg>
         Turn Off
       {:else}
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-        >
-          <path
-            d="M7 11v2h10v-2H7zm5-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"
-          />
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+          <path d={icons.minus}/>
         </svg>
         Turn On
       {/if}
@@ -255,20 +152,13 @@
 
   {#if error}
     <div class="error-message">
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill="currentColor"
-      >
-        <path
-          d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"
-        />
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+        <path d={icons.error}/>
       </svg>
       {error}
     </div>
   {/if}
 
-  <!-- Automation Rules Toggle Button -->
   <button
     class="automation-toggle-btn"
     onclick={toggleExpansion}
@@ -276,30 +166,16 @@
     type="button"
   >
     <div class="automation-toggle-content">
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill="currentColor"
-        class="automation-icon"
-      >
-        <path
-          d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"
-        />
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="automation-icon">
+        <path d={icons.wrench}/>
       </svg>
       <span>Automation Rules ({ruleCount})</span>
     </div>
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      class="chevron"
-      class:expanded={isExpanded}
-    >
-      <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z" />
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="chevron" class:expanded={isExpanded}>
+      <path d={icons.chevronDown}/>
     </svg>
   </button>
 
-  <!-- Expandable Automation Section -->
   {#if isExpanded}
     <div class="automation-section" transition:slide={{ duration: 200 }}>
       <AutomationRulePanel
@@ -358,47 +234,6 @@
   .device-info {
     flex: 1;
     min-width: 0;
-  }
-
-  .device-name {
-    margin: 0;
-    font-size: 1rem;
-    font-weight: 600;
-    color: #111827;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .device-name.editable {
-    background: none;
-    border: none;
-    padding: 0;
-    text-align: left;
-    cursor: pointer;
-    transition: color 0.2s ease;
-  }
-
-  .device-name.editable:hover {
-    color: #3b82f6;
-  }
-
-  .device-name-input {
-    margin: 0;
-    font-size: 1rem;
-    font-weight: 600;
-    color: #111827;
-    border: 2px solid #3b82f6;
-    border-radius: 4px;
-    padding: 0.25rem 0.5rem;
-    width: 100%;
-    outline: none;
-    background: white;
-  }
-
-  .device-name-input:focus {
-    border-color: #2563eb;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
   }
 
   .device-id {
@@ -547,7 +382,6 @@
     flex-shrink: 0;
   }
 
-  /* Automation Toggle Button */
   .automation-toggle-btn {
     width: 100%;
     display: flex;
@@ -593,7 +427,6 @@
     transform: rotate(180deg);
   }
 
-  /* Automation Section */
   .automation-section {
     border-top: 1px solid #e5e7eb;
     margin-top: 0.75rem;
