@@ -15,7 +15,7 @@
     targetDeviceId,
     availableSensors = [],
     availableSwitches = [],
-    onclose
+    onclose,
   }: {
     rule?: AutomationRule | null;
     targetDeviceId: string;
@@ -29,7 +29,9 @@
   let name = $state(rule?.name || "");
   let description = $state(rule?.description || "");
   let enabled = $state(rule?.enabled ?? true);
-  let conditionOperator = $state<"and" | "or">(rule?.condition_operator || "and");
+  let conditionOperator = $state<"and" | "or">(
+    rule?.condition_operator || "and"
+  );
   let timeWindowEnabled = $state(rule?.time_window?.enabled ?? false);
   let timeWindowStart = $state(rule?.time_window?.start_time || "");
   let timeWindowEnd = $state(rule?.time_window?.end_time || "");
@@ -77,6 +79,10 @@
   let saving = $state(false);
   let error = $state<string | null>(null);
 
+  // Opposite rule (creates a second rule with inverted condition and action)
+  let createOppositeRule = $state(false);
+  let oppositeValue = $state<number>(20);
+
   const fieldOptions = [
     { value: "temperature", label: "Temperature" },
     { value: "humidity", label: "Humidity" },
@@ -108,6 +114,27 @@
     { value: 5, label: "Fri" },
     { value: 6, label: "Sat" },
   ];
+
+  function getOppositeOperator(op: string): string {
+    const opposites: Record<string, string> = {
+      less_than: "greater_than",
+      less_than_or_equal: "greater_than_or_equal",
+      greater_than: "less_than",
+      greater_than_or_equal: "less_than_or_equal",
+      equal: "not_equal",
+      not_equal: "equal",
+    };
+    return opposites[op] || op;
+  }
+
+  function getOppositeAction(action: string): string {
+    const opposites: Record<string, string> = {
+      on: "off",
+      off: "on",
+      toggle: "toggle",
+    };
+    return opposites[action] || action;
+  }
 
   function addCondition() {
     conditions = [
@@ -201,12 +228,12 @@
       // Strip out the temporary id fields before sending to API
       const conditionsForApi = conditions.map(({ id, ...rest }) => rest);
       const actionsForApi = actions.map(({ id, ...rest }) => rest);
+      const activeDaysPayload = limitDays
+        ? activeDays.map((day) => Number(day))
+        : undefined;
 
       if (isEditing && rule) {
         // Update existing rule
-        const activeDaysPayload = limitDays
-          ? activeDays.map((day) => Number(day))
-          : undefined;
         const updates: UpdateAutomationRuleRequest = {
           name: name.trim(),
           description: description.trim() || undefined,
@@ -225,10 +252,7 @@
         const updated = await updateAutomationRule(rule.id, updates);
         automationStore.updateRule(rule.id, updated);
       } else {
-        // Create new rule
-        const activeDaysPayload = limitDays
-          ? activeDays.map((day) => Number(day))
-          : undefined;
+        // Create main rule
         const newRule: CreateAutomationRuleRequest = {
           name: name.trim(),
           description: description.trim() || undefined,
@@ -246,6 +270,39 @@
 
         const created = await createAutomationRule(newRule);
         automationStore.addRule(created);
+
+        // Create opposite rule if enabled
+        if (createOppositeRule && conditions.length === 1) {
+          const oppositeConditions = conditionsForApi.map((c) => ({
+            ...c,
+            operator: getOppositeOperator(c.operator),
+            value: oppositeValue,
+          }));
+          const oppositeActions = actionsForApi.map((a) => ({
+            ...a,
+            action: getOppositeAction(a.action),
+          }));
+
+          const oppositeRule: CreateAutomationRuleRequest = {
+            name: `${name.trim()} (opposite)`,
+            description: description.trim()
+              ? `${description.trim()} - Opposite rule`
+              : "Opposite rule",
+            enabled,
+            condition_operator: conditionOperator,
+            conditions: oppositeConditions,
+            actions: oppositeActions,
+            time_window: {
+              enabled: timeWindowEnabled,
+              start_time: timeWindowStart.trim() || undefined,
+              end_time: timeWindowEnd.trim() || undefined,
+              active_days: activeDaysPayload,
+            },
+          };
+
+          const createdOpposite = await createAutomationRule(oppositeRule);
+          automationStore.addRule(createdOpposite);
+        }
       }
 
       onclose();
@@ -274,10 +331,18 @@
   transition:fade={{ duration: 200 }}
   role="presentation"
 >
-  <div class="modal-container" transition:scale={{ duration: 200, start: 0.95 }}>
+  <div
+    class="modal-container"
+    transition:scale={{ duration: 200, start: 0.95 }}
+  >
     <div class="modal-header">
       <h2>{isEditing ? "Edit Rule" : "Create New Rule"}</h2>
-      <button class="close-btn" onclick={handleCancel} type="button" aria-label="Close">
+      <button
+        class="close-btn"
+        onclick={handleCancel}
+        type="button"
+        aria-label="Close"
+      >
         <svg
           xmlns="http://www.w3.org/2000/svg"
           viewBox="0 0 24 24"
@@ -379,7 +444,11 @@
                     class="day-pill"
                     class:active={activeDays.includes(day.value)}
                   >
-                    <input type="checkbox" bind:group={activeDays} value={day.value} />
+                    <input
+                      type="checkbox"
+                      bind:group={activeDays}
+                      value={day.value}
+                    />
                     <span>{day.label}</span>
                   </label>
                 {/each}
@@ -454,7 +523,9 @@
                   </div>
 
                   <div class="input-group">
-                    <label for="condition-operator-{condition.id}">Operator</label>
+                    <label for="condition-operator-{condition.id}"
+                      >Operator</label
+                    >
                     <select
                       id="condition-operator-{condition.id}"
                       bind:value={condition.operator}
@@ -587,6 +658,75 @@
           </button>
         </div>
 
+        <!-- Opposite Rule Option (only for new rules with single condition) -->
+        {#if !isEditing && conditions.length === 1}
+          <div class="form-section opposite-rule-section">
+            <h3 class="section-title">Opposite Trigger</h3>
+            <p class="section-description">
+              Create a second rule that does the opposite action at a different
+              threshold. For example: Turn ON heater at 16°C, turn OFF at 20°C.
+            </p>
+
+            <div class="form-group checkbox-group">
+              <label class="checkbox-label">
+                <input type="checkbox" bind:checked={createOppositeRule} />
+                <span class="checkbox-text">Create opposite rule</span>
+              </label>
+            </div>
+
+            {#if createOppositeRule}
+              <div class="opposite-rule-preview">
+                <div class="preview-header">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <path
+                      d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"
+                    />
+                  </svg>
+                  <span>Opposite rule will:</span>
+                </div>
+                <div class="preview-content">
+                  <div class="preview-item">
+                    <span class="preview-label">Condition:</span>
+                    <span class="preview-value">
+                      {conditions[0]?.field || "field"}
+                      {operatorOptions.find(
+                        (o) =>
+                          o.value ===
+                          getOppositeOperator(conditions[0]?.operator)
+                      )?.label || "?"}
+                    </span>
+                    <input
+                      type="number"
+                      step="0.1"
+                      bind:value={oppositeValue}
+                      class="opposite-value-input"
+                    />
+                  </div>
+                  <div class="preview-item">
+                    <span class="preview-label">Action:</span>
+                    <span
+                      class="preview-value action-badge"
+                      class:action-on={getOppositeAction(actions[0]?.action) ===
+                        "on"}
+                      class:action-off={getOppositeAction(
+                        actions[0]?.action
+                      ) === "off"}
+                    >
+                      {actionOptions.find(
+                        (a) => a.value === getOppositeAction(actions[0]?.action)
+                      )?.label || "?"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            {/if}
+          </div>
+        {/if}
+
         {#if error}
           <div class="error-message" transition:fade={{ duration: 150 }}>
             <svg
@@ -648,7 +788,8 @@
   .modal-container {
     background: white;
     border-radius: 12px;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    box-shadow:
+      0 20px 25px -5px rgba(0, 0, 0, 0.1),
       0 10px 10px -5px rgba(0, 0, 0, 0.04);
     max-width: 800px;
     width: 100%;
@@ -803,7 +944,6 @@
   }
 
   .form-group input[type="text"],
-  .form-group input[type="time"],
   .form-group textarea {
     width: 100%;
     padding: 0.75rem;
@@ -816,7 +956,6 @@
   }
 
   .form-group input[type="text"]:focus,
-  .form-group input[type="time"]:focus,
   .form-group textarea:focus {
     outline: none;
     border-color: #3b82f6;
@@ -1112,6 +1251,107 @@
     to {
       transform: rotate(360deg);
     }
+  }
+
+  /* Opposite Rule Section */
+  .opposite-rule-section {
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    border: 2px solid #f59e0b;
+    border-radius: 8px;
+    padding: 1rem;
+  }
+
+  .opposite-rule-section .section-title {
+    color: #92400e;
+  }
+
+  .opposite-rule-section .section-description {
+    color: #a16207;
+  }
+
+  .opposite-rule-preview {
+    background: white;
+    border: 1px solid #fcd34d;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-top: 1rem;
+  }
+
+  .preview-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    color: #92400e;
+    margin-bottom: 0.75rem;
+  }
+
+  .preview-header svg {
+    width: 20px;
+    height: 20px;
+    color: #f59e0b;
+  }
+
+  .preview-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .preview-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .preview-label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #6b7280;
+    min-width: 80px;
+  }
+
+  .preview-value {
+    font-size: 0.875rem;
+    color: #374151;
+    font-weight: 500;
+  }
+
+  .opposite-value-input {
+    width: 80px;
+    padding: 0.375rem 0.5rem;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    color: #111827;
+    background: white;
+  }
+
+  .opposite-value-input:focus {
+    outline: none;
+    border-color: #f59e0b;
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1);
+  }
+
+  .action-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.625rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .action-badge.action-on {
+    background: #dcfce7;
+    color: #166534;
+  }
+
+  .action-badge.action-off {
+    background: #fee2e2;
+    color: #991b1b;
   }
 
   @media (max-width: 768px) {

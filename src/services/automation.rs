@@ -207,11 +207,7 @@ impl AutomationService {
             return true;
         }
 
-        let start_minutes = match window
-            .start_time
-            .as_deref()
-            .and_then(parse_time_minutes)
-        {
+        let start_minutes = match window.start_time.as_deref().and_then(parse_time_minutes) {
             Some(minutes) => minutes,
             None => {
                 error!(
@@ -469,8 +465,12 @@ mod tests {
         });
         let in_window = Local.with_ymd_and_hms(2024, 4, 5, 9, 0, 0).unwrap();
         let out_window = Local.with_ymd_and_hms(2024, 4, 5, 11, 0, 0).unwrap();
-        assert!(AutomationService::is_within_time_window_at(&rule, in_window));
-        assert!(!AutomationService::is_within_time_window_at(&rule, out_window));
+        assert!(AutomationService::is_within_time_window_at(
+            &rule, in_window
+        ));
+        assert!(!AutomationService::is_within_time_window_at(
+            &rule, out_window
+        ));
     }
 
     #[test]

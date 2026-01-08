@@ -121,11 +121,11 @@ impl Database {
                 row.get::<_, Option<String>>(2)?, // description
                 row.get::<_, i32>(3)? == 1,       // enabled
                 condition_operator_str,
-                row.get::<_, i64>(5)?,         // created_at
-                row.get::<_, i64>(6)?,         // updated_at
-                row.get::<_, Option<i64>>(7)?, // last_triggered_at
-                row.get::<_, i64>(8)?,         // trigger_count
-                row.get::<_, Option<i32>>(9)?, // time_window_enabled
+                row.get::<_, i64>(5)?,             // created_at
+                row.get::<_, i64>(6)?,             // updated_at
+                row.get::<_, Option<i64>>(7)?,     // last_triggered_at
+                row.get::<_, i64>(8)?,             // trigger_count
+                row.get::<_, Option<i32>>(9)?,     // time_window_enabled
                 row.get::<_, Option<String>>(10)?, // time_window_start
                 row.get::<_, Option<String>>(11)?, // time_window_end
                 row.get::<_, Option<String>>(12)?, // active_days
@@ -199,20 +199,18 @@ impl Database {
                 .collect::<Result<Vec<_>>>()?;
 
             let active_days = match active_days_json {
-                Some(json) => Some(
-                    serde_json::from_str::<Vec<u8>>(&json).map_err(|e| {
-                        error!(
-                            error = %e,
-                            rule_id = %id,
-                            "Failed to parse active_days JSON"
-                        );
-                        rusqlite::Error::FromSqlConversionFailure(
-                            12,
-                            rusqlite::types::Type::Text,
-                            Box::new(e),
-                        )
-                    })?,
-                ),
+                Some(json) => Some(serde_json::from_str::<Vec<u8>>(&json).map_err(|e| {
+                    error!(
+                        error = %e,
+                        rule_id = %id,
+                        "Failed to parse active_days JSON"
+                    );
+                    rusqlite::Error::FromSqlConversionFailure(
+                        12,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })?),
                 None => None,
             };
 
