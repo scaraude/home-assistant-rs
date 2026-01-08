@@ -3,13 +3,14 @@
   import { graphConfig } from "./stores/graphConfig";
   import { dataCache } from "./stores/dataCache";
   import { updateDeviceName } from "./api";
+  import { formatDistanceToNow } from "date-fns";
   import type { SensorUIConfig } from "./stores/graphConfig";
   import type { SensorReading } from "./api";
 
   let {
     sensor,
     latestReading,
-    editMode = false
+    editMode = false,
   }: {
     sensor: SensorUIConfig;
     latestReading: SensorReading | null;
@@ -30,13 +31,22 @@
 
   // Get device name from cache
   let deviceInfo = $derived(
-    $dataCache.sensors.devices.find(d => d.device_id === sensor.deviceId)
+    $dataCache.sensors.devices.find((d) => d.device_id === sensor.deviceId)
   );
 
   let deviceName = $derived(deviceInfo?.name || sensor.deviceId);
 
   // Get device state from cache (updated via WebSocket)
   let deviceState = $derived($dataCache.deviceStates[sensor.deviceId] || null);
+
+  // Time ago display
+  let timeAgo = $derived(
+    latestReading
+      ? formatDistanceToNow(new Date(latestReading.timestamp * 1000), {
+          addSuffix: true,
+        })
+      : ""
+  );
 
   function handleColorClick() {
     showColorPicker = true;
@@ -48,12 +58,6 @@
 
   function handleCardClick() {
     graphConfig.toggleSensor(sensor.deviceId);
-  }
-
-  function handleNameClick(e: MouseEvent) {
-    e.stopPropagation();
-    // Only allow editing when editMode is active (controlled by parent)
-    // Individual clicking to edit is disabled
   }
 
   async function handleNameSubmit() {
@@ -85,7 +89,7 @@
   class="sensor-card"
   class:active={sensor.visible}
   onclick={handleCardClick}
-  onkeydown={(e) => e.key === 'Enter' && handleCardClick()}
+  onkeydown={(e) => e.key === "Enter" && handleCardClick()}
   role="button"
   tabindex="0"
   aria-pressed={sensor.visible}
@@ -118,7 +122,10 @@
       <button
         class="color-dot"
         style="background-color: {sensor.color}"
-        onclick={(e) => { e.stopPropagation(); handleColorClick(); }}
+        onclick={(e) => {
+          e.stopPropagation();
+          handleColorClick();
+        }}
         aria-label="Change color"
         title="Click to change color"
       ></button>
@@ -133,9 +140,12 @@
           onclick={(e) => e.stopPropagation()}
         />
       {:else}
-        <span class="sensor-name">
-          {deviceName}
-        </span>
+        <div class="name-time">
+          <span class="sensor-name">{deviceName}</span>
+          {#if timeAgo}
+            <span class="time-ago">{timeAgo}</span>
+          {/if}
+        </div>
       {/if}
     </div>
   </div>
@@ -144,7 +154,9 @@
     {#if latestReading}
       <div class="reading">
         <span class="reading-label">Temp</span>
-        <span class="reading-value">{latestReading.temperature.toFixed(1)}°C</span>
+        <span class="reading-value"
+          >{latestReading.temperature.toFixed(1)}°C</span
+        >
       </div>
       <div class="reading">
         <span class="reading-label">Humidity</span>
@@ -160,7 +172,7 @@
   <ColorPickerModal
     currentColor={sensor.color}
     onSelect={handleColorSelect}
-    onClose={() => showColorPicker = false}
+    onClose={() => (showColorPicker = false)}
   />
 {/if}
 
@@ -243,7 +255,9 @@
     height: 24px;
     border-radius: 50%;
     border: 2px solid white;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 0, 0, 0.1);
+    box-shadow:
+      0 1px 3px rgba(0, 0, 0, 0.2),
+      0 0 0 1px rgba(0, 0, 0, 0.1);
     cursor: pointer;
     transition: all 0.15s;
     flex-shrink: 0;
@@ -252,7 +266,16 @@
 
   .color-dot:hover {
     transform: scale(1.15);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25), 0 0 0 2px rgba(0, 0, 0, 0.15);
+    box-shadow:
+      0 2px 6px rgba(0, 0, 0, 0.25),
+      0 0 0 2px rgba(0, 0, 0, 0.15);
+  }
+
+  .name-time {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
   }
 
   .sensor-name {
@@ -262,8 +285,11 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    flex: 1;
-    min-width: 0;
+  }
+
+  .time-ago {
+    font-size: 0.625rem;
+    color: #9ca3af;
   }
 
   .name-input {
