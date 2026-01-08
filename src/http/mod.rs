@@ -165,6 +165,10 @@ async fn handle_request(
             debug!("Serving switches list");
             routes::serve_switches_list(&db, &switch_state, &device_state)
         }),
+        ("GET", "/api/devices/state") => Ok({
+            debug!("Serving all device states");
+            routes::serve_device_states(&db)
+        }),
         ("GET", path) if DeviceStatePath::parse(path).is_some() => Ok({
             let device_path = DeviceStatePath::parse(path).expect("path validated");
             debug!(path = %path, "Serving device state");

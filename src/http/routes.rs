@@ -498,6 +498,33 @@ pub fn serve_device_state(db: &Arc<Database>, device_id: &str) -> Response<Full<
     }
 }
 
+pub fn serve_device_states(db: &Arc<Database>) -> Response<Full<Bytes>> {
+    debug!("Getting all device states from database");
+
+    match db.get_all_device_states() {
+        Ok(states) => {
+            match serde_json::to_string(&states) {
+                Ok(json) => {
+                    info!(
+                        device_state_count = states.len(),
+                        response_size = json.len(),
+                        "Successfully retrieved device states"
+                    );
+                    json_response(json)
+                }
+                Err(e) => {
+                    error!(error = %e, "Failed to serialize device states");
+                    internal_error_response(e.to_string().as_str())
+                }
+            }
+        }
+        Err(e) => {
+            error!(error = %e, "Database error while fetching device states");
+            internal_error_response(e.to_string().as_str())
+        }
+    }
+}
+
 pub async fn execute_command(
     req: Request<hyper::body::Incoming>,
     db: &Arc<Database>,

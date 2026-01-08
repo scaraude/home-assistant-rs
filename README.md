@@ -258,6 +258,7 @@ CREATE TABLE automation_execution_log (
 
 - `GET /api/sensors` - List all sensor devices with latest readings
 - `GET /api/devices/switches` - List all switches with state, battery, link quality
+- `GET /api/devices/state` - Get state for all devices (battery, link quality, last seen)
 - `GET /api/devices/{device_id}/state` - Get device state (battery, link quality, last seen)
 - `PATCH /api/devices/{device_id}` - Update device name
 

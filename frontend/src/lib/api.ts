@@ -370,6 +370,19 @@ export async function fetchDeviceState(deviceId: string): Promise<DeviceState | 
   return response.json();
 }
 
+/**
+ * Fetch device state for all devices (battery, link_quality, last_seen)
+ */
+export async function fetchDeviceStates(): Promise<DeviceState[]> {
+  const response = await fetch('/api/devices/state');
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch device states: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
 // Automation Rules API Types
 
 export interface AutomationCondition {

@@ -1,7 +1,7 @@
 <script lang="ts">
   import UnifiedGraphPanel from "../lib/UnifiedGraphPanel.svelte";
   import SensorListPanel from "../lib/SensorListPanel.svelte";
-  import { fetchSensors, fetchReadings, fetchDeviceState } from "../lib/api";
+  import { fetchSensors, fetchReadings, fetchDeviceStates } from "../lib/api";
   import { dataCache } from "../lib/stores/dataCache";
   import { graphConfig, TIME_RANGE_HOURS } from "../lib/stores/graphConfig";
   import { onMount } from "svelte";
@@ -40,19 +40,14 @@
         graphConfig.initializeSensors(sensorIds);
       }
 
-      // Fetch device states for all sensors
-      await Promise.all(
-        sensors.map(async (sensor) => {
-          try {
-            const state = await fetchDeviceState(sensor.device_id);
-            if (state) {
-              dataCache.updateDeviceState(sensor.device_id, state);
-            }
-          } catch (err) {
-            console.error(`Failed to fetch state for ${sensor.device_id}:`, err);
-          }
-        })
-      );
+      try {
+        const states = await fetchDeviceStates();
+        states.forEach((state) => {
+          dataCache.updateDeviceState(state.device_id, state);
+        });
+      } catch (err) {
+        console.error("Failed to fetch device states:", err);
+      }
     } catch (err) {
       error = err instanceof Error ? err.message : "Failed to load sensor data";
     } finally {

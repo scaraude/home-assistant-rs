@@ -55,4 +55,31 @@ impl Database {
 
         Ok(rows.next().transpose()?)
     }
+
+    /// Get all device states from database
+    pub fn get_all_device_states(&self) -> Result<Vec<DeviceState>> {
+        let conn = self.conn.lock_or_recover();
+        let mut stmt = conn.prepare(
+            "SELECT device_id, battery_level, link_quality, last_seen
+             FROM device_state
+             ORDER BY last_seen DESC",
+        )?;
+
+        let rows = stmt.query_map([], |row| {
+            Ok(DeviceState {
+                device_id: row.get(0)?,
+                battery_level: row.get(1)?,
+                link_quality: row.get(2)?,
+                last_seen: chrono::DateTime::from_timestamp(row.get(3)?, 0)
+                    .unwrap_or_else(chrono::Utc::now),
+            })
+        })?;
+
+        let mut states = Vec::new();
+        for row in rows {
+            states.push(row?);
+        }
+
+        Ok(states)
+    }
 }
