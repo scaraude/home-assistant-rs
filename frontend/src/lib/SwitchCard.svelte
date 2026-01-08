@@ -29,7 +29,9 @@
   let displayName = $derived(device.name || device.id);
   let deviceRulesFromStore = $derived($rulesByDevice[device.id] || []);
   let ruleCount = $derived(deviceRulesFromStore.length);
-  let shortId = $derived(device.id.slice(0, 16) + (device.id.length > 16 ? "..." : ""));
+  let shortId = $derived(
+    device.id.slice(0, 16) + (device.id.length > 16 ? "..." : "")
+  );
   let timeAgo = $derived(
     device.last_seen
       ? formatDistanceToNow(new Date(device.last_seen * 1000), {
@@ -89,6 +91,7 @@
       device.name = trimmedName;
       isEditingName = false;
 
+      dataCache.updateDeviceName(device.id, trimmedName);
       await updateDeviceName(device.id, trimmedName);
     } catch (err) {
       // Revert on error

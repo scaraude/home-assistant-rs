@@ -69,15 +69,32 @@ function createDataCache() {
     },
 
     updateDeviceName(deviceId: string, name: string) {
-      update((state) => ({
-        ...state,
-        sensors: {
-          ...state.sensors,
-          devices: state.sensors.devices.map((device) =>
-            device.device_id === deviceId ? { ...device, name } : device,
-          ),
-        },
-      }));
+      update((state) => {
+        const existingSwitch = state.switches.byId[deviceId];
+        const updatedSwitch = existingSwitch ? { ...existingSwitch, name } : null;
+
+        return {
+          ...state,
+          sensors: {
+            ...state.sensors,
+            devices: state.sensors.devices.map((device) =>
+              device.device_id === deviceId ? { ...device, name } : device,
+            ),
+          },
+          switches: updatedSwitch
+            ? {
+              ...state.switches,
+              byId: {
+                ...state.switches.byId,
+                [deviceId]: updatedSwitch,
+              },
+              devices: state.switches.devices.map((device) =>
+                device.id === deviceId ? updatedSwitch : device,
+              ),
+            }
+            : state.switches,
+        };
+      });
     },
 
     setSensorReadings(readings: SensorReading[], latestTimestamp: number, rangeHours: number) {
