@@ -1,6 +1,7 @@
 <script lang="ts">
   import ColorPickerModal from "./ColorPickerModal.svelte";
   import EditableDeviceName from "./EditableDeviceName.svelte";
+  import StatusBadge from "./StatusBadge.svelte";
   import { graphConfig } from "./stores/graphConfig";
   import { dataCache } from "./stores/dataCache";
   import { formatDistanceToNow } from "date-fns";
@@ -61,25 +62,13 @@
   tabindex="0"
   aria-pressed={sensor.visible}
 >
-  {#if deviceState && (deviceState.battery_level !== null || deviceState.link_quality !== null)}
+  {#if deviceState && (deviceState.battery_level != null || deviceState.link_quality != null)}
     <div class="corner-badges">
-      {#if deviceState.battery_level !== null && deviceState.battery_level !== undefined}
-        <span
-          class="corner-badge"
-          class:battery-low={deviceState.battery_level < 20}
-          title="Battery: {deviceState.battery_level}%"
-        >
-          {deviceState.battery_level}%
-        </span>
+      {#if deviceState.battery_level != null}
+        <StatusBadge type="battery" value={deviceState.battery_level} mini />
       {/if}
-      {#if deviceState.link_quality !== null && deviceState.link_quality !== undefined}
-        <span
-          class="corner-badge"
-          class:link-weak={deviceState.link_quality < 50}
-          title="Link quality: {deviceState.link_quality}"
-        >
-          {deviceState.link_quality}
-        </span>
+      {#if deviceState.link_quality != null}
+        <StatusBadge type="signal" value={deviceState.link_quality} mini />
       {/if}
     </div>
   {/if}
@@ -170,31 +159,6 @@
     gap: 0.25rem;
     align-items: flex-end;
     z-index: 1;
-  }
-
-  .corner-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.125rem;
-    padding: 0.125rem 0.375rem;
-    background: rgba(243, 244, 246, 0.95);
-    backdrop-filter: blur(4px);
-    border-radius: 4px;
-    font-size: 0.625rem;
-    color: #4b5563;
-    font-weight: 600;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-    line-height: 1;
-  }
-
-  .corner-badge.battery-low {
-    background: rgba(254, 243, 199, 0.95);
-    color: #92400e;
-  }
-
-  .corner-badge.link-weak {
-    background: rgba(254, 226, 226, 0.95);
-    color: #991b1b;
   }
 
   .sensor-header {

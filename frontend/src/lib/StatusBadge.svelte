@@ -1,7 +1,7 @@
 <script lang="ts">
   type BadgeType = 'battery' | 'signal';
 
-  let { type, value }: { type: BadgeType; value: number } = $props();
+  let { type, value, mini = false }: { type: BadgeType; value: number; mini?: boolean } = $props();
 
   const thresholds = {
     battery: { good: 75, medium: 25 },
@@ -12,9 +12,11 @@
     value >= thresholds[type].good ? 'good' :
     value >= thresholds[type].medium ? 'medium' : 'low'
   );
+
+  let label = $derived(type === 'battery' ? 'Battery' : 'Link quality');
 </script>
 
-<div class="badge {level}">
+<div class="badge {level}" class:mini title="{label}: {value}{type === 'battery' ? '%' : ''}">
   {#if type === 'battery'}
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
       <path d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4z"/>
@@ -44,6 +46,19 @@
   .badge svg {
     width: 14px;
     height: 14px;
+  }
+
+  .badge.mini {
+    gap: 2px;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 9px;
+    border: none;
+  }
+
+  .badge.mini svg {
+    width: 8px;
+    height: 8px;
   }
 
   .badge.good {
