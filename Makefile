@@ -211,10 +211,14 @@ serial:\n\
   port: $(ZIGBEE_DEVICE)\n\
 frontend: false\n\
 availability:\n\
-    enabled: true\n\
+  enabled: true\n\
 advanced:\n\
   log_level: info\n\
   log_directory: $(LOG_DIR)\n\
+  pan_id: $(Z2M_PAN_ID)\n\
+  ext_pan_id: $(Z2M_EXT_PAN_ID)\n\
+  network_key: $(Z2M_NETWORK_KEY)\n\
+  channel: $(Z2M_CHANNEL)\n\
 data_path: $(DATA_DIR)/zigbee2mqtt" > configs/zigbee2mqtt-config.yaml
 	# Environment file for Raspberry Pi
 	@echo "MQTT_BROKER=localhost\n\
