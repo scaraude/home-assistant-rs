@@ -149,6 +149,30 @@ impl MqttClient {
         }
     }
 
+    /// Publish to a raw MQTT topic (for custom requests)
+    pub async fn publish_raw(&self, topic: &str, payload: &str) -> Result<(), ClientError> {
+        info!(
+            topic = %topic,
+            payload = %payload,
+            "Publishing raw MQTT message"
+        );
+
+        match self
+            .client
+            .publish(topic, QoS::AtLeastOnce, false, payload.as_bytes())
+            .await
+        {
+            Ok(_) => {
+                info!(topic = %topic, "Successfully published raw message");
+                Ok(())
+            }
+            Err(e) => {
+                error!(error = %e, topic = %topic, "Failed to publish raw message");
+                Err(e)
+            }
+        }
+    }
+
     async fn remember_subscription(&self, topic: String, qos: QoS) {
         let mut guard = self.subscriptions.lock().await;
         if guard

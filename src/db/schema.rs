@@ -144,6 +144,7 @@ impl Database {
             "CREATE TABLE IF NOT EXISTS devices (
                 id TEXT PRIMARY KEY,
                 mqtt_topic TEXT NOT NULL UNIQUE,
+                ieee_addr TEXT,
                 name TEXT NOT NULL,
                 capability_type TEXT NOT NULL,
                 capability_subtype TEXT NOT NULL,
@@ -159,6 +160,12 @@ impl Database {
             }
         }
 
+        // Add identity columns if missing
+        self.ensure_device_identity_columns(conn)?;
+
+        // Add network topology columns if missing
+        self.ensure_device_network_columns(conn)?;
+
         // Create index on mqtt_topic for fast lookups
         debug!("Creating index idx_mqtt_topic if not exists");
         match conn.execute(
@@ -172,6 +179,42 @@ impl Database {
             }
         }
 
+        // Create index on ieee_addr for fast lookups
+        debug!("Creating index idx_ieee_addr if not exists");
+        match conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_ieee_addr ON devices(ieee_addr)",
+            [],
+        ) {
+            Ok(_) => debug!("Index idx_ieee_addr created/verified"),
+            Err(e) => {
+                error!(error = %e, "Failed to create index idx_ieee_addr");
+                return Err(e);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Ensure identity columns exist in devices table
+    fn ensure_device_identity_columns(&self, conn: &rusqlite::Connection) -> Result<()> {
+        self.add_column_if_missing(conn, "devices", "ieee_addr", "TEXT")?;
+        self.backfill_device_ieee_addr(conn)?;
+        Ok(())
+    }
+
+    /// Ensure network topology columns exist in devices table
+    fn ensure_device_network_columns(&self, conn: &rusqlite::Connection) -> Result<()> {
+        self.add_column_if_missing(conn, "devices", "is_bridge", "INTEGER DEFAULT 0")?;
+        self.add_column_if_missing(conn, "devices", "parent_device_id", "TEXT")?;
+        Ok(())
+    }
+
+    fn backfill_device_ieee_addr(&self, conn: &rusqlite::Connection) -> Result<()> {
+        debug!("Backfilling missing device IEEE addresses from mqtt_topic");
+        conn.execute(
+            "UPDATE devices SET ieee_addr = mqtt_topic WHERE ieee_addr IS NULL OR ieee_addr = ''",
+            [],
+        )?;
         Ok(())
     }
 

@@ -4,6 +4,7 @@
   import SensorsView from "./routes/SensorsView.svelte";
   import LogsView from "./routes/LogsView.svelte";
   import CommanderView from "./routes/CommanderView.svelte";
+  import NetworkView from "./routes/NetworkView.svelte";
   import {
     fetchSensors,
     fetchReadings,
@@ -18,6 +19,7 @@
     "/": SensorsView,
     "/sensors": SensorsView,
     "/commander": CommanderView,
+    "/network": NetworkView,
     "/logs": LogsView,
   };
 
@@ -173,6 +175,7 @@
   let currentPath = $derived($location);
   let isOnSensors = $derived(currentPath === "/" || currentPath === "/sensors");
   let isOnCommander = $derived(currentPath === "/commander");
+  let isOnNetwork = $derived(currentPath === "/network");
   let isOnLogs = $derived(currentPath === "/logs");
   let permitJoinActive = $derived(permitJoinSecondsRemaining !== null);
   let permitJoinLabel = $derived(
@@ -200,6 +203,9 @@
         <a href="#/" class="nav-button" class:active={isOnSensors}> Sensors </a>
         <a href="#/commander" class="nav-button" class:active={isOnCommander}>
           Commander
+        </a>
+        <a href="#/network" class="nav-button" class:active={isOnNetwork}>
+          Network
         </a>
         <a href="#/logs" class="nav-button" class:active={isOnLogs}>
           System Logs

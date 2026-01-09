@@ -1,7 +1,7 @@
 use crate::db::Database;
 use crate::events::bus::EventBus;
 use crate::models::DeviceMqttMessage;
-use crate::mqtt::handlers::handle_device_message;
+use crate::mqtt::handlers::{handle_bridge_event, handle_bridge_response, handle_device_message};
 use crate::mqtt::topic::ZigbeeTopic;
 use rumqttc::{AsyncClient, Event, EventLoop, Packet, QoS};
 use std::sync::Arc;
@@ -65,6 +65,29 @@ pub(super) fn spawn_event_loop(
                     );
 
                     if let Some(topic) = ZigbeeTopic::parse(&p.topic) {
+                        // Handle bridge response topics (e.g., networkmap)
+                        if topic.is_bridge_response() {
+                            debug!(topic = %p.topic, "Handling bridge response");
+                            if let Ok(payload) = String::from_utf8(p.payload.to_vec()) {
+                                handle_bridge_response(&payload, &db, &event_bus.sender()).await;
+                            } else {
+                                warn!(topic = %p.topic, "Invalid UTF-8 in bridge response payload");
+                            }
+                            continue;
+                        }
+
+                        // Handle bridge event topics (e.g., device_joined)
+                        if topic.is_bridge_event() {
+                            debug!(topic = %p.topic, "Handling bridge event");
+                            if let Ok(payload) = String::from_utf8(p.payload.to_vec()) {
+                                handle_bridge_event(&payload, &db, &event_bus.sender()).await;
+                            } else {
+                                warn!(topic = %p.topic, "Invalid UTF-8 in bridge event payload");
+                            }
+                            continue;
+                        }
+
+                        // Skip other bridge topics
                         if topic.is_bridge() {
                             skipped_bridge += 1;
                             debug!(

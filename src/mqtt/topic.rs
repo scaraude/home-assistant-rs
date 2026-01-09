@@ -6,6 +6,10 @@ pub const ZIGBEE_NAMESPACE: &str = "zigbee2mqtt/";
 pub const BRIDGE_PREFIX: &str = "bridge/";
 /// Bridge request topics for Zigbee2MQTT (e.g. permit_join).
 pub const BRIDGE_REQUEST_PREFIX: &str = "bridge/request/";
+/// Bridge response topics for Zigbee2MQTT (e.g. networkmap response).
+pub const BRIDGE_RESPONSE_PREFIX: &str = "bridge/response/";
+/// Bridge event topics for Zigbee2MQTT (e.g. device_joined).
+pub const BRIDGE_EVENT_PREFIX: &str = "bridge/event";
 /// Suffix used for command topics (publish-only).
 pub const COMMAND_SUFFIX: &str = "/set";
 
@@ -25,6 +29,16 @@ impl<'a> ZigbeeTopic<'a> {
     /// Whether the topic describes bridge metadata.
     pub fn is_bridge(&self) -> bool {
         self.tail.starts_with(BRIDGE_PREFIX)
+    }
+
+    /// Whether this is a bridge response topic (e.g. networkmap).
+    pub fn is_bridge_response(&self) -> bool {
+        self.tail.starts_with(BRIDGE_RESPONSE_PREFIX)
+    }
+
+    /// Whether this is a bridge event topic (e.g. device_joined).
+    pub fn is_bridge_event(&self) -> bool {
+        self.tail.starts_with(BRIDGE_EVENT_PREFIX)
     }
 
     /// Whether this topic points to the command channel ("/set").

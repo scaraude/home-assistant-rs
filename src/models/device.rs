@@ -60,6 +60,9 @@ pub struct Device {
     /// MQTT topic for this device (e.g., "0x00158d0001a2b3c4")
     pub mqtt_topic: String,
 
+    /// IEEE address for this device (usually matches mqtt_topic)
+    pub ieee_addr: String,
+
     /// Human-readable name for the device
     pub name: String,
 
@@ -72,6 +75,12 @@ pub struct Device {
     /// When the device was added to the system
     #[serde(with = "chrono::serde::ts_seconds")]
     pub added_at: DateTime<Utc>,
+
+    /// Whether this device acts as a router in the Zigbee mesh
+    pub is_bridge: bool,
+
+    /// Parent device in the mesh network (None for coordinator)
+    pub parent_device_id: Option<String>,
 }
 
 impl Device {
@@ -84,11 +93,14 @@ impl Device {
     ) -> Self {
         Self {
             id: uuid::Uuid::new_v4().to_string(),
+            ieee_addr: mqtt_topic.clone(),
             mqtt_topic,
             name,
             capability,
             power_source,
             added_at: Utc::now(),
+            is_bridge: false,
+            parent_device_id: None,
         }
     }
 
@@ -161,6 +173,26 @@ impl DeviceState {
             last_seen: Utc::now(),
         }
     }
+}
+
+/// Network topology response containing devices and their connections
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NetworkTopology {
+    /// All devices in the network
+    pub devices: Vec<Device>,
+    /// Network edges computed from parent_device_id relationships
+    pub edges: Vec<NetworkEdge>,
+}
+
+/// A connection between two devices in the Zigbee mesh
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NetworkEdge {
+    /// Source device ID (parent)
+    pub source_id: String,
+    /// Target device ID (child)
+    pub target_id: String,
+    /// Link quality indicator (0-255), if available
+    pub link_quality: Option<u8>,
 }
 
 #[cfg(test)]

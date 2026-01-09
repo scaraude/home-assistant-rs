@@ -23,16 +23,19 @@ impl Database {
 
         let start = std::time::Instant::now();
         let result = self.conn.lock_or_recover().execute(
-            "INSERT INTO devices (id, mqtt_topic, name, capability_type, capability_subtype, power_source, added_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO devices (id, mqtt_topic, ieee_addr, name, capability_type, capability_subtype, power_source, added_at, is_bridge, parent_device_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 device.id,
                 device.mqtt_topic,
+                device.ieee_addr,
                 device.name,
                 capability_type,
                 capability_subtype,
                 device.power_source.to_db_string(),
-                device.added_at.timestamp()
+                device.added_at.timestamp(),
+                device.is_bridge as i32,
+                device.parent_device_id
             ],
         );
 
@@ -65,7 +68,7 @@ impl Database {
 
         let conn = self.conn.lock_or_recover();
         let mut stmt = conn.prepare(
-            "SELECT id, mqtt_topic, name, capability_type, capability_subtype, power_source, added_at
+            "SELECT id, mqtt_topic, ieee_addr, name, capability_type, capability_subtype, power_source, added_at, is_bridge, parent_device_id
              FROM devices
              WHERE id = ?1",
         )?;
@@ -100,7 +103,7 @@ impl Database {
 
         let conn = self.conn.lock_or_recover();
         let mut stmt = conn.prepare(
-            "SELECT id, mqtt_topic, name, capability_type, capability_subtype, power_source, added_at
+            "SELECT id, mqtt_topic, ieee_addr, name, capability_type, capability_subtype, power_source, added_at, is_bridge, parent_device_id
              FROM devices
              WHERE mqtt_topic = ?1",
         )?;
@@ -129,6 +132,42 @@ impl Database {
         }
     }
 
+    /// Get a device by its IEEE address
+    pub fn get_device_by_ieee_addr(&self, ieee_addr: &str) -> Result<Option<Device>> {
+        debug!(ieee_addr = %ieee_addr, "Querying device by IEEE address");
+        let start = std::time::Instant::now();
+
+        let conn = self.conn.lock_or_recover();
+        let mut stmt = conn.prepare(
+            "SELECT id, mqtt_topic, ieee_addr, name, capability_type, capability_subtype, power_source, added_at, is_bridge, parent_device_id
+             FROM devices
+             WHERE ieee_addr = ?1",
+        )?;
+
+        let result = stmt.query_row(params![ieee_addr], Self::map_device_row);
+
+        let elapsed = start.elapsed();
+        match result {
+            Ok(device) => {
+                debug!(
+                    ieee_addr = %ieee_addr,
+                    device_id = %device.id,
+                    duration_us = elapsed.as_micros(),
+                    "Found device"
+                );
+                Ok(Some(device))
+            }
+            Err(rusqlite::Error::QueryReturnedNoRows) => {
+                debug!(ieee_addr = %ieee_addr, "Device not found");
+                Ok(None)
+            }
+            Err(e) => {
+                error!(error = %e, ieee_addr = %ieee_addr, "Failed to query device");
+                Err(e)
+            }
+        }
+    }
+
     /// Get all devices
     pub fn get_all_devices(&self) -> Result<Vec<Device>> {
         debug!("Querying all devices");
@@ -136,7 +175,7 @@ impl Database {
 
         let conn = self.conn.lock_or_recover();
         let mut stmt = conn.prepare(
-            "SELECT id, mqtt_topic, name, capability_type, capability_subtype, power_source, added_at
+            "SELECT id, mqtt_topic, ieee_addr, name, capability_type, capability_subtype, power_source, added_at, is_bridge, parent_device_id
              FROM devices
              ORDER BY name",
         )?;
@@ -262,19 +301,65 @@ impl Database {
     ///
     /// Eliminates duplication across get_device_by_id, get_device_by_mqtt_topic, and get_all_devices
     fn map_device_row(row: &rusqlite::Row) -> Result<Device> {
-        let capability_type_str: String = row.get(3)?;
-        let capability_subtype_str: String = row.get(4)?;
-        let power_source_str: String = row.get(5)?;
+        let capability_type_str: String = row.get(4)?;
+        let capability_subtype_str: String = row.get(5)?;
+        let power_source_str: String = row.get(6)?;
+        let is_bridge_int: i32 = row.get(8).unwrap_or(0);
 
         Ok(Device {
             id: row.get(0)?,
             mqtt_topic: row.get(1)?,
-            name: row.get(2)?,
+            ieee_addr: row.get(2)?,
+            name: row.get(3)?,
             capability: Device::capability_from_db(&capability_type_str, &capability_subtype_str)
-                .ok_or_else(|| invalid_column_error(3, "capability"))?,
+                .ok_or_else(|| invalid_column_error(4, "capability"))?,
             power_source: PowerSource::from_db_string(&power_source_str)
-                .ok_or_else(|| invalid_column_error(5, "power_source"))?,
-            added_at: timestamp_to_datetime(row.get(6)?, "device.added_at"),
+                .ok_or_else(|| invalid_column_error(6, "power_source"))?,
+            added_at: timestamp_to_datetime(row.get(7)?, "device.added_at"),
+            is_bridge: is_bridge_int != 0,
+            parent_device_id: row.get(9)?,
         })
+    }
+
+    /// Update device network topology fields
+    pub fn update_device_topology(
+        &self,
+        device_id: &str,
+        is_bridge: bool,
+        parent_device_id: Option<String>,
+    ) -> Result<()> {
+        debug!(
+            device_id = %device_id,
+            is_bridge = %is_bridge,
+            parent_device_id = ?parent_device_id,
+            "Updating device network topology"
+        );
+
+        let start = std::time::Instant::now();
+        let result = self.conn.lock_or_recover().execute(
+            "UPDATE devices SET is_bridge = ?1, parent_device_id = ?2 WHERE id = ?3",
+            params![is_bridge as i32, parent_device_id, device_id],
+        );
+
+        match result {
+            Ok(rows) => {
+                let elapsed = start.elapsed();
+                info!(
+                    device_id = %device_id,
+                    rows_affected = rows,
+                    duration_us = elapsed.as_micros(),
+                    "Successfully updated device topology"
+                );
+                Ok(())
+            }
+            Err(e) => {
+                error!(
+                    error = %e,
+                    device_id = %device_id,
+                    "Failed to update device topology"
+                );
+                Err(e)
+            }
+        }
     }
 }

@@ -57,6 +57,13 @@ pub enum SystemEvent {
         #[serde(with = "chrono::serde::ts_seconds")]
         timestamp: DateTime<Utc>,
     },
+    /// Network topology has been updated
+    NetworkTopologyUpdated,
+    /// Device pairing event (device_joined, device_interview)
+    DevicePairing {
+        ieee_addr: String,
+        friendly_name: String,
+    },
 }
 
 impl SystemEvent {
@@ -70,6 +77,8 @@ impl SystemEvent {
             SystemEvent::AutomationTriggered { .. } => "automation_triggered",
             SystemEvent::AutomationExecuted { .. } => "automation_executed",
             SystemEvent::LogEntries { .. } => "log_entries",
+            SystemEvent::NetworkTopologyUpdated => "network_topology_updated",
+            SystemEvent::DevicePairing { .. } => "device_pairing",
         }
     }
 }

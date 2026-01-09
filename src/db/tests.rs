@@ -205,12 +205,15 @@ mod tests {
         let device = Device {
             id: "device1".to_string(),
             mqtt_topic: "zigbee2mqtt/device1".to_string(),
+            ieee_addr: "zigbee2mqtt/device1".to_string(),
             name: "Living Room Sensor".to_string(),
             capability: DeviceCapability::Sensor {
                 sensor_type: SensorType::TempHumidity,
             },
             power_source: PowerSource::Battery,
             added_at: Utc::now(),
+            is_bridge: false,
+            parent_device_id: None,
         };
 
         db.insert_device(&device).unwrap();
@@ -236,12 +239,15 @@ mod tests {
         let device = Device {
             id: "device1".to_string(),
             mqtt_topic: "zigbee2mqtt/device1".to_string(),
+            ieee_addr: "zigbee2mqtt/device1".to_string(),
             name: "Living Room Sensor".to_string(),
             capability: DeviceCapability::Sensor {
                 sensor_type: SensorType::TempHumidity,
             },
             power_source: PowerSource::Battery,
             added_at: Utc::now(),
+            is_bridge: false,
+            parent_device_id: None,
         };
 
         db.insert_device(&device).unwrap();
@@ -259,23 +265,29 @@ mod tests {
         let device1 = Device {
             id: "device1".to_string(),
             mqtt_topic: "zigbee2mqtt/device1".to_string(),
+            ieee_addr: "zigbee2mqtt/device1".to_string(),
             name: "Device 1".to_string(),
             capability: DeviceCapability::Sensor {
                 sensor_type: SensorType::TempHumidity,
             },
             power_source: PowerSource::Battery,
             added_at: Utc::now(),
+            is_bridge: false,
+            parent_device_id: None,
         };
 
         let device2 = Device {
             id: "device2".to_string(),
             mqtt_topic: "zigbee2mqtt/device2".to_string(),
+            ieee_addr: "zigbee2mqtt/device2".to_string(),
             name: "Device 2".to_string(),
             capability: DeviceCapability::Commander {
                 commander_type: CommanderType::Switch,
             },
             power_source: PowerSource::Plugged,
             added_at: Utc::now(),
+            is_bridge: false,
+            parent_device_id: None,
         };
 
         db.insert_device(&device1).unwrap();
@@ -292,12 +304,15 @@ mod tests {
         let device = Device {
             id: "device1".to_string(),
             mqtt_topic: "zigbee2mqtt/device1".to_string(),
+            ieee_addr: "zigbee2mqtt/device1".to_string(),
             name: "Old Name".to_string(),
             capability: DeviceCapability::Sensor {
                 sensor_type: SensorType::TempHumidity,
             },
             power_source: PowerSource::Battery,
             added_at: Utc::now(),
+            is_bridge: false,
+            parent_device_id: None,
         };
 
         db.insert_device(&device).unwrap();
@@ -314,12 +329,15 @@ mod tests {
         let device = Device {
             id: "device1".to_string(),
             mqtt_topic: "zigbee2mqtt/device1".to_string(),
+            ieee_addr: "zigbee2mqtt/device1".to_string(),
             name: "Device 1".to_string(),
             capability: DeviceCapability::Commander {
                 commander_type: CommanderType::Switch,
             },
             power_source: PowerSource::Plugged,
             added_at: Utc::now(),
+            is_bridge: false,
+            parent_device_id: None,
         };
 
         db.insert_device(&device).unwrap();
@@ -345,12 +363,15 @@ mod tests {
         let device = Device {
             id: "sensor1".to_string(),
             mqtt_topic: "zigbee2mqtt/sensor1".to_string(),
+            ieee_addr: "zigbee2mqtt/sensor1".to_string(),
             name: "Living Room Sensor".to_string(),
             capability: DeviceCapability::Sensor {
                 sensor_type: SensorType::TempHumidity,
             },
             power_source: PowerSource::Battery,
             added_at: Utc::now(),
+            is_bridge: false,
+            parent_device_id: None,
         };
         db.insert_device(&device).unwrap();
 
@@ -652,8 +673,8 @@ mod tests {
         let tx = Transaction::begin(&conn).unwrap();
 
         conn.execute(
-            "INSERT INTO devices (id, mqtt_topic, name, capability_type, capability_subtype, power_source, added_at)
-             VALUES ('test', 'topic', 'name', 'sensor', 'temp_humidity', 'battery', 0)",
+            "INSERT INTO devices (id, mqtt_topic, ieee_addr, name, capability_type, capability_subtype, power_source, added_at)
+             VALUES ('test', 'topic', 'topic', 'name', 'sensor', 'temp_humidity', 'battery', 0)",
             [],
         )
         .unwrap();
@@ -677,8 +698,8 @@ mod tests {
             let _tx = Transaction::begin(&conn).unwrap();
 
             conn.execute(
-                "INSERT INTO devices (id, mqtt_topic, name, capability_type, capability_subtype, power_source, added_at)
-                 VALUES ('test', 'topic', 'name', 'sensor', 'temp_humidity', 'battery', 0)",
+                "INSERT INTO devices (id, mqtt_topic, ieee_addr, name, capability_type, capability_subtype, power_source, added_at)
+                 VALUES ('test', 'topic', 'topic', 'name', 'sensor', 'temp_humidity', 'battery', 0)",
                 [],
             )
             .unwrap();
@@ -700,12 +721,15 @@ mod tests {
         let device = Device {
             id: "device1".to_string(),
             mqtt_topic: "zigbee2mqtt/device1".to_string(),
+            ieee_addr: "zigbee2mqtt/device1".to_string(),
             name: "Device 1".to_string(),
             capability: DeviceCapability::Sensor {
                 sensor_type: SensorType::TempHumidity,
             },
             power_source: PowerSource::Battery,
             added_at: Utc::now(),
+            is_bridge: false,
+            parent_device_id: None,
         };
 
         db.insert_device(&device).unwrap();
@@ -714,12 +738,15 @@ mod tests {
         let duplicate = Device {
             id: "device1".to_string(),
             mqtt_topic: "zigbee2mqtt/different".to_string(),
+            ieee_addr: "zigbee2mqtt/different".to_string(),
             name: "Different".to_string(),
             capability: DeviceCapability::Commander {
                 commander_type: CommanderType::Switch,
             },
             power_source: PowerSource::Plugged,
             added_at: Utc::now(),
+            is_bridge: false,
+            parent_device_id: None,
         };
 
         let result = db.insert_device(&duplicate);
@@ -733,12 +760,15 @@ mod tests {
         let device = Device {
             id: "device1".to_string(),
             mqtt_topic: "zigbee2mqtt/device1".to_string(),
+            ieee_addr: "zigbee2mqtt/device1".to_string(),
             name: "Device 1".to_string(),
             capability: DeviceCapability::Sensor {
                 sensor_type: SensorType::TempHumidity,
             },
             power_source: PowerSource::Battery,
             added_at: Utc::now(),
+            is_bridge: false,
+            parent_device_id: None,
         };
 
         db.insert_device(&device).unwrap();
@@ -747,12 +777,15 @@ mod tests {
         let duplicate = Device {
             id: "device2".to_string(),
             mqtt_topic: "zigbee2mqtt/device1".to_string(),
+            ieee_addr: "zigbee2mqtt/device1".to_string(),
             name: "Different".to_string(),
             capability: DeviceCapability::Commander {
                 commander_type: CommanderType::Switch,
             },
             power_source: PowerSource::Plugged,
             added_at: Utc::now(),
+            is_bridge: false,
+            parent_device_id: None,
         };
 
         let result = db.insert_device(&duplicate);
@@ -839,6 +872,16 @@ mod tests {
         let index_exists: i64 = conn
             .query_row(
                 "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_mqtt_topic'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(index_exists, 1);
+
+        // Check idx_ieee_addr index
+        let index_exists: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_ieee_addr'",
                 [],
                 |row| row.get(0),
             )

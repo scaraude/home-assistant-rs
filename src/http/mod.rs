@@ -229,6 +229,14 @@ async fn handle_request(
             debug!(query = ?query, "Serving process history");
             routes::serve_process_history(query.as_deref())
         }),
+        ("GET", "/api/network/topology") => Ok({
+            debug!("Serving network topology");
+            routes::serve_network_topology(&db, &device_state)
+        }),
+        ("POST", "/api/network/refresh") => Ok({
+            debug!("Refreshing network map");
+            routes::refresh_network_map(&mqtt).await
+        }),
         ("GET", "/ws") => websocket::handle_websocket_upgrade(req, ws_broadcaster).await,
         (_, path_str) if path_str.starts_with("/assets/") || path_str.ends_with(".svg") => Ok({
             debug!(path = %path_str, "Serving static asset");
