@@ -3,7 +3,8 @@ import type { AutomationAction, SensorReading, LogEntry } from './api';
 
 type DeviceCapability =
   | { type: 'sensor'; sensor_type: 'temp_humidity' | 'presence' }
-  | { type: 'commander'; commander_type: 'switch' };
+  | { type: 'commander'; commander_type: 'switch' }
+  | { type: 'coordinator' };
 
 export type LogFile = 'system_monitor' | 'process_monitor' | 'top_cpu_consumers' | 'top_ram_consumers';
 

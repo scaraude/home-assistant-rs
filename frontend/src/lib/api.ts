@@ -585,7 +585,7 @@ export interface NetworkTopology {
     ieee_addr: string;
     name: string;
     capability: {
-      type: 'sensor' | 'commander';
+      type: 'sensor' | 'commander' | 'coordinator';
       sensor_type?: 'temp_humidity' | 'presence';
       commander_type?: 'switch';
     };

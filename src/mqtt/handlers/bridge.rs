@@ -1,5 +1,6 @@
 use crate::db::Database;
 use crate::events::SystemEvent;
+use crate::models::{Device, DeviceCapability, PowerSource};
 use serde::Deserialize;
 use tokio::sync::broadcast;
 use tracing::{debug, error, info, warn};
@@ -26,6 +27,8 @@ pub struct NetworkMapValue {
 
 #[derive(Debug, Deserialize)]
 pub struct NetworkNode {
+    #[serde(rename = "friendlyName")]
+    pub friendly_name: Option<String>,
     #[serde(rename = "ieeeAddr")]
     pub ieee_addr: String,
     #[serde(rename = "type")]
@@ -127,6 +130,10 @@ async fn process_network_map(
     let mut node_types = std::collections::HashMap::new();
     for node in &response.data.value.nodes {
         node_types.insert(node.ieee_addr.clone(), node.node_type.clone());
+
+        if node.node_type == "Coordinator" {
+            ensure_coordinator_device(db, node);
+        }
     }
 
     let mut parent_by_child = std::collections::HashMap::new();
@@ -238,4 +245,52 @@ fn assign_parent(
     }
 
     parent_by_child.insert(child_ieee.to_string(), parent_ieee.to_string());
+}
+
+fn ensure_coordinator_device(db: &Database, node: &NetworkNode) {
+    let coordinator_name = node
+        .friendly_name
+        .as_ref()
+        .filter(|name| !name.trim().is_empty())
+        .cloned()
+        .unwrap_or_else(|| "Coordinator".to_string());
+
+    match find_device_by_ieee_or_topic(db, &node.ieee_addr) {
+        Ok(Some(device)) => {
+            debug!(
+                device_id = %device.id,
+                ieee_addr = %node.ieee_addr,
+                "Coordinator already exists in database"
+            );
+        }
+        Ok(None) => {
+            let device = Device::new(
+                node.ieee_addr.clone(),
+                coordinator_name,
+                DeviceCapability::Coordinator,
+                PowerSource::Plugged,
+            );
+
+            if let Err(e) = db.insert_device(&device) {
+                error!(
+                    error = %e,
+                    ieee_addr = %node.ieee_addr,
+                    "Failed to insert coordinator device"
+                );
+            } else {
+                info!(
+                    device_id = %device.id,
+                    ieee_addr = %node.ieee_addr,
+                    "Coordinator device created from network map"
+                );
+            }
+        }
+        Err(e) => {
+            error!(
+                error = %e,
+                ieee_addr = %node.ieee_addr,
+                "Failed to query coordinator device"
+            );
+        }
+    }
 }

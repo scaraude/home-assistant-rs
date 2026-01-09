@@ -92,6 +92,13 @@ pub async fn handle_device_message(
             )
             .await;
         }
+        _ => {
+            debug!(
+                device_id = %device_id,
+                capability = ?device.capability,
+                "Device capability not handled, skipping"
+            );
+        }
     }
 }
 

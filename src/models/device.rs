@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 pub enum DeviceCapability {
     Sensor { sensor_type: SensorType },
     Commander { commander_type: CommanderType },
+    Coordinator,
 }
 
 /// Type of sensor capability
@@ -119,6 +120,7 @@ impl Device {
                 "commander".to_string(),
                 commander_type.to_db_string().to_string(),
             ),
+            DeviceCapability::Coordinator => ("coordinator".to_string(), "coordinator".to_string()),
         }
     }
 
@@ -129,6 +131,7 @@ impl Device {
                 .map(|sensor_type| DeviceCapability::Sensor { sensor_type }),
             "commander" => CommanderType::from_db_string(cap_subtype)
                 .map(|commander_type| DeviceCapability::Commander { commander_type }),
+            "coordinator" => Some(DeviceCapability::Coordinator),
             _ => None,
         }
     }
