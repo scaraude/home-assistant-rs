@@ -68,6 +68,7 @@ impl DbWriterService {
                 device_id,
                 battery,
                 link_quality,
+                turbo_mode,
                 timestamp,
             } => {
                 let state = DeviceState {
@@ -75,6 +76,7 @@ impl DbWriterService {
                     battery_level: battery,
                     link_quality,
                     last_seen: timestamp,
+                    turbo_mode,
                 };
 
                 if let Err(e) = self.db.upsert_device_state(&state) {

@@ -31,6 +31,9 @@ pub struct DeviceMqttMessage {
     /// Switch state parsed from MQTT payload
     pub state: Option<SwitchState>,
 
+    /// Turbo mode flag (if supported by device)
+    pub turbo_mode: Option<bool>,
+
     // ==================== Catch-all ====================
     /// Other fields we don't use yet
     #[serde(flatten)]
@@ -43,6 +46,7 @@ impl DeviceMqttMessage {
         DeviceStateFields {
             battery_level: self.battery,
             link_quality: self.linkquality,
+            turbo_mode: self.turbo_mode,
         }
     }
 
@@ -66,7 +70,14 @@ impl DeviceMqttMessage {
         self.other.keys().any(|key| {
             matches!(
                 key.as_str(),
-                "inching_control" | "inching_time" | "inching_mode" | "inching_control_set"
+                "inching_control"
+                    | "inching_time"
+                    | "inching_mode"
+                    | "inching_control_set"
+                    | "delayed_power_on_state"
+                    | "delayed_power_on_time"
+                    | "detach_relay_mode"
+                    | "external_trigger_mode"
             )
         })
     }
@@ -77,6 +88,7 @@ impl DeviceMqttMessage {
 pub struct DeviceStateFields {
     pub battery_level: Option<u8>,
     pub link_quality: Option<u8>,
+    pub turbo_mode: Option<bool>,
 }
 
 /// Switch state enum
@@ -273,6 +285,51 @@ mod tests {
     use super::*;
     use serde::Deserialize;
 
+    fn create_test_mqtt_message(
+        linkality: Option<u8>,
+        battery: Option<u8>,
+        temperature: Option<f32>,
+        humidity: Option<f32>,
+        occupancy: Option<bool>,
+        state: Option<SwitchState>,
+        turbo_mode: Option<bool>,
+    ) -> DeviceMqttMessage {
+        DeviceMqttMessage {
+            linkquality: if linkality.is_some() {
+                linkality
+            } else {
+                Some(100)
+            },
+            battery: if battery.is_some() { battery } else { Some(85) },
+            temperature: if temperature.is_some() {
+                temperature
+            } else {
+                Some(22.5)
+            },
+            humidity: if humidity.is_some() {
+                humidity
+            } else {
+                Some(55.0)
+            },
+            occupancy: if occupancy.is_some() {
+                occupancy
+            } else {
+                Some(true)
+            },
+            state: if state.is_some() {
+                state
+            } else {
+                Some(SwitchState::On)
+            },
+            turbo_mode: if turbo_mode.is_some() {
+                turbo_mode
+            } else {
+                Some(true)
+            },
+            other: serde_json::Map::new(),
+        }
+    }
+
     #[test]
     fn test_switch_state_from_mqtt_string() {
         assert_eq!(SwitchState::from_mqtt_string("ON"), Some(SwitchState::On));
@@ -304,15 +361,7 @@ mod tests {
 
     #[test]
     fn test_device_mqtt_message_has_sensor_data() {
-        let msg = DeviceMqttMessage {
-            linkquality: Some(100),
-            battery: Some(80),
-            temperature: Some(22.5),
-            humidity: Some(50.0),
-            occupancy: None,
-            state: None,
-            other: Default::default(),
-        };
+        let msg = create_test_mqtt_message(None, None, None, None, None, None, None);
 
         assert!(msg.has_sensor_data(&SensorType::TempHumidity));
         assert!(!msg.has_sensor_data(&SensorType::Presence));
@@ -320,15 +369,7 @@ mod tests {
 
     #[test]
     fn test_extract_device_state_returns_struct_with_fields() {
-        let msg = DeviceMqttMessage {
-            linkquality: Some(10),
-            battery: Some(90),
-            temperature: None,
-            humidity: None,
-            occupancy: None,
-            state: None,
-            other: Default::default(),
-        };
+        let msg = create_test_mqtt_message(Some(10), Some(90), None, None, None, None, None);
 
         let state = msg.extract_device_state();
         assert_eq!(state.battery_level, Some(90));
@@ -337,30 +378,15 @@ mod tests {
 
     #[test]
     fn test_device_mqtt_message_has_commander_data() {
-        let msg = DeviceMqttMessage {
-            linkquality: Some(100),
-            battery: None,
-            temperature: None,
-            humidity: None,
-            occupancy: None,
-            state: Some(SwitchState::On),
-            other: Default::default(),
-        };
+        let msg =
+            create_test_mqtt_message(None, None, None, None, None, Some(SwitchState::On), None);
 
         assert!(msg.has_commander_data(&CommanderType::Switch));
     }
 
     #[test]
     fn test_sensor_reading_from_mqtt() {
-        let msg = DeviceMqttMessage {
-            linkquality: Some(100),
-            battery: Some(80),
-            temperature: Some(22.5),
-            humidity: Some(50.0),
-            occupancy: None,
-            state: None,
-            other: Default::default(),
-        };
+        let msg = create_test_mqtt_message(None, None, Some(22.5), Some(50.0), None, None, None);
 
         let reading =
             SensorReading::from_mqtt("device1".to_string(), &SensorType::TempHumidity, &msg);

@@ -8,6 +8,7 @@ use crate::models::{
     UpdateAutomationRuleRequest,
 };
 use crate::mqtt::MqttClient;
+use crate::mqtt::topic::ZigbeeTopic;
 use crate::state::{DeviceStateStore, SwitchStateStore};
 use chrono::{Duration, Utc};
 use http_body_util::{BodyExt, Full};
@@ -470,6 +471,7 @@ pub fn serve_device_state(db: &Arc<Database>, device_id: &str) -> Response<Full<
                 "device_id": state.device_id,
                 "battery_level": state.battery_level,
                 "link_quality": state.link_quality,
+                "turbo_mode": state.turbo_mode,
                 "last_seen": state.last_seen.timestamp(),
             });
 
@@ -479,6 +481,7 @@ pub fn serve_device_state(db: &Arc<Database>, device_id: &str) -> Response<Full<
                         device_id = %device_id,
                         battery_level = ?state.battery_level,
                         link_quality = ?state.link_quality,
+                        turbo_mode = ?state.turbo_mode,
                         "Successfully retrieved device state"
                     );
                     json_response(json)
@@ -769,6 +772,95 @@ pub async fn update_device(
                 device_id = %device_id,
                 "Failed to update device name in database"
             );
+            internal_error_response(e.to_string().as_str())
+        }
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct DeviceOptionUpdate {
+    turbo_mode: Option<bool>,
+}
+
+pub async fn set_device_option(
+    req: Request<hyper::body::Incoming>,
+    mqtt: &Arc<Mutex<MqttClient>>,
+    db: &Arc<Database>,
+    path: &str,
+) -> Response<Full<Bytes>> {
+    debug!("Parsing device option update request");
+
+    let device_path = path.strip_prefix("/api/devices/").unwrap_or("");
+    let device_id = device_path.strip_suffix("/set").unwrap_or("");
+
+    if device_id.is_empty() {
+        warn!("Missing device ID in path");
+        return bad_request_response("Missing device ID");
+    }
+
+    let device = match db._get_device_by_id(device_id) {
+        Ok(Some(device)) => device,
+        Ok(None) => {
+            warn!(device_id = %device_id, "Device not found for option update");
+            return not_found_response("Device not found");
+        }
+        Err(e) => {
+            error!(error = %e, device_id = %device_id, "Failed to fetch device for option update");
+            return internal_error_response("Failed to fetch device");
+        }
+    };
+
+    let body_bytes = match req.into_body().collect().await {
+        Ok(collected) => collected.to_bytes(),
+        Err(e) => {
+            error!(error = %e, "Failed to read request body");
+            return bad_request_response("Failed to read request body");
+        }
+    };
+
+    let update: DeviceOptionUpdate = match serde_json::from_slice::<DeviceOptionUpdate>(&body_bytes)
+    {
+        Ok(upd) => upd,
+        Err(e) => {
+            error!(error = %e, "Failed to parse device option update JSON");
+            return bad_request_response(format!("Invalid JSON: {}", e).as_str());
+        }
+    };
+
+    let turbo_mode = match update.turbo_mode {
+        Some(value) => value,
+        None => {
+            warn!(device_id = %device_id, "Missing turbo_mode in update payload");
+            return bad_request_response("Missing turbo_mode value");
+        }
+    };
+
+    let payload = serde_json::json!({ "turbo_mode": turbo_mode });
+    let payload_json = match serde_json::to_string(&payload) {
+        Ok(json) => json,
+        Err(e) => {
+            error!(error = %e, "Failed to serialize turbo_mode payload");
+            return internal_error_response("Failed to serialize payload");
+        }
+    };
+
+    info!(
+        device_id = %device_id,
+        mqtt_topic = %device.mqtt_topic,
+        turbo_mode,
+        payload = %payload_json,
+        "Publishing turbo_mode update"
+    );
+
+    let mqtt_target = ZigbeeTopic::parse(&device.mqtt_topic)
+        .and_then(|topic| topic.device_id())
+        .unwrap_or(device.mqtt_topic.as_str());
+
+    let mqtt_guard = mqtt.lock().await;
+    match mqtt_guard.publish_command(mqtt_target, &payload_json).await {
+        Ok(_) => json_response(r#"{"status":"ok"}"#.into()),
+        Err(e) => {
+            error!(error = %e, device_id = %device_id, "Failed to publish turbo_mode update");
             internal_error_response(e.to_string().as_str())
         }
     }

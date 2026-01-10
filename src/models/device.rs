@@ -164,6 +164,9 @@ pub struct DeviceState {
     /// Last time we received a message from this device
     #[serde(with = "chrono::serde::ts_seconds")]
     pub last_seen: DateTime<Utc>,
+
+    /// Turbo mode flag, if supported by the device
+    pub turbo_mode: Option<bool>,
 }
 
 impl DeviceState {
@@ -174,6 +177,7 @@ impl DeviceState {
             link_quality: None,
             battery_level: None,
             last_seen: Utc::now(),
+            turbo_mode: None,
         }
     }
 }

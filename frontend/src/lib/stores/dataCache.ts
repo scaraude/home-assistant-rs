@@ -189,6 +189,7 @@ function createDataCache() {
           device_id: deviceId,
           battery_level: updates.battery_level ?? existing?.battery_level ?? null,
           link_quality: updates.link_quality ?? existing?.link_quality ?? null,
+          turbo_mode: updates.turbo_mode ?? existing?.turbo_mode ?? null,
           last_seen: updates.last_seen ?? existing?.last_seen ?? Math.floor(Date.now() / 1000),
         };
 

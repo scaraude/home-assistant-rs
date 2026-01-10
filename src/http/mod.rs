@@ -182,6 +182,12 @@ async fn handle_request(
             debug!("Publishing Zigbee permit join request");
             routes::permit_join(req, &mqtt).await
         }),
+        ("POST", path)
+            if path.starts_with("/api/devices/") && path.ends_with("/set") =>
+        {
+            debug!(path = %path, "Updating device option");
+            Ok(routes::set_device_option(req, &mqtt, &db, path).await)
+        }
         ("PATCH", path) if path.starts_with("/api/devices/") => Ok({
             debug!(path = %path, "Updating device");
             routes::update_device(req, &db, path).await

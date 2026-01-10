@@ -159,6 +159,7 @@ export interface DeviceState {
   battery_level: number | null;
   link_quality: number | null;
   last_seen: number;
+  turbo_mode: boolean | null;
 }
 
 export interface SwitchDevice {
@@ -349,6 +350,31 @@ export async function updateDeviceName(deviceId: string, name: string): Promise<
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
     throw new Error(errorData.error || `Failed to update device name: ${response.statusText}`);
+  }
+}
+
+/**
+ * Update a device option (e.g. turbo_mode)
+ * @param deviceId - Device ID (e.g., "0x7cc6b6fffec90892")
+ * @param option - Option name (e.g., "turbo_mode")
+ * @param value - Option value
+ */
+export async function setDeviceOption(
+  deviceId: string,
+  option: string,
+  value: unknown,
+): Promise<void> {
+  const response = await fetch(`/api/devices/${deviceId}/set`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ [option]: value }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(errorData.error || `Failed to set device option: ${response.statusText}`);
   }
 }
 

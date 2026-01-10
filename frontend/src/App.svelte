@@ -90,6 +90,7 @@
         dataCache.updateDeviceState(event.device_id, {
           battery_level: event.battery,
           link_quality: event.link_quality,
+          turbo_mode: event.turbo_mode,
           last_seen: event.timestamp,
         });
         break;

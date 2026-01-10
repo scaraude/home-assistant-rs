@@ -108,6 +108,7 @@ impl Database {
                 device_id TEXT PRIMARY KEY,
                 battery_level INTEGER,
                 link_quality INTEGER,
+                turbo_mode INTEGER,
                 last_seen INTEGER NOT NULL,
                 FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE
             )",
@@ -119,6 +120,8 @@ impl Database {
                 return Err(e);
             }
         }
+
+        self.ensure_device_state_columns(conn)?;
 
         // Index for efficient last_seen queries
         debug!("Creating index idx_device_state_last_seen if not exists");
@@ -132,6 +135,26 @@ impl Database {
                 error!(error = %e, "Failed to create index idx_device_state_last_seen");
                 return Err(e);
             }
+        }
+
+        Ok(())
+    }
+
+    fn ensure_device_state_columns(&self, conn: &rusqlite::Connection) -> Result<()> {
+        let mut stmt = conn.prepare("PRAGMA table_info(device_state)")?;
+        let columns = stmt.query_map([], |row| row.get::<_, String>(1))?;
+        let mut has_turbo_mode = false;
+
+        for column in columns {
+            if column? == "turbo_mode" {
+                has_turbo_mode = true;
+                break;
+            }
+        }
+
+        if !has_turbo_mode {
+            info!("Adding turbo_mode column to device_state table");
+            conn.execute("ALTER TABLE device_state ADD COLUMN turbo_mode INTEGER", [])?;
         }
 
         Ok(())

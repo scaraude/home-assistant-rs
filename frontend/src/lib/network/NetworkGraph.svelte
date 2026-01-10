@@ -16,10 +16,12 @@
   type DeviceState = {
     link_quality: number | null;
     battery_level: number | null;
+    turbo_mode?: boolean | null;
   };
 
   interface Props {
     deviceStates?: Map<string, DeviceState>;
+    onTurboModeChange?: (deviceId: string, turboMode: boolean) => void;
   }
 
   type DeviceNodeData = Record<string, unknown> & {
@@ -34,7 +36,7 @@
     event: MouseEvent | TouchEvent;
   };
 
-  let { deviceStates = new Map() }: Props = $props();
+  let { deviceStates = new Map(), onTurboModeChange }: Props = $props();
 
   const nodeTypes = {
     device: DeviceNodeComponent,
@@ -58,6 +60,7 @@
         data: {
           device,
           deviceState: deviceStates.get(device.id),
+          onTurboModeChange,
         },
         draggable: true,
       };

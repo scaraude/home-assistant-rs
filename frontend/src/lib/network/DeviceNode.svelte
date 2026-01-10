@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Handle, Position } from "@xyflow/svelte";
   import type { Node, NodeProps } from "@xyflow/svelte";
+  import { setDeviceOption } from "../api";
   import EditableDeviceName from "../EditableDeviceName.svelte";
   import StatusBadge from "../StatusBadge.svelte";
 
@@ -21,7 +22,9 @@
     deviceState?: {
       link_quality: number | null;
       battery_level: number | null;
+      turbo_mode?: boolean | null;
     };
+    onTurboModeChange?: (deviceId: string, turboMode: boolean) => void;
   };
 
   type DeviceNode = Node<DeviceData>;
@@ -30,22 +33,33 @@
 
   const isCoordinator = $derived(!data.device.parent_device_id);
   const isBridge = $derived(data.device.is_bridge);
+  const supportsTurbo = $derived(isBridge);
   const linkQuality = $derived(data.deviceState?.link_quality);
   const batteryLevel = $derived(data.deviceState?.battery_level);
+  const turboFromState = $derived(data.deviceState?.turbo_mode ?? false);
+  let turboEnabled = $state<boolean>(data.deviceState?.turbo_mode ?? false);
+  let turboError = $state<string | null>(null);
+  let turboUpdating = $state(false);
+
+  $effect(() => {
+    if (!turboUpdating) {
+      turboEnabled = turboFromState;
+    }
+  });
 
   function getIcon(device: typeof data.device): string {
     if (device.capability.type === "sensor") {
       if (device.capability.sensor_type === "temp_humidity") {
         return "🌡️";
       } else if (device.capability.sensor_type === "presence") {
-        return "👁️";
+        return "💡";
       }
     } else if (device.capability.type === "commander") {
       if (device.capability.commander_type === "switch") {
-        return "💡";
+        return "⚙️";
       }
     } else if (device.capability.type === "coordinator") {
-      return "🧭";
+      return "📡";
     }
     return "📱";
   }
@@ -60,6 +74,28 @@
   const borderColor = $derived(
     isCoordinator ? "#f59e0b" : isBridge ? "#3b82f6" : "#6b7280"
   );
+
+  async function toggleTurboMode() {
+    if (turboUpdating || !supportsTurbo) return;
+
+    turboUpdating = true;
+    turboError = null;
+
+    const previous = turboEnabled;
+    const next = !turboEnabled;
+    turboEnabled = next;
+
+    try {
+      await setDeviceOption(data.device.id, "turbo_mode", next);
+      data.onTurboModeChange?.(data.device.id, next);
+    } catch (error) {
+      turboEnabled = previous;
+      turboError =
+        error instanceof Error ? error.message : "Turbo update failed";
+    } finally {
+      turboUpdating = false;
+    }
+  }
 </script>
 
 <div class="device-node" style="border-color: {borderColor}">
@@ -81,10 +117,7 @@
         {/if}
 
         {#if data.device.power_source === "battery" && batteryLevel != null}
-          <StatusBadge
-            value={batteryLevel}
-            type="battery"
-          />
+          <StatusBadge value={batteryLevel} type="battery" />
         {/if}
 
         {#if linkQuality != null}
@@ -96,6 +129,24 @@
           </span>
         {/if}
       </div>
+
+      {#if supportsTurbo}
+        <div class="turbo-row">
+          <span class="turbo-label">Turbo</span>
+          <label class="turbo-toggle">
+            <input
+              type="checkbox"
+              checked={turboEnabled}
+              disabled={turboUpdating}
+              onchange={toggleTurboMode}
+            />
+            <span class="toggle-track"></span>
+          </label>
+        </div>
+        {#if turboError}
+          <div class="turbo-error">{turboError}</div>
+        {/if}
+      {/if}
     </div>
   </div>
 
@@ -163,5 +214,71 @@
 
   .badge.link-quality {
     color: white;
+  }
+
+  .turbo-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .turbo-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #374151;
+  }
+
+  .turbo-toggle {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+  }
+
+  .turbo-toggle input {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+  }
+
+  .toggle-track {
+    width: 34px;
+    height: 18px;
+    background: #e5e7eb;
+    border-radius: 999px;
+    position: relative;
+    transition: background 0.2s ease;
+  }
+
+  .toggle-track::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    background: white;
+    border-radius: 999px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s ease;
+  }
+
+  .turbo-toggle input:checked + .toggle-track {
+    background: #22c55e;
+  }
+
+  .turbo-toggle input:checked + .toggle-track::after {
+    transform: translateX(16px);
+  }
+
+  .turbo-toggle input:disabled + .toggle-track {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .turbo-error {
+    font-size: 11px;
+    color: #b91c1c;
   }
 </style>

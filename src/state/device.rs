@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 /// In-memory state storage for all devices
-/// Tracks ephemeral data like link quality, battery level, and last seen timestamp
+/// Tracks ephemeral data like link quality, battery level, turbo mode, and last seen timestamp
 #[derive(Clone)]
 pub struct DeviceStateStore {
     states: Arc<RwLock<HashMap<String, DeviceState>>>,

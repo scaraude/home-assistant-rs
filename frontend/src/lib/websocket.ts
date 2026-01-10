@@ -27,6 +27,7 @@ export type DeviceStateEvent = {
   device_id: string;
   battery: number | null;
   link_quality: number | null;
+  turbo_mode: boolean | null;
   timestamp: number;
 };
 

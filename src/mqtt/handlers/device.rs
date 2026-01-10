@@ -24,6 +24,7 @@ pub async fn handle_device_message(
         has_occupancy = msg.occupancy.is_some(),
         linkquality = ?msg.linkquality,
         battery = ?msg.battery,
+        turbo_mode = ?msg.turbo_mode,
         "Received unified MQTT message"
     );
 
@@ -46,6 +47,7 @@ pub async fn handle_device_message(
         &device_id,
         device_state_fields.battery_level,
         device_state_fields.link_quality,
+        device_state_fields.turbo_mode,
         publish_failures,
     );
 
@@ -216,12 +218,14 @@ fn publish_device_state_event(
     device_id: &str,
     battery: Option<u8>,
     link_quality: Option<u8>,
+    turbo_mode: Option<bool>,
     publish_failures: &mut u64,
 ) {
     let event = SystemEvent::DeviceState {
         device_id: device_id.to_string(),
         battery,
         link_quality,
+        turbo_mode,
         timestamp: Utc::now(),
     };
 
@@ -238,6 +242,7 @@ fn publish_device_state_event(
             device_id = %device_id,
             battery = ?battery,
             link_quality = ?link_quality,
+            turbo_mode = ?turbo_mode,
             "Published device state event"
         );
     }

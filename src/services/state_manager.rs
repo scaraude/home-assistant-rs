@@ -52,6 +52,7 @@ impl StateManagerService {
                 device_id,
                 battery,
                 link_quality,
+                turbo_mode,
                 timestamp,
             } => {
                 let log_timestamp = timestamp.clone();
@@ -63,6 +64,9 @@ impl StateManagerService {
                     if let Some(quality) = link_quality {
                         state.link_quality = Some(quality);
                     }
+                    if let Some(turbo) = turbo_mode {
+                        state.turbo_mode = Some(turbo);
+                    }
                     state.last_seen = timestamp;
                 });
 
@@ -70,6 +74,7 @@ impl StateManagerService {
                     device_id = %id_for_log,
                     battery = ?battery,
                     link_quality = ?link_quality,
+                    turbo_mode = ?turbo_mode,
                     timestamp = %log_timestamp,
                     "Device state updated from event"
                 );
@@ -114,6 +119,7 @@ mod tests {
             device_id: "dev-1".into(),
             battery: Some(90),
             link_quality: Some(200),
+            turbo_mode: Some(true),
             timestamp: ts,
         })
         .unwrap();
@@ -126,6 +132,7 @@ mod tests {
             .expect("device state updated");
         assert_eq!(state.battery_level, Some(90));
         assert_eq!(state.link_quality, Some(200));
+        assert_eq!(state.turbo_mode, Some(true));
         assert_eq!(state.last_seen, ts);
     }
 

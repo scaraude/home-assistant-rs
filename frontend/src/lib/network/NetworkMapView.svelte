@@ -1,13 +1,14 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { SvelteMap } from "svelte/reactivity";
   import { networkTopologyStore } from "../stores/networkTopology";
-  import { fetchNetworkTopology, refreshNetworkMap } from "../api";
+  import { fetchDeviceStates, fetchNetworkTopology, refreshNetworkMap } from "../api";
   import NetworkGraph from "./NetworkGraph.svelte";
 
-  let deviceStates: Map<
+  let deviceStates = new SvelteMap<
     string,
-    { link_quality: number | null; battery_level: number | null }
-  > = new Map();
+    { link_quality: number | null; battery_level: number | null; turbo_mode?: boolean | null }
+  >();
   let refreshing = $state(false);
   let showRefreshWarning = $state(false);
   let isRefreshing = $derived(refreshing || $networkTopologyStore.loading);
@@ -23,16 +24,30 @@
       console.log("Topology loaded:", topology);
       networkTopologyStore.setTopology(topology);
 
-      // Build device state map for quick lookup
+      const states = await fetchDeviceStates();
       deviceStates.clear();
-      // Note: Device states would need to be fetched separately
-      // For now, we'll extract link quality from edges
+      for (const state of states) {
+        deviceStates.set(state.device_id, {
+          link_quality: state.link_quality,
+          battery_level: state.battery_level,
+          turbo_mode: state.turbo_mode,
+        });
+      }
     } catch (error) {
       console.error("Failed to load network topology:", error);
       networkTopologyStore.setError(
         error instanceof Error ? error.message : "Unknown error"
       );
     }
+  }
+
+  function handleTurboModeChange(deviceId: string, turboMode: boolean) {
+    const existing = deviceStates.get(deviceId);
+    deviceStates.set(deviceId, {
+      link_quality: existing?.link_quality ?? null,
+      battery_level: existing?.battery_level ?? null,
+      turbo_mode: turboMode,
+    });
   }
 
   async function handleRefresh() {
@@ -139,7 +154,10 @@
       </div>
     </div>
 
-    <NetworkGraph {deviceStates} />
+    <NetworkGraph
+      {deviceStates}
+      onTurboModeChange={handleTurboModeChange}
+    />
 
     <div class="legend">
       <h3>Legend</h3>

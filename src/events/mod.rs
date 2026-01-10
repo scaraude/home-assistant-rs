@@ -27,6 +27,7 @@ pub enum SystemEvent {
         device_id: String,
         battery: Option<u8>,
         link_quality: Option<u8>,
+        turbo_mode: Option<bool>,
         #[serde(with = "chrono::serde::ts_seconds")]
         timestamp: DateTime<Utc>,
     },
