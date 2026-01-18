@@ -11,7 +11,7 @@
   import { networkTopologyStore } from "../stores/networkTopology";
   import DeviceNodeComponent from "./DeviceNode.svelte";
 
-  import type { Device } from "../stores/networkTopology";
+  import type { Device, NetworkTopology } from "../stores/networkTopology";
 
   type DeviceState = {
     link_quality: number | null;
@@ -67,11 +67,24 @@
     });
   });
 
+  const enricheTopologyWithLinkQuality = (topology: NetworkTopology | null) => {
+    if (!topology) return null;
+
+    return {
+      ...topology,
+      edges: topology.edges.map((edge) => ({
+        ...edge,
+        link_quality: deviceStates.get(edge.target_id)?.link_quality ?? null,
+      })),
+    };
+  };
+
   const edges = $derived.by((): Edge[] => {
     const topology = $networkTopologyStore.topology;
-    if (!topology) return [];
+    const topologyEnriched = enricheTopologyWithLinkQuality(topology);
+    if (!topologyEnriched) return [];
 
-    return topology.edges.map((edge) => {
+    return topologyEnriched.edges.map((edge) => {
       const linkQuality = edge.link_quality;
       const color = getLinkQualityColor(linkQuality);
 
@@ -81,7 +94,6 @@
         target: edge.target_id,
         animated: false,
         style: `stroke: ${color}; stroke-width: 2px;`,
-        label: linkQuality != null ? `LQI: ${linkQuality}` : undefined,
       };
     });
   });
