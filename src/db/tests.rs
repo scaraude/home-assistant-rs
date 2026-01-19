@@ -19,6 +19,22 @@ mod tests {
         (db, temp_dir)
     }
 
+    /// Helper to create and insert a test device
+    fn insert_test_device(db: &Database, device_id: &str, sensor_type: SensorType) {
+        let device = Device {
+            id: device_id.to_string(),
+            name: format!("Test Device {}", device_id),
+            mqtt_topic: format!("zigbee2mqtt/{}", device_id),
+            ieee_addr: format!("0x{}", device_id),
+            capability: DeviceCapability::Sensor { sensor_type },
+            power_source: PowerSource::Battery,
+            added_at: Utc::now(),
+            is_bridge: false,
+            parent_device_id: None,
+        };
+        db.insert_device(&device).unwrap();
+    }
+
     // ==================== Temperature Reading Tests ====================
 
     #[test]
@@ -1276,5 +1292,366 @@ mod tests {
         let retrieved = db.get_automation_rule("rule1").unwrap().unwrap();
         assert_eq!(retrieved.conditions.len(), 2);
         assert_eq!(retrieved.actions.len(), 2);
+    }
+
+    // ==================== Batch Query Tests (CRIT-2) ====================
+
+    #[test]
+    fn test_batch_query_empty_device_list() {
+        let (db, _temp_dir) = create_test_db();
+
+        let device_ids = vec![];
+        let results = db.get_latest_readings_batch(&device_ids).unwrap();
+        assert_eq!(results.len(), 0);
+    }
+
+    #[test]
+    fn test_batch_query_single_temperature_device() {
+        let (db, _temp_dir) = create_test_db();
+
+        // Register device first
+        insert_test_device(&db, "sensor1", SensorType::TempHumidity);
+
+        // Insert a temperature reading
+        let timestamp = Utc::now();
+        let reading = SensorReading::TempHumidity {
+            device_id: "sensor1".to_string(),
+            temperature: 22.5,
+            humidity: 45.0,
+            timestamp,
+        };
+        db.insert_reading(&reading).unwrap();
+
+        // Query using batch method
+        let device_ids = vec!["sensor1".to_string()];
+        let results = db.get_latest_readings_batch(&device_ids).unwrap();
+
+        assert_eq!(results.len(), 1);
+        assert!(results.contains_key("sensor1"));
+
+        match results.get("sensor1").unwrap() {
+            SensorReading::TempHumidity {
+                device_id,
+                temperature,
+                humidity,
+                ..
+            } => {
+                assert_eq!(device_id, "sensor1");
+                assert_eq!(*temperature, 22.5);
+                assert_eq!(*humidity, 45.0);
+            }
+            _ => panic!("Expected TempHumidity reading"),
+        }
+    }
+
+    #[test]
+    fn test_batch_query_multiple_temperature_devices() {
+        let (db, _temp_dir) = create_test_db();
+
+        // Register devices first
+        insert_test_device(&db, "sensor1", SensorType::TempHumidity);
+        insert_test_device(&db, "sensor2", SensorType::TempHumidity);
+        insert_test_device(&db, "sensor3", SensorType::TempHumidity);
+
+        let timestamp = Utc::now();
+
+        // Insert readings for multiple devices
+        let reading1 = SensorReading::TempHumidity {
+            device_id: "sensor1".to_string(),
+            temperature: 22.5,
+            humidity: 45.0,
+            timestamp,
+        };
+
+        let reading2 = SensorReading::TempHumidity {
+            device_id: "sensor2".to_string(),
+            temperature: 18.0,
+            humidity: 60.0,
+            timestamp,
+        };
+
+        let reading3 = SensorReading::TempHumidity {
+            device_id: "sensor3".to_string(),
+            temperature: 25.0,
+            humidity: 35.0,
+            timestamp,
+        };
+
+        db.insert_reading(&reading1).unwrap();
+        db.insert_reading(&reading2).unwrap();
+        db.insert_reading(&reading3).unwrap();
+
+        // Query all three devices in a single batch
+        let device_ids = vec![
+            "sensor1".to_string(),
+            "sensor2".to_string(),
+            "sensor3".to_string(),
+        ];
+        let results = db.get_latest_readings_batch(&device_ids).unwrap();
+
+        assert_eq!(results.len(), 3);
+        assert!(results.contains_key("sensor1"));
+        assert!(results.contains_key("sensor2"));
+        assert!(results.contains_key("sensor3"));
+
+        // Verify sensor1
+        match results.get("sensor1").unwrap() {
+            SensorReading::TempHumidity { temperature, .. } => {
+                assert_eq!(*temperature, 22.5);
+            }
+            _ => panic!("Expected TempHumidity reading"),
+        }
+
+        // Verify sensor2
+        match results.get("sensor2").unwrap() {
+            SensorReading::TempHumidity { temperature, .. } => {
+                assert_eq!(*temperature, 18.0);
+            }
+            _ => panic!("Expected TempHumidity reading"),
+        }
+
+        // Verify sensor3
+        match results.get("sensor3").unwrap() {
+            SensorReading::TempHumidity { temperature, .. } => {
+                assert_eq!(*temperature, 25.0);
+            }
+            _ => panic!("Expected TempHumidity reading"),
+        }
+    }
+
+    #[test]
+    fn test_batch_query_mixed_sensor_types() {
+        let (db, _temp_dir) = create_test_db();
+
+        // Register devices first
+        insert_test_device(&db, "temp_sensor", SensorType::TempHumidity);
+        insert_test_device(&db, "presence_sensor", SensorType::Presence);
+        insert_test_device(&db, "energy_sensor", SensorType::EnergyMeter);
+
+        let timestamp = Utc::now();
+
+        // Insert temperature reading
+        let temp_reading = SensorReading::TempHumidity {
+            device_id: "temp_sensor".to_string(),
+            temperature: 22.5,
+            humidity: 45.0,
+            timestamp,
+        };
+
+        // Insert presence reading
+        let presence_reading = SensorReading::Presence {
+            device_id: "presence_sensor".to_string(),
+            occupied: true,
+            illumination: Some("bright".to_string()),
+            timestamp,
+        };
+
+        // Insert energy reading
+        let energy_reading = SensorReading::EnergyMeter {
+            device_id: "energy_sensor".to_string(),
+            power: 150.0,
+            energy: 1000.0,
+            produced_energy: 0.0,
+            voltage: 230.0,
+            current: 0.65,
+            ac_frequency: 50.0,
+            power_factor: 0.95,
+            timestamp,
+        };
+
+        db.insert_reading(&temp_reading).unwrap();
+        db.insert_reading(&presence_reading).unwrap();
+        db.insert_reading(&energy_reading).unwrap();
+
+        // Query all three different sensor types in a single batch
+        let device_ids = vec![
+            "temp_sensor".to_string(),
+            "presence_sensor".to_string(),
+            "energy_sensor".to_string(),
+        ];
+        let results = db.get_latest_readings_batch(&device_ids).unwrap();
+
+        assert_eq!(results.len(), 3);
+
+        // Verify temperature reading
+        match results.get("temp_sensor").unwrap() {
+            SensorReading::TempHumidity { temperature, .. } => {
+                assert_eq!(*temperature, 22.5);
+            }
+            _ => panic!("Expected TempHumidity reading"),
+        }
+
+        // Verify presence reading
+        match results.get("presence_sensor").unwrap() {
+            SensorReading::Presence { occupied, .. } => {
+                assert!(*occupied);
+            }
+            _ => panic!("Expected Presence reading"),
+        }
+
+        // Verify energy reading
+        match results.get("energy_sensor").unwrap() {
+            SensorReading::EnergyMeter { power, .. } => {
+                assert_eq!(*power, 150.0);
+            }
+            _ => panic!("Expected EnergyMeter reading"),
+        }
+    }
+
+    #[test]
+    fn test_batch_query_returns_latest_reading_only() {
+        let (db, _temp_dir) = create_test_db();
+
+        // Register device first
+        insert_test_device(&db, "sensor1", SensorType::TempHumidity);
+
+        let timestamp1 = Utc::now();
+        let timestamp2 = timestamp1 + chrono::Duration::seconds(10);
+        let timestamp3 = timestamp2 + chrono::Duration::seconds(10);
+
+        // Insert multiple readings for the same device at different times
+        let reading1 = SensorReading::TempHumidity {
+            device_id: "sensor1".to_string(),
+            temperature: 20.0,
+            humidity: 50.0,
+            timestamp: timestamp1,
+        };
+
+        let reading2 = SensorReading::TempHumidity {
+            device_id: "sensor1".to_string(),
+            temperature: 22.0,
+            humidity: 48.0,
+            timestamp: timestamp2,
+        };
+
+        let reading3 = SensorReading::TempHumidity {
+            device_id: "sensor1".to_string(),
+            temperature: 24.0,
+            humidity: 45.0,
+            timestamp: timestamp3,
+        };
+
+        db.insert_reading(&reading1).unwrap();
+        db.insert_reading(&reading2).unwrap();
+        db.insert_reading(&reading3).unwrap();
+
+        // Query should return only the latest reading
+        let device_ids = vec!["sensor1".to_string()];
+        let results = db.get_latest_readings_batch(&device_ids).unwrap();
+
+        assert_eq!(results.len(), 1);
+
+        match results.get("sensor1").unwrap() {
+            SensorReading::TempHumidity {
+                temperature,
+                timestamp,
+                ..
+            } => {
+                // Should be the most recent reading
+                assert_eq!(*temperature, 24.0);
+                // SQLite stores timestamps as seconds, so we compare timestamps truncated to seconds
+                assert_eq!(timestamp.timestamp(), timestamp3.timestamp());
+            }
+            _ => panic!("Expected TempHumidity reading"),
+        }
+    }
+
+    #[test]
+    fn test_batch_query_partial_results() {
+        let (db, _temp_dir) = create_test_db();
+
+        // Register only one device
+        insert_test_device(&db, "sensor1", SensorType::TempHumidity);
+
+        let timestamp = Utc::now();
+
+        // Insert reading for only one device
+        let reading = SensorReading::TempHumidity {
+            device_id: "sensor1".to_string(),
+            temperature: 22.5,
+            humidity: 45.0,
+            timestamp,
+        };
+        db.insert_reading(&reading).unwrap();
+
+        // Query for multiple devices, but only one exists
+        let device_ids = vec![
+            "sensor1".to_string(),
+            "sensor2".to_string(),
+            "sensor3".to_string(),
+        ];
+        let results = db.get_latest_readings_batch(&device_ids).unwrap();
+
+        // Should only return results for devices that have readings
+        assert_eq!(results.len(), 1);
+        assert!(results.contains_key("sensor1"));
+        assert!(!results.contains_key("sensor2"));
+        assert!(!results.contains_key("sensor3"));
+    }
+
+    #[test]
+    fn test_batch_query_no_results() {
+        let (db, _temp_dir) = create_test_db();
+
+        // Query for devices that don't exist
+        let device_ids = vec!["nonexistent1".to_string(), "nonexistent2".to_string()];
+        let results = db.get_latest_readings_batch(&device_ids).unwrap();
+
+        assert_eq!(results.len(), 0);
+    }
+
+    #[test]
+    fn test_batch_query_performance_benefit() {
+        let (db, _temp_dir) = create_test_db();
+
+        // Register devices first
+        for i in 1..=5 {
+            insert_test_device(&db, &format!("sensor{}", i), SensorType::TempHumidity);
+        }
+
+        let timestamp = Utc::now();
+
+        // Insert readings for 5 devices
+        for i in 1..=5 {
+            let reading = SensorReading::TempHumidity {
+                device_id: format!("sensor{}", i),
+                temperature: 20.0 + i as f32,
+                humidity: 40.0 + i as f32,
+                timestamp,
+            };
+            db.insert_reading(&reading).unwrap();
+        }
+
+        let device_ids: Vec<String> = (1..=5).map(|i| format!("sensor{}", i)).collect();
+
+        // Time the batch query
+        let start = std::time::Instant::now();
+        let batch_results = db.get_latest_readings_batch(&device_ids).unwrap();
+        let batch_duration = start.elapsed();
+
+        // Time individual queries
+        let start = std::time::Instant::now();
+        let mut individual_results = std::collections::HashMap::new();
+        for device_id in &device_ids {
+            if let Ok(Some(reading)) = db.get_latest_reading_for_sensor(device_id) {
+                individual_results.insert(device_id.clone(), reading);
+            }
+        }
+        let individual_duration = start.elapsed();
+
+        // Verify same results
+        assert_eq!(batch_results.len(), 5);
+        assert_eq!(individual_results.len(), 5);
+
+        // Batch query should be faster (this is informational, not a hard assertion)
+        println!(
+            "Batch query: {:?}, Individual queries: {:?}, Speedup: {:.2}x",
+            batch_duration,
+            individual_duration,
+            individual_duration.as_micros() as f64 / batch_duration.as_micros() as f64
+        );
+
+        // Note: We don't assert on performance as it can vary based on system load,
+        // but this test documents the expected performance benefit
     }
 }

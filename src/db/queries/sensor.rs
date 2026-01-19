@@ -416,6 +416,143 @@ impl Database {
         Ok(energy_readings.pop())
     }
 
+    /// Get the latest readings for multiple devices in a single database transaction
+    ///
+    /// This method eliminates the N+1 query problem when evaluating automation rules
+    /// with multiple conditions. Instead of querying each device separately, it fetches
+    /// all readings in a single batch operation.
+    ///
+    /// Returns a HashMap mapping device_id to its latest SensorReading.
+    /// Devices with no readings are not included in the result.
+    pub fn get_latest_readings_batch(
+        &self,
+        device_ids: &[String],
+    ) -> Result<std::collections::HashMap<String, SensorReading>> {
+        use std::collections::HashMap;
+
+        if device_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        debug!(
+            device_count = device_ids.len(),
+            device_ids = ?device_ids,
+            "Batch querying latest readings for multiple devices"
+        );
+        let start = std::time::Instant::now();
+
+        let mut result = HashMap::new();
+        let conn = self.conn.lock_or_recover();
+
+        // Build placeholders for SQL IN clause
+        let placeholders = device_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+
+        // Build params vector that can be reused
+        let params_refs: Vec<&dyn rusqlite::ToSql> = device_ids
+            .iter()
+            .map(|id| id as &dyn rusqlite::ToSql)
+            .collect();
+
+        // Query temperature readings
+        let query = format!(
+            "SELECT device_id, temperature, humidity, timestamp
+             FROM temperature_readings
+             WHERE device_id IN ({})
+             AND (device_id, timestamp) IN (
+                 SELECT device_id, MAX(timestamp)
+                 FROM temperature_readings
+                 WHERE device_id IN ({})
+                 GROUP BY device_id
+             )",
+            placeholders, placeholders
+        );
+
+        let mut stmt = conn.prepare(&query)?;
+        // Duplicate params for both IN clauses
+        let doubled_params: Vec<&dyn rusqlite::ToSql> = params_refs
+            .iter()
+            .chain(params_refs.iter())
+            .copied()
+            .collect();
+
+        let temp_readings = stmt
+            .query_map(doubled_params.as_slice(), Self::map_sensor_reading_row)?
+            .collect::<Result<Vec<_>>>()?;
+
+        for reading in temp_readings {
+            result.insert(reading.device_id().to_string(), reading);
+        }
+
+        // Query presence readings
+        let query = format!(
+            "SELECT device_id, occupied, illumination, timestamp
+             FROM presence_readings
+             WHERE device_id IN ({})
+             AND (device_id, timestamp) IN (
+                 SELECT device_id, MAX(timestamp)
+                 FROM presence_readings
+                 WHERE device_id IN ({})
+                 GROUP BY device_id
+             )",
+            placeholders, placeholders
+        );
+
+        let mut stmt = conn.prepare(&query)?;
+        let doubled_params: Vec<&dyn rusqlite::ToSql> = params_refs
+            .iter()
+            .chain(params_refs.iter())
+            .copied()
+            .collect();
+
+        let presence_readings = stmt
+            .query_map(doubled_params.as_slice(), Self::map_presence_reading_row)?
+            .collect::<Result<Vec<_>>>()?;
+
+        for reading in presence_readings {
+            result.insert(reading.device_id().to_string(), reading);
+        }
+
+        // Query energy readings
+        let query = format!(
+            "SELECT device_id, power, energy, produced_energy, voltage,
+                    current, ac_frequency, power_factor, timestamp
+             FROM energy_readings
+             WHERE device_id IN ({})
+             AND (device_id, timestamp) IN (
+                 SELECT device_id, MAX(timestamp)
+                 FROM energy_readings
+                 WHERE device_id IN ({})
+                 GROUP BY device_id
+             )",
+            placeholders, placeholders
+        );
+
+        let mut stmt = conn.prepare(&query)?;
+        let doubled_params: Vec<&dyn rusqlite::ToSql> = params_refs
+            .iter()
+            .chain(params_refs.iter())
+            .copied()
+            .collect();
+
+        let energy_readings = stmt
+            .query_map(doubled_params.as_slice(), Self::map_energy_reading_row)?
+            .collect::<Result<Vec<_>>>()?;
+
+        for reading in energy_readings {
+            result.insert(reading.device_id().to_string(), reading);
+        }
+
+        let elapsed = start.elapsed();
+        info!(
+            device_count = device_ids.len(),
+            readings_found = result.len(),
+            duration_ms = elapsed.as_millis(),
+            "Batch query completed for latest readings"
+        );
+
+        Ok(result)
+    }
+
     /// Helper to map a database row to a SensorReading enum
     ///
     /// Eliminates duplication across get_readings_since, get_readings_for_sensor_since, and get_latest_reading_for_sensor

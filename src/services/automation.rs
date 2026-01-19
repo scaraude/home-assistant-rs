@@ -261,9 +261,42 @@ impl AutomationService {
             return false;
         }
 
+        // Collect all device IDs that require sensor readings from the database
+        let sensor_device_ids: Vec<String> = rule
+            .conditions
+            .iter()
+            .filter(|c| {
+                matches!(
+                    c.field,
+                    SensorField::Temperature
+                        | SensorField::Humidity
+                        | SensorField::Presence
+                        | SensorField::Illumination
+                )
+            })
+            .map(|c| c.device_id.clone())
+            .collect();
+
+        // Batch query all sensor readings in a single database transaction
+        let readings_cache = if !sensor_device_ids.is_empty() {
+            match self.db.get_latest_readings_batch(&sensor_device_ids) {
+                Ok(cache) => cache,
+                Err(e) => {
+                    error!(
+                        rule_id = %rule.id,
+                        error = %e,
+                        "Failed to fetch batch readings for automation rule"
+                    );
+                    return false;
+                }
+            }
+        } else {
+            std::collections::HashMap::new()
+        };
+
         let mut results = Vec::with_capacity(rule.conditions.len());
         for condition in &rule.conditions {
-            let result = self.evaluate_condition(condition).await;
+            let result = self.evaluate_condition_with_cache(condition, &readings_cache);
             results.push(result);
 
             debug!(
@@ -283,60 +316,56 @@ impl AutomationService {
         }
     }
 
-    async fn evaluate_condition(&self, condition: &AutomationCondition) -> bool {
+    fn evaluate_condition_with_cache(
+        &self,
+        condition: &AutomationCondition,
+        readings_cache: &std::collections::HashMap<String, SensorReading>,
+    ) -> bool {
         let field_value = match condition.field {
-            SensorField::Temperature => self
-                .db
-                .get_latest_reading_for_sensor(&condition.device_id)
-                .ok()
-                .flatten()
-                .and_then(|reading| {
-                    if let SensorReading::TempHumidity { temperature, .. } = reading {
-                        Some(temperature as f64)
-                    } else {
-                        None
-                    }
-                }),
-            SensorField::Humidity => self
-                .db
-                .get_latest_reading_for_sensor(&condition.device_id)
-                .ok()
-                .flatten()
+            SensorField::Temperature => {
+                readings_cache
+                    .get(&condition.device_id)
+                    .and_then(|reading| {
+                        if let SensorReading::TempHumidity { temperature, .. } = reading {
+                            Some(*temperature as f64)
+                        } else {
+                            None
+                        }
+                    })
+            }
+            SensorField::Humidity => readings_cache
+                .get(&condition.device_id)
                 .and_then(|reading| {
                     if let SensorReading::TempHumidity { humidity, .. } = reading {
-                        Some(humidity as f64)
+                        Some(*humidity as f64)
                     } else {
                         None
                     }
                 }),
-            SensorField::Presence => self
-                .db
-                .get_latest_reading_for_sensor(&condition.device_id)
-                .ok()
-                .flatten()
+            SensorField::Presence => readings_cache
+                .get(&condition.device_id)
                 .and_then(|reading| {
                     if let SensorReading::Presence { occupied, .. } = reading {
-                        Some(if occupied { 1.0 } else { 0.0 })
+                        Some(if *occupied { 1.0 } else { 0.0 })
                     } else {
                         None
                     }
                 }),
-            SensorField::Illumination => self
-                .db
-                .get_latest_reading_for_sensor(&condition.device_id)
-                .ok()
-                .flatten()
-                .and_then(|reading| {
-                    if let SensorReading::Presence { illumination, .. } = reading {
-                        illumination.as_ref().map(|ill| match ill.as_str() {
-                            "bright" => 1.0,
-                            "dim" => 0.0,
-                            _ => 0.0, // default to dim for unknown values
-                        })
-                    } else {
-                        None
-                    }
-                }),
+            SensorField::Illumination => {
+                readings_cache
+                    .get(&condition.device_id)
+                    .and_then(|reading| {
+                        if let SensorReading::Presence { illumination, .. } = reading {
+                            illumination.as_ref().map(|ill| match ill.as_str() {
+                                "bright" => 1.0,
+                                "dim" => 0.0,
+                                _ => 0.0, // default to dim for unknown values
+                            })
+                        } else {
+                            None
+                        }
+                    })
+            }
             SensorField::Battery => self
                 .device_state
                 .get_battery(&condition.device_id)
