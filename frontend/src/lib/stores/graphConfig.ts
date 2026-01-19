@@ -92,6 +92,14 @@ function createGraphConfig() {
     set,
     update,
 
+    // Reset sensors list (call when switching views)
+    reset: () => {
+      update(state => ({
+        ...state,
+        sensors: [],
+      }));
+    },
+
     // Initialize sensors from device list
     initializeSensors: (deviceIds: string[]) => {
       update(state => {
