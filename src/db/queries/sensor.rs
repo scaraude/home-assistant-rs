@@ -100,6 +100,14 @@ impl Database {
                     }
                 }
             }
+            SensorReading::EnergyMeter { device_id, .. } => {
+                // TODO: Implement energy_readings table insertion in Phase 2
+                info!(
+                    device_id = %device_id,
+                    "Energy reading received (table not yet implemented)"
+                );
+                Ok(())
+            }
         }
     }
 

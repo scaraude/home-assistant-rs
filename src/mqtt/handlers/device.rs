@@ -138,6 +138,14 @@ async fn handle_sensor_message(
                         "Created presence reading from MQTT message"
                     );
                 }
+                SensorReading::EnergyMeter { power, energy, .. } => {
+                    info!(
+                        device_id = %device_id,
+                        power = %power,
+                        energy = %energy,
+                        "Created energy meter reading from MQTT message"
+                    );
+                }
             }
 
             let event = SystemEvent::SensorReading {

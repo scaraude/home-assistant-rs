@@ -929,6 +929,7 @@ fn validate_condition_fields(
             DeviceCapability::Sensor { sensor_type } => match sensor_type {
                 SensorType::TempHumidity => "temp_humidity",
                 SensorType::Presence => "presence",
+                SensorType::EnergyMeter => "energy_meter",
             },
             _ => return Err(format!("Device '{}' is not a sensor", condition.device_id)),
         };

@@ -19,11 +19,14 @@ pub enum SensorType {
     #[serde(rename = "temp_humidity")]
     TempHumidity,
     Presence,
+    #[serde(rename = "energy_meter")]
+    EnergyMeter,
 }
 
 impl_db_enum!(SensorType {
     TempHumidity => "temp_humidity",
-    Presence => "presence"
+    Presence => "presence",
+    EnergyMeter => "energy_meter"
 });
 
 /// Type of commander capability

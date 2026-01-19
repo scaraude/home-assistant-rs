@@ -30,6 +30,28 @@ pub struct DeviceMqttMessage {
     /// Illumination level (only for presence sensors)
     pub illumination: Option<String>,
 
+    // ==================== Energy meter fields ====================
+    /// Power consumption in Watts
+    pub power: Option<f32>,
+
+    /// Voltage in Volts
+    pub voltage: Option<f32>,
+
+    /// Current in Amperes
+    pub current: Option<f32>,
+
+    /// AC frequency in Hertz
+    pub ac_frequency: Option<f32>,
+
+    /// Power factor (0-1)
+    pub power_factor: Option<f32>,
+
+    /// Total consumed energy in kWh
+    pub energy: Option<f32>,
+
+    /// Total produced energy in kWh
+    pub produced_energy: Option<f32>,
+
     // ==================== Commander fields ====================
     /// Switch state parsed from MQTT payload
     pub state: Option<SwitchState>,
@@ -58,6 +80,7 @@ impl DeviceMqttMessage {
         match sensor_type {
             SensorType::TempHumidity => self.temperature.is_some(),
             SensorType::Presence => self.occupancy.is_some(),
+            SensorType::EnergyMeter => self.power.is_some(),
         }
     }
 
@@ -227,6 +250,19 @@ pub enum SensorReading {
         #[serde(with = "chrono::serde::ts_seconds")]
         timestamp: DateTime<Utc>,
     },
+    #[serde(rename = "energy_meter")]
+    EnergyMeter {
+        device_id: String,
+        power: f32,           // Primary metric (Watts)
+        energy: f32,          // kWh consumed
+        produced_energy: f32, // kWh produced
+        voltage: f32,         // Volts
+        current: f32,         // Amperes
+        ac_frequency: f32,    // Hertz
+        power_factor: f32,    // 0-1
+        #[serde(with = "chrono::serde::ts_seconds")]
+        timestamp: DateTime<Utc>,
+    },
 }
 
 impl SensorReading {
@@ -249,6 +285,17 @@ impl SensorReading {
                 illumination: msg.illumination.clone(),
                 timestamp: Utc::now(),
             }),
+            SensorType::EnergyMeter => msg.power.map(|pwr| SensorReading::EnergyMeter {
+                device_id,
+                power: pwr,
+                energy: msg.energy.unwrap_or(0.0),
+                produced_energy: msg.produced_energy.unwrap_or(0.0),
+                voltage: msg.voltage.unwrap_or(0.0),
+                current: msg.current.unwrap_or(0.0),
+                ac_frequency: msg.ac_frequency.unwrap_or(0.0),
+                power_factor: msg.power_factor.unwrap_or(0.0),
+                timestamp: Utc::now(),
+            }),
         }
     }
 
@@ -257,6 +304,7 @@ impl SensorReading {
         match self {
             SensorReading::TempHumidity { device_id, .. } => device_id,
             SensorReading::Presence { device_id, .. } => device_id,
+            SensorReading::EnergyMeter { device_id, .. } => device_id,
         }
     }
 
@@ -265,6 +313,7 @@ impl SensorReading {
         match self {
             SensorReading::TempHumidity { timestamp, .. } => *timestamp,
             SensorReading::Presence { timestamp, .. } => *timestamp,
+            SensorReading::EnergyMeter { timestamp, .. } => *timestamp,
         }
     }
 }
@@ -307,6 +356,13 @@ mod tests {
             humidity,
             occupancy,
             illumination,
+            power: None,
+            voltage: None,
+            current: None,
+            ac_frequency: None,
+            power_factor: None,
+            energy: None,
+            produced_energy: None,
             state,
             turbo_mode,
             other: serde_json::Map::new(),
