@@ -1,0 +1,15 @@
+[Unit]
+Description=System Monitor - CPU, RAM and Temperature Logger
+After=network.target
+
+[Service]
+Type=simple
+User={{PI_USER}}
+ExecStart={{DEPLOY_DIR}}/monitor.sh
+Restart=always
+RestartSec=10
+StandardOutput=append:{{LOG_DIR}}/monitor.log
+StandardError=append:{{LOG_DIR}}/monitor-error.log
+
+[Install]
+WantedBy=multi-user.target

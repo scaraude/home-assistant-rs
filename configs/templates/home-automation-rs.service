@@ -1,0 +1,18 @@
+[Unit]
+Description=Home Automation RS - Rust-based Home Automation
+After=mosquitto.service
+Requires=mosquitto.service
+
+[Service]
+Type=simple
+User={{PI_USER}}
+WorkingDirectory={{DEPLOY_DIR}}
+EnvironmentFile={{DEPLOY_DIR}}/.env
+ExecStart={{DEPLOY_DIR}}/bin/{{BINARY_NAME}}
+Restart=always
+RestartSec=10
+StandardOutput=append:{{LOG_DIR}}/home-automation-rs.log
+StandardError=append:{{LOG_DIR}}/home-automation-rs-error.log
+
+[Install]
+WantedBy=multi-user.target

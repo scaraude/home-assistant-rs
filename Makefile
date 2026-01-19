@@ -124,107 +124,38 @@ setup-services: check-ssh ## Install and enable systemd services
 generate-service-files: ## Generate systemd service files
 	@echo "$(COLOR_BLUE)Generating systemd service files...$(COLOR_RESET)"
 	@mkdir -p systemd
-	# Home Automation RS service
-	@echo "[Unit]\n\
-Description=Home Automation RS - Rust-based Home Automation\n\
-After=mosquitto.service\n\
-Requires=mosquitto.service\n\
-\n\
-[Service]\n\
-Type=simple\n\
-User=$(PI_USER)\n\
-WorkingDirectory=$(DEPLOY_DIR)\n\
-EnvironmentFile=$(DEPLOY_DIR)/.env\n\
-ExecStart=$(DEPLOY_DIR)/bin/$(BINARY_NAME)\n\
-Restart=always\n\
-RestartSec=10\n\
-StandardOutput=append:$(LOG_DIR)/home-automation-rs.log\n\
-StandardError=append:$(LOG_DIR)/home-automation-rs-error.log\n\
-\n\
-[Install]\n\
-WantedBy=multi-user.target" > systemd/home-automation-rs.service
-	# Mosquitto service (override default if needed)
-	@echo "[Unit]\n\
-Description=Mosquitto MQTT Broker\n\
-\n\
-[Service]\n\
-Type=simple\n\
-User=mosquitto\n\
-ExecStart=/usr/sbin/mosquitto -c /etc/mosquitto/mosquitto.conf\n\
-Restart=always\n\
-RestartSec=10\n\
-\n\
-[Install]\n\
-WantedBy=multi-user.target" > systemd/mosquitto.service
-	# Zigbee2MQTT service
-	@echo "[Unit]\n\
-Description=Zigbee2MQTT Bridge\n\
-After=mosquitto.service\n\
-Requires=mosquitto.service\n\
-\n\
-[Service]\n\
-Type=simple\n\
-User=$(PI_USER)\n\
-WorkingDirectory=$(DATA_DIR)/zigbee2mqtt\n\
-ExecStart=/usr/bin/zigbee2mqtt\n\
-Restart=always\n\
-RestartSec=10\n\
-StandardOutput=append:$(LOG_DIR)/zigbee2mqtt.log\n\
-StandardError=append:$(LOG_DIR)/zigbee2mqtt-error.log\n\
-Environment=\"NODE_ENV=production\"\n\
-Environment=\"ZIGBEE2MQTT_DATA=$(DATA_DIR)/zigbee2mqtt\"\n\
-\n\
-[Install]\n\
-WantedBy=multi-user.target" > systemd/zigbee2mqtt.service
-	# System Monitor service
-	@echo "[Unit]\n\
-Description=System Monitor - CPU, RAM and Temperature Logger\n\
-After=network.target\n\
-\n\
-[Service]\n\
-Type=simple\n\
-User=$(PI_USER)\n\
-ExecStart=$(DEPLOY_DIR)/monitor.sh\n\
-Restart=always\n\
-RestartSec=10\n\
-StandardOutput=append:$(LOG_DIR)/monitor.log\n\
-StandardError=append:$(LOG_DIR)/monitor-error.log\n\
-\n\
-[Install]\n\
-WantedBy=multi-user.target" > systemd/system-monitor.service
+	@sed -e 's|{{PI_USER}}|$(PI_USER)|g' \
+		-e 's|{{DEPLOY_DIR}}|$(DEPLOY_DIR)|g' \
+		-e 's|{{BINARY_NAME}}|$(BINARY_NAME)|g' \
+		-e 's|{{LOG_DIR}}|$(LOG_DIR)|g' \
+		-e 's|{{DATA_DIR}}|$(DATA_DIR)|g' \
+		configs/templates/home-automation-rs.service > systemd/home-automation-rs.service
+	@cp configs/templates/mosquitto.service systemd/mosquitto.service
+	@sed -e 's|{{PI_USER}}|$(PI_USER)|g' \
+		-e 's|{{DATA_DIR}}|$(DATA_DIR)|g' \
+		-e 's|{{LOG_DIR}}|$(LOG_DIR)|g' \
+		configs/templates/zigbee2mqtt.service > systemd/zigbee2mqtt.service
+	@sed -e 's|{{PI_USER}}|$(PI_USER)|g' \
+		-e 's|{{DEPLOY_DIR}}|$(DEPLOY_DIR)|g' \
+		-e 's|{{LOG_DIR}}|$(LOG_DIR)|g' \
+		configs/templates/system-monitor.service > systemd/system-monitor.service
 	@echo "$(COLOR_GREEN)✓ Service files generated in systemd/$(COLOR_RESET)"
 
 generate-configs: ## Generate configuration files for deployment
 	@echo "$(COLOR_BLUE)Generating configuration files...$(COLOR_RESET)"
 	@mkdir -p configs
-	# Mosquitto config
-	@echo "listener 1883\n\
-allow_anonymous true\n\
-persistence true\n\
-persistence_location $(DATA_DIR)/mosquitto/data/\n\
-log_dest file $(DATA_DIR)/mosquitto/log/mosquitto.log\n\
-log_dest stdout" > configs/mosquitto.conf
-	# Zigbee2MQTT config
-	@echo "mqtt:\n\
-  server: mqtt://localhost:1883\n\
-serial:\n\
-  port: $(ZIGBEE_DEVICE)\n\
-frontend: false\n\
-availability:\n\
-  enabled: true\n\
-advanced:\n\
-  log_level: info\n\
-  log_directory: $(LOG_DIR)\n\
-  pan_id: $(Z2M_PAN_ID)\n\
-  ext_pan_id: $(Z2M_EXT_PAN_ID)\n\
-  network_key: $(Z2M_NETWORK_KEY)\n\
-  channel: $(Z2M_CHANNEL)\n\
-data_path: $(DATA_DIR)/zigbee2mqtt" > configs/zigbee2mqtt-config.yaml
-	# Environment file for Raspberry Pi
-	@echo "MQTT_BROKER=localhost\n\
-MQTT_PORT=1883\n\
-HTTP_ADDR=0.0.0.0:8082\n\
-DB_PATH=$(DATA_DIR)/database/home_automation.db" > configs/pi.env
+	@sed -e 's|{{DATA_DIR}}|$(DATA_DIR)|g' \
+		configs/templates/mosquitto.conf > configs/mosquitto.conf
+	@sed -e 's|{{ZIGBEE_DEVICE}}|$(ZIGBEE_DEVICE)|g' \
+		-e 's|{{LOG_DIR}}|$(LOG_DIR)|g' \
+		-e 's|{{Z2M_PAN_ID}}|$(Z2M_PAN_ID)|g' \
+		-e 's|{{Z2M_EXT_PAN_ID}}|$(Z2M_EXT_PAN_ID)|g' \
+		-e 's|{{Z2M_NETWORK_KEY}}|$(Z2M_NETWORK_KEY)|g' \
+		-e 's|{{Z2M_CHANNEL}}|$(Z2M_CHANNEL)|g' \
+		-e 's|{{DATA_DIR}}|$(DATA_DIR)|g' \
+		configs/templates/zigbee2mqtt-config.yaml > configs/zigbee2mqtt-config.yaml
+	@sed -e 's|{{DATA_DIR}}|$(DATA_DIR)|g' \
+		configs/templates/pi.env > configs/pi.env
 	@echo "$(COLOR_GREEN)✓ Configuration files generated in configs/$(COLOR_RESET)"
 
 install-zigbee2mqtt: check-ssh ## Install Zigbee2MQTT on Raspberry Pi

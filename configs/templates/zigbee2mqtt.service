@@ -1,0 +1,19 @@
+[Unit]
+Description=Zigbee2MQTT Bridge
+After=mosquitto.service
+Requires=mosquitto.service
+
+[Service]
+Type=simple
+User={{PI_USER}}
+WorkingDirectory={{DATA_DIR}}/zigbee2mqtt
+ExecStart=/usr/bin/zigbee2mqtt
+Restart=always
+RestartSec=10
+StandardOutput=append:{{LOG_DIR}}/zigbee2mqtt.log
+StandardError=append:{{LOG_DIR}}/zigbee2mqtt-error.log
+Environment="NODE_ENV=production"
+Environment="ZIGBEE2MQTT_DATA={{DATA_DIR}}/zigbee2mqtt"
+
+[Install]
+WantedBy=multi-user.target

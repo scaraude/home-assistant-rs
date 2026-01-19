@@ -25,7 +25,8 @@ deploy/
 
 # Deployment artifacts
 .env.deploy
-/configs/
+/configs/*
+!/configs/templates/
 /systemd/
 /backups/
 

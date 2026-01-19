@@ -1,0 +1,15 @@
+mqtt:
+  server: mqtt://localhost:1883
+serial:
+  port: {{ZIGBEE_DEVICE}}
+frontend: false
+availability:
+  enabled: true
+advanced:
+  log_level: info
+  log_directory: {{LOG_DIR}}
+  pan_id: {{Z2M_PAN_ID}}
+  ext_pan_id: {{Z2M_EXT_PAN_ID}}
+  network_key: {{Z2M_NETWORK_KEY}}
+  channel: {{Z2M_CHANNEL}}
+data_path: {{DATA_DIR}}/zigbee2mqtt
