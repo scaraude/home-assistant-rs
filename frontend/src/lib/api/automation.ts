@@ -4,6 +4,7 @@ import type {
   ComparisonOperator,
   LogicalOperator,
 } from "../types/automation";
+import { parseUnixSeconds, unixSecondsToDate } from "../utils/time";
 
 export type {
   AutomationActionType,
@@ -35,9 +36,9 @@ export interface AutomationRule {
   conditions: AutomationCondition[];
   actions: AutomationAction[];
   time_window: TimeWindow;
-  created_at: string;
-  updated_at: string;
-  last_triggered_at: string | null;
+  created_at: Date;
+  updated_at: Date;
+  last_triggered_at: Date | null;
   trigger_count: number;
 }
 
@@ -97,7 +98,36 @@ export interface AutomationExecutionLog {
   rule_name: string;
   success: boolean;
   error_message: string | null;
-  executed_at: string;
+  executed_at: Date;
+}
+
+type AutomationRuleResponse = Omit<
+  AutomationRule,
+  "created_at" | "updated_at" | "last_triggered_at"
+> & {
+  created_at: number;
+  updated_at: number;
+  last_triggered_at: number | null;
+};
+
+type AutomationExecutionLogResponse = Omit<AutomationExecutionLog, "executed_at"> & {
+  executed_at: number;
+};
+
+function parseAutomationRule(rule: AutomationRuleResponse): AutomationRule {
+  return {
+    ...rule,
+    created_at: unixSecondsToDate(rule.created_at),
+    updated_at: unixSecondsToDate(rule.updated_at),
+    last_triggered_at: parseUnixSeconds(rule.last_triggered_at),
+  };
+}
+
+function parseAutomationLog(log: AutomationExecutionLogResponse): AutomationExecutionLog {
+  return {
+    ...log,
+    executed_at: unixSecondsToDate(log.executed_at),
+  };
 }
 
 /**
@@ -108,7 +138,8 @@ export async function fetchAutomationRules(): Promise<AutomationRule[]> {
   if (!response.ok) {
     throw new Error(`Failed to fetch automation rules: ${response.statusText}`);
   }
-  return response.json();
+  const rules = (await response.json()) as AutomationRuleResponse[];
+  return rules.map(parseAutomationRule);
 }
 
 /**
@@ -120,7 +151,8 @@ export async function fetchAutomationRule(id: string): Promise<AutomationRule> {
   if (!response.ok) {
     throw new Error(`Failed to fetch automation rule: ${response.statusText}`);
   }
-  return response.json();
+  const rule = (await response.json()) as AutomationRuleResponse;
+  return parseAutomationRule(rule);
 }
 
 /**
@@ -141,7 +173,8 @@ export async function createAutomationRule(rule: CreateAutomationRuleRequest): P
     throw new Error(errorData.error || `Failed to create automation rule: ${response.statusText}`);
   }
 
-  return response.json();
+  const created = (await response.json()) as AutomationRuleResponse;
+  return parseAutomationRule(created);
 }
 
 /**
@@ -166,7 +199,8 @@ export async function updateAutomationRule(
     throw new Error(errorData.error || `Failed to update automation rule: ${response.statusText}`);
   }
 
-  return response.json();
+  const updated = (await response.json()) as AutomationRuleResponse;
+  return parseAutomationRule(updated);
 }
 
 /**
@@ -196,5 +230,6 @@ export async function fetchAutomationLogs(limit: number = 100): Promise<Automati
   if (!response.ok) {
     throw new Error(`Failed to fetch automation logs: ${response.statusText}`);
   }
-  return response.json();
+  const logs = (await response.json()) as AutomationExecutionLogResponse[];
+  return logs.map(parseAutomationLog);
 }

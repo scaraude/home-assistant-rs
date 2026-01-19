@@ -20,7 +20,7 @@ export interface DeviceState {
   device_id: string;
   battery_level: number | null;
   link_quality: number | null;
-  last_seen: number;
+  last_seen: Date;
   turbo_mode: boolean | null;
 }
 
@@ -32,7 +32,7 @@ export interface NetworkDevice {
   capabilities: DeviceCapability[];
   available_fields: string[];
   power_source: PowerSource;
-  added_at: number;
+  added_at: Date;
   is_bridge: boolean;
   parent_device_id: string | null;
 }

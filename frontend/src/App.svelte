@@ -53,7 +53,7 @@
       dataCache.setSensors(sensors);
       dataCache.setSensorReadings(
         readingsResult.readings,
-        readingsResult.latestTimestamp ?? 0,
+        readingsResult.latestTimestamp ?? null,
         DEFAULT_SENSOR_HOURS
       );
       dataCache.setSwitches(switches);

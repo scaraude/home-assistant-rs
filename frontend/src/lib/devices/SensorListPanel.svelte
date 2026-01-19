@@ -14,7 +14,7 @@
   function getLatestReading(deviceId: string): SensorReading | null {
     const sensorReadings = readings
       .filter(r => r.device_id === deviceId)
-      .sort((a, b) => b.timestamp - a.timestamp);
+      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 
     return sensorReadings[0] || null;
   }

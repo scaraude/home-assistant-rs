@@ -26,7 +26,7 @@
   function getLatestReading(deviceId: string): EnergySensorReading | null {
     const deviceReadings = $dataCache.sensors.readings
       .filter(r => r.device_id === deviceId)
-      .sort((a, b) => b.timestamp - a.timestamp);
+      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 
     if (deviceReadings.length === 0) return null;
 

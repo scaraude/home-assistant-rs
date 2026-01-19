@@ -10,8 +10,10 @@
   import "@xyflow/svelte/dist/style.css";
   import { networkTopologyStore } from "../stores/networkTopology";
   import DeviceNodeComponent from "./DeviceNode.svelte";
+  import type { NetworkTopology } from "../api/network";
+  import type { NetworkDevice } from "../types/devices";
 
-  import type { Device, NetworkTopology } from "../stores/networkTopology";
+  type NetworkEdge = NetworkTopology["edges"][number];
 
   type DeviceState = {
     link_quality: number | null;
@@ -25,7 +27,7 @@
   }
 
   type DeviceNodeData = Record<string, unknown> & {
-    device: Device;
+    device: NetworkDevice;
     deviceState?: DeviceState;
   };
 
@@ -72,7 +74,7 @@
 
     return {
       ...topology,
-      edges: topology.edges.map((edge) => ({
+      edges: topology.edges.map((edge: NetworkEdge) => ({
         ...edge,
         link_quality: deviceStates.get(edge.target_id)?.link_quality ?? null,
       })),
@@ -84,7 +86,7 @@
     const topologyEnriched = enricheTopologyWithLinkQuality(topology);
     if (!topologyEnriched) return [];
 
-    return topologyEnriched.edges.map((edge) => {
+    return topologyEnriched.edges.map((edge: NetworkEdge) => {
       const linkQuality = edge.link_quality;
       const color = getLinkQualityColor(linkQuality);
 
@@ -99,7 +101,7 @@
   });
 
   function calculateInitialPosition(
-    device: Device,
+    device: NetworkDevice,
     index: number,
     total: number
   ): { x: number; y: number } {

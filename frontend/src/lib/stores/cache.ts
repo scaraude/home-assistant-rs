@@ -9,7 +9,7 @@ import type { LogFile } from '../websocket';
 
 interface SensorCache {
   readings: SensorReading[];
-  latestTimestamp: number;
+  latestTimestamp: Date | null;
 }
 
 interface LogCache {
@@ -39,7 +39,7 @@ function createCache() {
   const initialState: CacheState = {
     sensors: {
       readings: [],
-      latestTimestamp: 0,
+      latestTimestamp: null,
     },
     logs: {},
   };
@@ -58,14 +58,14 @@ function createCache() {
     subscribe,
 
     // Sensor methods
-    setSensorReadings(readings: SensorReading[], latestTimestamp: number) {
+    setSensorReadings(readings: SensorReading[], latestTimestamp: Date | null) {
       update((state) => ({
         ...state,
         sensors: { readings, latestTimestamp },
       }));
     },
 
-    mergeSensorReadings(newReadings: SensorReading[], latestTimestamp: number) {
+    mergeSensorReadings(newReadings: SensorReading[], latestTimestamp: Date | null) {
       update((state) => ({
         ...state,
         sensors: {
@@ -75,8 +75,8 @@ function createCache() {
       }));
     },
 
-    getSensorTimestamp(): number {
-      let timestamp = 0;
+    getSensorTimestamp(): Date | null {
+      let timestamp: Date | null = null;
       this.subscribe((state) => {
         timestamp = state.sensors.latestTimestamp;
       })();
@@ -174,7 +174,7 @@ function createCache() {
     clearSensors() {
       update((state) => ({
         ...state,
-        sensors: { readings: [], latestTimestamp: 0 },
+        sensors: { readings: [], latestTimestamp: null },
       }));
     },
 

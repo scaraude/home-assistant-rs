@@ -71,7 +71,7 @@
     for (const sensor of visibleSensors) {
       const sensorReadings = visibleReadings
         .filter(r => r.device_id === sensor.deviceId)
-        .sort((a, b) => a.timestamp - b.timestamp);
+        .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 
       if (sensorReadings.length === 0) continue;
 
@@ -79,7 +79,7 @@
 
       // Power metric (for energy meters)
       if (metricType === 'power') {
-        const timestamps = sensorReadings.map(r => r.timestamp * 1000);
+        const timestamps = sensorReadings.map(r => r.timestamp.getTime());
         const powerValues = sensorReadings.map(r => r.type === 'energy_meter' ? r.power : 0);
 
         datasets.push({
@@ -96,7 +96,7 @@
       }
       // Temperature/Humidity metrics
       else {
-        const timestamps = sensorReadings.map(r => r.timestamp * 1000);
+        const timestamps = sensorReadings.map(r => r.timestamp.getTime());
         const temperatures = sensorReadings.map(r => r.type === 'temp_humidity' ? r.temperature : 0);
         const humidities = sensorReadings.map(r => r.type === 'temp_humidity' ? r.humidity : 0);
 

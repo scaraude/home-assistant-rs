@@ -44,7 +44,7 @@
   let chart = $state<Chart | null>(null);
 
   function getDatasets() {
-    const timestamps = readings.map((r) => r.timestamp * 1000);
+    const timestamps = readings.map((r) => r.timestamp.getTime());
 
     // Check if this is a presence sensor
     const isPresenceSensor = readings.length > 0 && readings[0].type === 'presence';

@@ -1,5 +1,6 @@
 import type { DeviceInfo, DeviceState } from "../types/devices";
 import type { SensorType } from "../types/sensors";
+import { unixSecondsToDate } from "../utils/time";
 
 export type {
   DeviceInfo,
@@ -7,6 +8,15 @@ export type {
   SensorType,
 };
 export type { DeviceCapability, PowerSource, CommanderType } from "../types/devices";
+
+type DeviceStateResponse = Omit<DeviceState, "last_seen"> & { last_seen: number };
+
+function parseDeviceState(state: DeviceStateResponse): DeviceState {
+  return {
+    ...state,
+    last_seen: unixSecondsToDate(state.last_seen),
+  };
+}
 
 /**
  * Open or close Zigbee permit join on Zigbee2MQTT.
@@ -93,7 +103,8 @@ export async function fetchDeviceState(deviceId: string): Promise<DeviceState | 
     throw new Error(`Failed to fetch device state: ${response.statusText}`);
   }
 
-  return response.json();
+  const state = (await response.json()) as DeviceStateResponse;
+  return parseDeviceState(state);
 }
 
 /**
@@ -106,5 +117,6 @@ export async function fetchDeviceStates(): Promise<DeviceState[]> {
     throw new Error(`Failed to fetch device states: ${response.statusText}`);
   }
 
-  return response.json();
+  const states = (await response.json()) as DeviceStateResponse[];
+  return states.map(parseDeviceState);
 }

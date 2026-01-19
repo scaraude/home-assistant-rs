@@ -30,7 +30,7 @@
   );
   let timeAgo = $derived(
     device.last_seen
-      ? formatDistanceToNow(new Date(device.last_seen * 1000), {
+      ? formatDistanceToNow(device.last_seen, {
           addSuffix: true,
         })
       : "Never"
@@ -107,7 +107,7 @@
       <div class="device-id">{shortId}</div>
       <div
         class="last-update"
-        title={device.last_seen ? new Date(device.last_seen * 1000).toLocaleString() : "Never"}
+        title={device.last_seen ? device.last_seen.toLocaleString() : "Never"}
       >
         {displayTimeAgo}
       </div>

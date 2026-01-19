@@ -1,3 +1,5 @@
+import { unixSecondsToDate } from "../utils/time";
+
 export interface SwitchDevice {
   id: string;
   name: string;
@@ -5,7 +7,7 @@ export interface SwitchDevice {
   // Device state fields (from device_state table)
   link_quality: number | null;
   battery_level: number | null;
-  last_seen: number | null;
+  last_seen: Date | null;
 }
 
 export interface SwitchCommand {
@@ -21,7 +23,15 @@ export async function fetchSwitches(): Promise<SwitchDevice[]> {
   if (!response.ok) {
     throw new Error(`Failed to fetch switches: ${response.statusText}`);
   }
-  return response.json();
+
+  const devices = (await response.json()) as Array<Omit<SwitchDevice, 'last_seen'> & {
+    last_seen: number | null;
+  }>;
+
+  return devices.map((device) => ({
+    ...device,
+    last_seen: device.last_seen ? unixSecondsToDate(device.last_seen) : null,
+  }));
 }
 
 /**

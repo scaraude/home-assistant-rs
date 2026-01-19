@@ -30,7 +30,7 @@
       dataCache.setSensors(sensors);
       dataCache.setSensorReadings(
         readingsResult.readings,
-        readingsResult.latestTimestamp ?? 0,
+        readingsResult.latestTimestamp ?? null,
         hours
       );
 

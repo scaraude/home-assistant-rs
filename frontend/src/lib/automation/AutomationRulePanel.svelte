@@ -126,8 +126,8 @@
     return `${start}–${end} · ${daysLabel}`;
   }
 
-  function formatTimeAgo(timestamp: string) {
-    const timeAgo = formatDistanceToNow(new Date(timestamp), {
+  function formatTimeAgo(timestamp: Date) {
+    const timeAgo = formatDistanceToNow(timestamp, {
       addSuffix: true,
     });
     return timeAgo === "less than a minute ago" ? "now" : timeAgo;

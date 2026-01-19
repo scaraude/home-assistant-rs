@@ -4,7 +4,7 @@ import type { DeviceInfo, DeviceState, SensorReading, SwitchDevice } from '../ap
 interface SensorStoreState {
   devices: DeviceInfo[];
   readings: SensorReading[];
-  latestTimestamp: number;
+  latestTimestamp: Date | null;
   rangeHours: number;
   loaded: boolean;
 }
@@ -25,7 +25,7 @@ const createInitialState = (): DataCacheState => ({
   sensors: {
     devices: [],
     readings: [],
-    latestTimestamp: 0,
+    latestTimestamp: null,
     rangeHours: 24,
     loaded: false,
   },
@@ -38,15 +38,15 @@ const createInitialState = (): DataCacheState => ({
 });
 
 function sortReadings(readings: SensorReading[]): SensorReading[] {
-  return [...readings].sort((a, b) => a.timestamp - b.timestamp);
+  return [...readings].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 }
 
 function trimReadings(readings: SensorReading[], hours: number): SensorReading[] {
   if (hours <= 0) {
     return readings;
   }
-  const cutoff = Math.floor(Date.now() / 1000) - hours * 3600;
-  return readings.filter((reading) => reading.timestamp >= cutoff);
+  const cutoff = Date.now() - hours * 3600 * 1000;
+  return readings.filter((reading) => reading.timestamp.getTime() >= cutoff);
 }
 
 function createDataCache() {
@@ -97,7 +97,7 @@ function createDataCache() {
       });
     },
 
-    setSensorReadings(readings: SensorReading[], latestTimestamp: number, rangeHours: number) {
+    setSensorReadings(readings: SensorReading[], latestTimestamp: Date | null, rangeHours: number) {
       const sorted = sortReadings(readings);
       update((state) => ({
         ...state,
@@ -116,7 +116,7 @@ function createDataCache() {
         const exists = state.sensors.readings.some(
           (item) =>
             item.device_id === reading.device_id &&
-            item.timestamp === reading.timestamp &&
+            item.timestamp.getTime() === reading.timestamp.getTime() &&
             item.type === reading.type,
         );
 
@@ -124,12 +124,19 @@ function createDataCache() {
           ? state.sensors.readings
           : sortReadings([...state.sensors.readings, reading]);
 
+        const latestTimestamp = state.sensors.latestTimestamp;
+        const nextLatest = latestTimestamp
+          ? latestTimestamp.getTime() >= reading.timestamp.getTime()
+            ? latestTimestamp
+            : reading.timestamp
+          : reading.timestamp;
+
         return {
           ...state,
           sensors: {
             ...state.sensors,
             readings: trimReadings(merged, state.sensors.rangeHours),
-            latestTimestamp: Math.max(state.sensors.latestTimestamp, reading.timestamp),
+            latestTimestamp: nextLatest,
           },
         };
       });
@@ -190,7 +197,7 @@ function createDataCache() {
           battery_level: updates.battery_level ?? existing?.battery_level ?? null,
           link_quality: updates.link_quality ?? existing?.link_quality ?? null,
           turbo_mode: updates.turbo_mode ?? existing?.turbo_mode ?? null,
-          last_seen: updates.last_seen ?? existing?.last_seen ?? Math.floor(Date.now() / 1000),
+          last_seen: updates.last_seen ?? existing?.last_seen ?? new Date(),
         };
 
         const newState: DataCacheState = {

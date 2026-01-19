@@ -35,7 +35,7 @@
 
   let timeAgo = $derived(
     latestReading
-      ? formatDistanceToNow(new Date(latestReading.timestamp * 1000), {
+      ? formatDistanceToNow(latestReading.timestamp, {
           addSuffix: true,
         })
       : ""
