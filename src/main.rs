@@ -21,6 +21,11 @@ use tokio::sync::Mutex;
 use tracing::{debug, info};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
+/// Event bus capacity sized for short bursts of MQTT + service events.
+const EVENT_BUS_CAPACITY: usize = 1000;
+/// MQTT client queue size for outgoing commands and inbound processing.
+const MQTT_CLIENT_QUEUE_CAPACITY: usize = 20;
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize tracing with environment filter (use RUST_LOG env var to control)
@@ -63,8 +68,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let switch_state = SwitchStateStore::new();
     info!("Switch state store initialized");
 
-    let event_bus = EventBus::new(1000);
-    info!("Event bus initialized with capacity 1000");
+    let event_bus = EventBus::new(EVENT_BUS_CAPACITY);
+    info!(
+        event_bus_capacity = EVENT_BUS_CAPACITY,
+        "Event bus initialized"
+    );
 
     let ws_broadcaster = Arc::new(WebSocketBroadcaster::new(event_bus.subscribe()));
     let ws_broadcaster_task = ws_broadcaster.clone();
@@ -83,7 +91,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &mqtt_broker,
         mqtt_port,
         "home-automation-rs",
-        Some(20),
+        Some(MQTT_CLIENT_QUEUE_CAPACITY),
         db.clone(),
         event_bus.clone(),
     );

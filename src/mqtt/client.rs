@@ -7,6 +7,13 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::{debug, error, info};
 
+/// MQTT keep-alive interval in seconds.
+const MQTT_KEEP_ALIVE_SECS: u64 = 60;
+/// Maximum MQTT packet size in bytes (1MB).
+const MQTT_MAX_PACKET_SIZE_BYTES: usize = 1024 * 1024;
+/// Default queue size for MQTT event loop backpressure.
+const MQTT_DEFAULT_QUEUE_CAPACITY: usize = 50;
+
 /// Unified MQTT client for both publishing commands and listening to messages.
 /// Handles all MQTT operations including subscribing to topics and publishing commands.
 #[derive(Clone)]
@@ -34,20 +41,16 @@ impl MqttClient {
         );
 
         let mut mqtt_options = MqttOptions::new(client_id, broker_host, broker_port);
-        mqtt_options.set_keep_alive(std::time::Duration::from_secs(60));
-        mqtt_options.set_max_packet_size(1024 * 1024, 1024 * 1024); // 1MB max packet size
+        mqtt_options.set_keep_alive(std::time::Duration::from_secs(MQTT_KEEP_ALIVE_SECS));
+        mqtt_options.set_max_packet_size(MQTT_MAX_PACKET_SIZE_BYTES, MQTT_MAX_PACKET_SIZE_BYTES);
 
         debug!(
-            keep_alive_secs = 60,
-            max_packet_size = "1MB",
+            keep_alive_secs = MQTT_KEEP_ALIVE_SECS,
+            max_packet_size_bytes = MQTT_MAX_PACKET_SIZE_BYTES,
             "MQTT options configured"
         );
 
-        let cap = if capacity.is_some() {
-            capacity.unwrap()
-        } else {
-            50
-        };
+        let cap = capacity.unwrap_or(MQTT_DEFAULT_QUEUE_CAPACITY);
         let (async_client, eventloop) = AsyncClient::new(mqtt_options, cap);
         info!(queue_size = cap, "MQTT client created");
         let subscriptions = Arc::new(Mutex::new(Vec::new()));

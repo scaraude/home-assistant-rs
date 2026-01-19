@@ -1,23 +1,12 @@
-export interface DeviceInfo {
-  device_id: string;
-  name: string;
-  capabilities: DeviceCapability[];
-  available_fields: string[];
-}
+import type { DeviceInfo, DeviceState } from "../types/devices";
+import type { SensorType } from "../types/sensors";
 
-export type DeviceCapability =
-  | { type: 'sensor'; sensor_type: 'temp_humidity' | 'presence' | 'energy_meter' }
-  | { type: 'commander'; commander_type: 'switch' }
-  | { type: 'router'; turbo_mode: boolean }
-  | { type: 'coordinator' };
-
-export interface DeviceState {
-  device_id: string;
-  battery_level: number | null;
-  link_quality: number | null;
-  last_seen: number;
-  turbo_mode: boolean | null;
-}
+export type {
+  DeviceInfo,
+  DeviceState,
+  SensorType,
+};
+export type { DeviceCapability, PowerSource, CommanderType } from "../types/devices";
 
 /**
  * Open or close Zigbee permit join on Zigbee2MQTT.

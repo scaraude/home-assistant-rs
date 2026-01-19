@@ -1,19 +1,7 @@
+import type { NetworkDevice } from "../types/devices";
+
 export interface NetworkTopology {
-  devices: Array<{
-    id: string;
-    mqtt_topic: string;
-    ieee_addr: string;
-    name: string;
-    capability: {
-      type: 'sensor' | 'commander' | 'coordinator';
-      sensor_type?: 'temp_humidity' | 'presence';
-      commander_type?: 'switch';
-    };
-    power_source: 'battery' | 'plugged';
-    added_at: number;
-    is_bridge: boolean;
-    parent_device_id: string | null;
-  }>;
+  devices: NetworkDevice[];
   edges: Array<{
     source_id: string;
     target_id: string;

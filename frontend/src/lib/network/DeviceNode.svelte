@@ -4,21 +4,10 @@
   import { setDeviceOption } from "../api";
   import EditableDeviceName from "../devices/EditableDeviceName.svelte";
   import StatusBadge from "../shared/StatusBadge.svelte";
+  import type { NetworkDevice } from "../types/devices";
 
   type DeviceData = Record<string, unknown> & {
-    device: {
-      id: string;
-      name: string;
-      mqtt_topic: string;
-      capability: {
-        type: "sensor" | "commander" | "coordinator";
-        sensor_type?: "temp_humidity" | "presence";
-        commander_type?: "switch";
-      };
-      power_source: "battery" | "plugged";
-      is_bridge: boolean;
-      parent_device_id: string | null;
-    };
+    device: NetworkDevice;
     deviceState?: {
       link_quality: number | null;
       battery_level: number | null;
@@ -47,19 +36,31 @@
     }
   });
 
-  function getIcon(device: typeof data.device): string {
-    if (device.capability.type === "sensor") {
-      if (device.capability.sensor_type === "temp_humidity") {
+  function getIcon(device: NetworkDevice): string {
+    if (device.capabilities.some((cap) => cap.type === "coordinator")) {
+      return "📡";
+    }
+
+    const sensorCap = device.capabilities.find((cap) => cap.type === "sensor");
+    if (sensorCap?.type === "sensor") {
+      if (sensorCap.sensor_type === "temp_humidity") {
         return "🌡️";
-      } else if (device.capability.sensor_type === "presence") {
+      }
+      if (sensorCap.sensor_type === "presence") {
         return "💡";
       }
-    } else if (device.capability.type === "commander") {
-      if (device.capability.commander_type === "switch") {
+      if (sensorCap.sensor_type === "energy_meter") {
+        return "⚡";
+      }
+    }
+
+    const commanderCap = device.capabilities.find(
+      (cap) => cap.type === "commander"
+    );
+    if (commanderCap?.type === "commander") {
+      if (commanderCap.commander_type === "switch") {
         return "⚙️";
       }
-    } else if (device.capability.type === "coordinator") {
-      return "📡";
     }
     return "📱";
   }

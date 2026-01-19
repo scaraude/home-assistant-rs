@@ -1,31 +1,5 @@
-import { writable } from 'svelte/store';
-
-export interface Device {
-  id: string;
-  mqtt_topic: string;
-  ieee_addr: string;
-  name: string;
-  capability: {
-    type: 'sensor' | 'commander' | 'coordinator';
-    sensor_type?: 'temp_humidity' | 'presence';
-    commander_type?: 'switch';
-  };
-  power_source: 'battery' | 'plugged';
-  added_at: number;
-  is_bridge: boolean;
-  parent_device_id: string | null;
-}
-
-export interface NetworkEdge {
-  source_id: string;
-  target_id: string;
-  link_quality: number | null;
-}
-
-export interface NetworkTopology {
-  devices: Device[];
-  edges: NetworkEdge[];
-}
+import { writable } from "svelte/store";
+import type { NetworkTopology } from "../api";
 
 export interface NetworkState {
   topology: NetworkTopology | null;

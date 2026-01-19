@@ -5,10 +5,15 @@
     SwitchDevice,
     CreateAutomationRuleRequest,
     UpdateAutomationRuleRequest,
+    AutomationConditionField,
+    AutomationActionType,
+    ComparisonOperator,
+    LogicalOperator,
   } from "../api";
   import { createAutomationRule, updateAutomationRule } from "../api";
   import { automationStore } from "../stores/automations";
   import { fade, scale } from "svelte/transition";
+  import type { SensorType } from "../types/sensors";
 
   let {
     rule = null,
@@ -29,7 +34,7 @@
   let name = $state(rule?.name || "");
   let description = $state(rule?.description || "");
   let enabled = $state(rule?.enabled ?? true);
-  let conditionOperator = $state<"and" | "or">(
+  let conditionOperator = $state<LogicalOperator>(
     rule?.condition_operator || "and"
   );
   let timeWindowEnabled = $state(rule?.time_window?.enabled ?? false);
@@ -42,8 +47,8 @@
   interface ConditionForm {
     id: number;
     device_id: string;
-    field: string;
-    operator: string;
+    field: AutomationConditionField;
+    operator: ComparisonOperator;
     value: number;
   }
 
@@ -62,7 +67,7 @@
   interface ActionForm {
     id: number;
     device_id: string;
-    action: string;
+    action: AutomationActionType;
   }
 
   let actionIdCounter = $state(
@@ -84,7 +89,8 @@
   let oppositeValue = $state<number>(20);
 
   // Define field sets per sensor type
-  const FIELD_OPTIONS_MAP: Record<string, Array<{ value: string; label: string }>> = {
+  type FieldOption = { value: AutomationConditionField; label: string };
+  const FIELD_OPTIONS_MAP: Partial<Record<SensorType, FieldOption[]>> = {
     temp_humidity: [
       { value: "temperature", label: "Temperature (°C)" },
       { value: "humidity", label: "Humidity (%)" },
@@ -104,7 +110,7 @@
     if (!deviceId) return [];
     const sensor = availableSensors.find((s) => s.device_id === deviceId);
     if (!sensor) return [];
-    const options = new Map<string, { value: string; label: string }>();
+    const options = new Map<string, FieldOption>();
     for (const cap of sensor.capabilities) {
       if (cap.type !== "sensor") continue;
       const fields = FIELD_OPTIONS_MAP[cap.sensor_type] || [];
@@ -115,7 +121,7 @@
     return Array.from(options.values());
   }
 
-  const operatorOptions = [
+  const operatorOptions: Array<{ value: ComparisonOperator; label: string }> = [
     { value: "equal", label: "=" },
     { value: "not_equal", label: "≠" },
     { value: "greater_than", label: ">" },
@@ -124,11 +130,14 @@
     { value: "less_than_or_equal", label: "≤" },
   ];
 
-  const actionOptions = [
+  const actionOptions: Array<{ value: AutomationActionType; label: string }> = [
     { value: "on", label: "Turn On" },
     { value: "off", label: "Turn Off" },
     { value: "toggle", label: "Toggle" },
   ];
+
+  const DEFAULT_OPERATOR: ComparisonOperator = "equal";
+  const DEFAULT_ACTION: AutomationActionType = "on";
 
   const dayOptions = [
     { value: 0, label: "Sun" },
@@ -140,8 +149,8 @@
     { value: 6, label: "Sat" },
   ];
 
-  function getOppositeOperator(op: string): string {
-    const opposites: Record<string, string> = {
+  function getOppositeOperator(op: ComparisonOperator): ComparisonOperator {
+    const opposites: Record<ComparisonOperator, ComparisonOperator> = {
       less_than: "greater_than",
       less_than_or_equal: "greater_than_or_equal",
       greater_than: "less_than",
@@ -152,8 +161,8 @@
     return opposites[op] || op;
   }
 
-  function getOppositeAction(action: string): string {
-    const opposites: Record<string, string> = {
+  function getOppositeAction(action: AutomationActionType): AutomationActionType {
+    const opposites: Record<AutomationActionType, AutomationActionType> = {
       on: "off",
       off: "on",
       toggle: "toggle",
@@ -164,7 +173,8 @@
   function addCondition() {
     const firstSensor = availableSensors[0];
     const defaultFields = firstSensor ? getFieldsForDevice(firstSensor.device_id) : [];
-    const defaultField = defaultFields[0]?.value || "temperature";
+    const defaultField =
+      defaultFields[0]?.value || ("temperature" as AutomationConditionField);
 
     conditions = [
       ...conditions,
@@ -752,7 +762,9 @@
                       {operatorOptions.find(
                         (o) =>
                           o.value ===
-                          getOppositeOperator(conditions[0]?.operator)
+                          getOppositeOperator(
+                            conditions[0]?.operator ?? DEFAULT_OPERATOR
+                          )
                       )?.label || "?"}
                     </span>
                     <input
@@ -766,14 +778,17 @@
                     <span class="preview-label">Action:</span>
                     <span
                       class="preview-value action-badge"
-                      class:action-on={getOppositeAction(actions[0]?.action) ===
-                        "on"}
+                      class:action-on={getOppositeAction(
+                        actions[0]?.action ?? DEFAULT_ACTION
+                      ) === "on"}
                       class:action-off={getOppositeAction(
-                        actions[0]?.action
+                        actions[0]?.action ?? DEFAULT_ACTION
                       ) === "off"}
                     >
                       {actionOptions.find(
-                        (a) => a.value === getOppositeAction(actions[0]?.action)
+                        (a) =>
+                          a.value ===
+                          getOppositeAction(actions[0]?.action ?? DEFAULT_ACTION)
                       )?.label || "?"}
                     </span>
                   </div>

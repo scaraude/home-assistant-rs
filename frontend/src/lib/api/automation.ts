@@ -1,15 +1,29 @@
+import type {
+  AutomationActionType,
+  AutomationConditionField,
+  ComparisonOperator,
+  LogicalOperator,
+} from "../types/automation";
+
+export type {
+  AutomationActionType,
+  AutomationConditionField,
+  ComparisonOperator,
+  LogicalOperator,
+};
+
 export interface AutomationCondition {
   id: string;
   device_id: string;
-  field: 'temperature' | 'humidity' | 'battery' | 'link_quality' | 'presence' | 'illumination';
-  operator: 'equal' | 'not_equal' | 'greater_than' | 'greater_than_or_equal' | 'less_than' | 'less_than_or_equal';
+  field: AutomationConditionField;
+  operator: ComparisonOperator;
   value: number;
 }
 
 export interface AutomationAction {
   id: string;
   device_id: string;
-  action: 'on' | 'off' | 'toggle';
+  action: AutomationActionType;
 }
 
 export interface AutomationRule {
@@ -17,7 +31,7 @@ export interface AutomationRule {
   name: string;
   description: string | null;
   enabled: boolean;
-  condition_operator: 'and' | 'or';
+  condition_operator: LogicalOperator;
   conditions: AutomationCondition[];
   actions: AutomationAction[];
   time_window: TimeWindow;
@@ -45,16 +59,16 @@ export interface CreateAutomationRuleRequest {
   name: string;
   description?: string;
   enabled?: boolean;
-  condition_operator: 'and' | 'or';
+  condition_operator: LogicalOperator;
   conditions: Array<{
     device_id: string;
-    field: string;
-    operator: string;
+    field: AutomationConditionField;
+    operator: ComparisonOperator;
     value: number;
   }>;
   actions: Array<{
     device_id: string;
-    action: string;
+    action: AutomationActionType;
   }>;
   time_window?: TimeWindowRequest;
 }
@@ -63,16 +77,16 @@ export interface UpdateAutomationRuleRequest {
   name?: string;
   description?: string;
   enabled?: boolean;
-  condition_operator?: 'and' | 'or';
+  condition_operator?: LogicalOperator;
   conditions?: Array<{
     device_id: string;
-    field: string;
-    operator: string;
+    field: AutomationConditionField;
+    operator: ComparisonOperator;
     value: number;
   }>;
   actions?: Array<{
     device_id: string;
-    action: string;
+    action: AutomationActionType;
   }>;
   time_window?: TimeWindowRequest;
 }
