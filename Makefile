@@ -410,3 +410,63 @@ test-connection: check-ssh ## Test MQTT connection on Raspberry Pi
 		mosquitto_pub -h localhost -t test/hello -m 'Hello from Makefile' && \
 		wait"
 	@echo "$(COLOR_GREEN)✓ MQTT test complete$(COLOR_RESET)"
+
+setup-hotspot: check-ssh ## Setup isolated Wi-Fi hotspot on Raspberry Pi
+	@echo "$(COLOR_BLUE)Setting up isolated Wi-Fi hotspot...$(COLOR_RESET)"
+	@echo "$(COLOR_YELLOW)This will configure a permanent hotspot alongside your existing Wi-Fi connection$(COLOR_RESET)"
+	scp -i $(SSH_KEY) scripts/setup-hotspot.sh $(PI_USER)@$(PI_IP):/tmp/
+	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "sudo bash /tmp/setup-hotspot.sh"
+	@echo "$(COLOR_GREEN)✓ Hotspot setup complete$(COLOR_RESET)"
+
+hotspot-status: check-ssh ## Check status of hotspot services
+	@echo "$(COLOR_BLUE)Hotspot Service Status:$(COLOR_RESET)"
+	@ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "\
+		echo '$(COLOR_BOLD)Hotspot Setup:$(COLOR_RESET)' && \
+		sudo systemctl status hotspot-setup.service --no-pager -l | head -n 10 && \
+		echo '' && \
+		echo '$(COLOR_BOLD)Hostapd (Access Point):$(COLOR_RESET)' && \
+		sudo systemctl status hostapd.service --no-pager -l | head -n 10 && \
+		echo '' && \
+		echo '$(COLOR_BOLD)Dnsmasq (DHCP):$(COLOR_RESET)' && \
+		sudo systemctl status dnsmasq.service --no-pager -l | head -n 10 && \
+		echo '' && \
+		echo '$(COLOR_BOLD)Network Configuration:$(COLOR_RESET)' && \
+		(ip addr show uap0 2>/dev/null | grep -E 'inet |state ' || echo 'uap0 interface not found') && \
+		echo 'wlan0 (home Wi-Fi):' && \
+		ip addr show wlan0 | grep -E 'inet |state ' && \
+		echo '' && \
+		echo '$(COLOR_BOLD)Connected Clients:$(COLOR_RESET)' && \
+		(sudo iw dev uap0 station dump 2>/dev/null | grep -E 'Station|connected time' || echo 'No clients connected')"
+
+hotspot-restart: check-ssh ## Restart hotspot services
+	@echo "$(COLOR_BLUE)Restarting hotspot services...$(COLOR_RESET)"
+	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "\
+		sudo systemctl restart hotspot-setup.service && \
+		sudo systemctl restart hostapd.service && \
+		sudo systemctl restart dnsmasq.service"
+	@echo "$(COLOR_GREEN)✓ Hotspot services restarted$(COLOR_RESET)"
+	@sleep 2
+	$(MAKE) hotspot-status
+
+hotspot-stop: check-ssh ## Stop hotspot services
+	@echo "$(COLOR_BLUE)Stopping hotspot services...$(COLOR_RESET)"
+	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "\
+		sudo systemctl stop hostapd.service && \
+		sudo systemctl stop dnsmasq.service && \
+		sudo systemctl stop hotspot-setup.service"
+	@echo "$(COLOR_GREEN)✓ Hotspot services stopped$(COLOR_RESET)"
+
+hotspot-start: check-ssh ## Start hotspot services
+	@echo "$(COLOR_BLUE)Starting hotspot services...$(COLOR_RESET)"
+	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "\
+		sudo systemctl start hotspot-setup.service && \
+		sudo systemctl start hostapd.service && \
+		sudo systemctl start dnsmasq.service"
+	@echo "$(COLOR_GREEN)✓ Hotspot services started$(COLOR_RESET)"
+	@sleep 2
+	$(MAKE) hotspot-status
+
+hotspot-logs: check-ssh ## Tail hotspot service logs
+	@echo "$(COLOR_BLUE)Tailing hotspot logs (Ctrl+C to exit)...$(COLOR_RESET)"
+	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "\
+		sudo journalctl -f -u hotspot-setup.service -u hostapd.service -u dnsmasq.service"
