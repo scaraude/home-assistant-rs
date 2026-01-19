@@ -16,7 +16,20 @@ export interface PresenceSensorReading {
   timestamp: number;
 }
 
-export type SensorReading = TempHumiditySensorReading | PresenceSensorReading;
+export interface EnergySensorReading {
+  type: 'energy_meter';
+  device_id: string;
+  power: number;              // Watts (primary metric)
+  energy: number;             // kWh consumed
+  produced_energy: number;    // kWh produced
+  voltage: number;            // Volts
+  current: number;            // Amperes
+  ac_frequency: number;       // Hertz
+  power_factor: number;       // 0-1
+  timestamp: number;          // Unix timestamp
+}
+
+export type SensorReading = TempHumiditySensorReading | PresenceSensorReading | EnergySensorReading;
 
 // Legacy type for backward compatibility (temp/humidity only)
 export interface LegacySensorReading {
@@ -30,7 +43,7 @@ export interface DeviceInfo {
   device_id: string;
   name: string;
   capability_type: 'sensor' | 'commander';
-  capability_subtype: 'temp_humidity' | 'presence' | 'switch';
+  capability_subtype: 'temp_humidity' | 'presence' | 'switch' | 'energy_meter';
 }
 
 export interface SensorData {

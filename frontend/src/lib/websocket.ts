@@ -2,7 +2,7 @@ import { writable, type Readable } from 'svelte/store';
 import type { AutomationAction, SensorReading, LogEntry } from './api';
 
 type DeviceCapability =
-  | { type: 'sensor'; sensor_type: 'temp_humidity' | 'presence' }
+  | { type: 'sensor'; sensor_type: 'temp_humidity' | 'presence' | 'energy_meter' }
   | { type: 'commander'; commander_type: 'switch' }
   | { type: 'coordinator' };
 
