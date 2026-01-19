@@ -138,6 +138,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         device_state,
         http_addr,
         ws_broadcaster,
+        event_bus,
     );
     server.run().await?;
 

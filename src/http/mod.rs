@@ -5,6 +5,7 @@ mod static_files;
 pub mod websocket;
 
 use crate::db::Database;
+use crate::events::bus::EventBus;
 use crate::http::query::DeviceStatePath;
 use crate::mqtt::MqttClient;
 use crate::services::WebSocketBroadcaster;
@@ -28,6 +29,7 @@ pub struct HttpServer {
     device_state: DeviceStateStore,
     addr: SocketAddr,
     ws_broadcaster: Arc<WebSocketBroadcaster>,
+    event_bus: EventBus,
 }
 
 impl HttpServer {
@@ -38,6 +40,7 @@ impl HttpServer {
         device_state: DeviceStateStore,
         addr: SocketAddr,
         ws_broadcaster: Arc<WebSocketBroadcaster>,
+        event_bus: EventBus,
     ) -> Self {
         Self {
             db,
@@ -46,6 +49,7 @@ impl HttpServer {
             device_state,
             addr,
             ws_broadcaster,
+            event_bus,
         }
     }
 
@@ -81,6 +85,7 @@ impl HttpServer {
                     let switch_state = self.switch_state.clone();
                     let device_state = self.device_state.clone();
                     let ws_broadcaster = self.ws_broadcaster.clone();
+                    let event_bus = self.event_bus.clone();
                     let conn_id = connection_count;
 
                     tokio::spawn(async move {
@@ -98,6 +103,7 @@ impl HttpServer {
                                         switch_state.clone(),
                                         device_state.clone(),
                                         ws_broadcaster.clone(),
+                                        event_bus.clone(),
                                     )
                                 }),
                             )
@@ -130,6 +136,7 @@ async fn handle_request(
     switch_state: Arc<SwitchStateStore>,
     device_state: DeviceStateStore,
     ws_broadcaster: Arc<WebSocketBroadcaster>,
+    event_bus: EventBus,
 ) -> Result<Response<Full<Bytes>>, hyper::Error> {
     let path = req.uri().path().to_string();
     let method = req.method().clone();
@@ -211,7 +218,7 @@ async fn handle_request(
         ("DELETE", path) if path.starts_with("/api/automation/rules/") => Ok({
             debug!(path = %path, "Deleting automation rule");
             let rule_id = &path["/api/automation/rules/".len()..];
-            routes::delete_automation_rule(&db, rule_id)
+            routes::delete_automation_rule(&db, rule_id, &event_bus)
         }),
         ("GET", "/api/automation/logs") => Ok({
             debug!("Serving automation execution logs");

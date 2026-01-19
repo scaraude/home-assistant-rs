@@ -1,4 +1,5 @@
 use crate::db::Database;
+use crate::events::{SystemEvent, bus::EventBus};
 use crate::http::query::{ExecutionLogsQuery, QueryParams};
 use crate::http::responses::*;
 use crate::logs::{self, LogFile};
@@ -1184,10 +1185,28 @@ fn apply_time_window_update(rule: &mut AutomationRule, update: TimeWindowRequest
     }
 }
 
-pub fn delete_automation_rule(db: &Database, rule_id: &str) -> Response<Full<Bytes>> {
+pub fn delete_automation_rule(
+    db: &Database,
+    rule_id: &str,
+    event_bus: &EventBus,
+) -> Response<Full<Bytes>> {
     match db.delete_automation_rule(rule_id) {
         Ok(_) => {
             info!(rule_id = %rule_id, "Deleted automation rule");
+
+            // Publish event to notify AutomationService to clean up debounce cache
+            let event = SystemEvent::AutomationRuleDeleted {
+                rule_id: rule_id.to_string(),
+                timestamp: Utc::now(),
+            };
+            if let Err(e) = event_bus.publish(event) {
+                warn!(
+                    error = %e,
+                    rule_id = %rule_id,
+                    "Failed to publish AutomationRuleDeleted event"
+                );
+            }
+
             no_content_response()
         }
         Err(e) => {

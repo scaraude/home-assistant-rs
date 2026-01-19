@@ -51,6 +51,11 @@ pub enum SystemEvent {
         #[serde(with = "chrono::serde::ts_seconds")]
         timestamp: DateTime<Utc>,
     },
+    AutomationRuleDeleted {
+        rule_id: String,
+        #[serde(with = "chrono::serde::ts_seconds")]
+        timestamp: DateTime<Utc>,
+    },
     /// New log entries from monitor.sh log files
     LogEntries {
         log_file: LogFile,
@@ -77,6 +82,7 @@ impl SystemEvent {
             SystemEvent::DeviceDiscovered { .. } => "device_discovered",
             SystemEvent::AutomationTriggered { .. } => "automation_triggered",
             SystemEvent::AutomationExecuted { .. } => "automation_executed",
+            SystemEvent::AutomationRuleDeleted { .. } => "automation_rule_deleted",
             SystemEvent::LogEntries { .. } => "log_entries",
             SystemEvent::NetworkTopologyUpdated => "network_topology_updated",
             SystemEvent::DevicePairing { .. } => "device_pairing",

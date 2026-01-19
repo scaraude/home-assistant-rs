@@ -69,8 +69,29 @@ impl AutomationService {
     }
 
     async fn process_event(&self, event: SystemEvent) {
-        if let SystemEvent::SensorReading { reading, .. } = event {
-            self.handle_sensor_reading(reading).await;
+        match event {
+            SystemEvent::SensorReading { reading, .. } => {
+                self.handle_sensor_reading(reading).await;
+            }
+            SystemEvent::AutomationRuleDeleted { rule_id, .. } => {
+                self.handle_rule_deleted(rule_id).await;
+            }
+            _ => {
+                // Ignore other events
+            }
+        }
+    }
+
+    async fn handle_rule_deleted(&self, rule_id: String) {
+        debug!(rule_id = %rule_id, "AutomationService handling rule deletion");
+
+        // Clean up debounce tracking for the deleted rule
+        let mut guard = self.last_triggered.write().await;
+        if guard.remove(&rule_id).is_some() {
+            info!(
+                rule_id = %rule_id,
+                "Cleaned up debounce tracking for deleted automation rule"
+            );
         }
     }
 
