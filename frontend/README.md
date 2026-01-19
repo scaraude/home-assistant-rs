@@ -28,7 +28,7 @@ frontend/
 │   ├── lib/
 │   │   ├── api.ts              # API client for backend
 │   │   ├── SensorCard.svelte   # Card component
-│   │   └── TemperatureGraph.svelte # Chart.js wrapper
+│   │   └── SensorGraph.svelte # Chart.js wrapper
 │   ├── main.ts                 # Entry point
 │   └── app.css                 # Global styles
 ├── vite.config.ts              # Build configuration
@@ -156,7 +156,7 @@ Edit component styles or `src/app.css`:
 
 ### Adding More Chart Types
 
-Install additional Chart.js controllers and register them in `src/lib/TemperatureGraph.svelte`.
+Install additional Chart.js controllers and register them in `src/lib/graphs/SensorGraph.svelte`.
 
 ### Changing Icons
 

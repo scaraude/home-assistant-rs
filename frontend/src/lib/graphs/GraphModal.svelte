@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import TemperatureGraph from "./TemperatureGraph.svelte";
+  import SensorGraph from "./SensorGraph.svelte";
   import type { SensorReading } from "../api";
 
   let {
@@ -66,7 +66,7 @@
         </button>
       </div>
       <div class="modal-body">
-        <TemperatureGraph {readings} {selectedMetric} />
+        <SensorGraph {readings} {selectedMetric} />
       </div>
     </div>
   </div>

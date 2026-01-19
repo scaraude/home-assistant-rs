@@ -162,7 +162,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_all_sensors() {
+    fn test_get_all_sensor_devices() {
         let (db, _temp_dir) = create_test_db();
 
         // Insert devices first (required for INNER JOIN)
@@ -216,7 +216,7 @@ mod tests {
         db.insert_reading(&reading1).unwrap();
         db.insert_reading(&reading2).unwrap();
 
-        let sensors = db.get_all_sensors().unwrap();
+        let sensors = db.get_all_sensor_devices().unwrap();
         assert_eq!(sensors.len(), 2);
     }
 
@@ -662,7 +662,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_all_sensors_with_device_names() {
+    fn test_get_all_sensor_devices_with_device_names() {
         let (db, _temp_dir) = create_test_db();
 
         // Insert device with custom name
@@ -718,7 +718,7 @@ mod tests {
         };
         db.insert_reading(&reading2).unwrap();
 
-        let sensors = db.get_all_sensors().unwrap();
+        let sensors = db.get_all_sensor_devices().unwrap();
         assert_eq!(sensors.len(), 2);
 
         // Check that sensor1 has the custom name

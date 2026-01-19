@@ -9,7 +9,7 @@ use tracing::{debug, error, info};
 pub fn serve_sensors(db: &Database) -> Response<Full<Bytes>> {
     debug!("Querying database for all sensors");
 
-    match db.get_all_sensors() {
+    match db.get_all_sensor_devices() {
         Ok(sensors) => {
             debug!(
                 sensor_count = sensors.len(),

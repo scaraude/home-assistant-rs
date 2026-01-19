@@ -184,9 +184,9 @@ mod tests {
         assert!(!"sensor_001".ends_with("/set"));
     }
 
-    // ==================== TemperatureReading Creation Tests ====================
+    // ==================== SensorReading Creation Tests ====================
 
-    // NOTE: Old tests removed - TemperatureReading::from_mqtt now uses TempSensorMqttMessage (legacy)
+    // NOTE: Old tests removed - SensorReading::from_mqtt now uses TempSensorMqttMessage (legacy)
     // Unified message parsing is tested in src/models/mqtt.rs tests instead
 
     // ==================== State Store Tests ====================
@@ -300,7 +300,7 @@ mod tests {
 
     // ==================== Edge Cases ====================
 
-    // NOTE: Old tests removed - TemperatureReading::from_mqtt now uses unified DeviceMqttMessage
+    // NOTE: Old tests removed - SensorReading::from_mqtt now uses unified DeviceMqttMessage
     // These edge case tests are covered by the sensor reading logic in handlers
 
     // #[test]
@@ -312,7 +312,7 @@ mod tests {
     //         linkquality: Some(0),
     //     };
     //
-    //     let reading = TemperatureReading::from_mqtt("device_001".to_string(), msg);
+    //     let reading = SensorReading::from_mqtt("device_001".to_string(), msg);
     //     assert!(reading.is_some());
     //
     //     let reading = reading.unwrap();
@@ -331,7 +331,7 @@ mod tests {
     //         linkquality: Some(255),
     //     };
     //
-    //     let reading = TemperatureReading::from_mqtt("device_001".to_string(), msg);
+    //     let reading = SensorReading::from_mqtt("device_001".to_string(), msg);
     //     assert!(reading.is_some());
     //
     //     let reading = reading.unwrap();

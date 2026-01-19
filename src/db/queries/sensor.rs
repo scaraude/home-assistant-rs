@@ -163,7 +163,7 @@ impl Database {
     }
 
     /// Get all sensors with their device info (ID + name + capability metadata)
-    pub fn get_all_sensors(&self) -> Result<Vec<DeviceInfo>> {
+    pub fn get_all_sensor_devices(&self) -> Result<Vec<DeviceInfo>> {
         debug!("Querying all distinct sensors with device info");
         let start = std::time::Instant::now();
 

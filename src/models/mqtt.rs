@@ -75,8 +75,8 @@ impl DeviceMqttMessage {
         }
     }
 
-    /// Check if this message contains sensor data for the given sensor type
-    pub fn has_sensor_data(&self, sensor_type: &SensorType) -> bool {
+    /// Check if this message advertises capability data for the given sensor type
+    pub fn has_sensor_capability(&self, sensor_type: &SensorType) -> bool {
         match sensor_type {
             SensorType::TempHumidity => self.temperature.is_some(),
             SensorType::Presence => self.occupancy.is_some(),
@@ -117,7 +117,7 @@ impl DeviceMqttMessage {
             SensorType::Presence,
             SensorType::EnergyMeter,
         ] {
-            if self.has_sensor_data(&sensor_type) {
+            if self.has_sensor_capability(&sensor_type) {
                 capabilities.push(DeviceCapability::Sensor { sensor_type });
             }
         }
@@ -483,11 +483,11 @@ mod tests {
     }
 
     #[test]
-    fn test_device_mqtt_message_has_sensor_data() {
+    fn test_device_mqtt_message_has_sensor_capability() {
         let temp_msg =
             create_test_mqtt_message(None, None, Some(22.5), Some(55.0), None, None, None, None);
-        assert!(temp_msg.has_sensor_data(&SensorType::TempHumidity));
-        assert!(!temp_msg.has_sensor_data(&SensorType::Presence));
+        assert!(temp_msg.has_sensor_capability(&SensorType::TempHumidity));
+        assert!(!temp_msg.has_sensor_capability(&SensorType::Presence));
 
         let presence_msg = create_test_mqtt_message(
             None,
@@ -499,8 +499,8 @@ mod tests {
             None,
             None,
         );
-        assert!(!presence_msg.has_sensor_data(&SensorType::TempHumidity));
-        assert!(presence_msg.has_sensor_data(&SensorType::Presence));
+        assert!(!presence_msg.has_sensor_capability(&SensorType::TempHumidity));
+        assert!(presence_msg.has_sensor_capability(&SensorType::Presence));
     }
 
     #[test]

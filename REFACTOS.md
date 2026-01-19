@@ -21,7 +21,7 @@
 
 ### 🟡 Medium Priority
 
-- [ ] MED-1: Naming Improvements Across Codebase
+- [x] MED-1: Naming Improvements Across Codebase
 - [x] MED-2: Extract Magic Numbers to Constants
 - [x] MED-3: Refactor Device Capability Model
 - [x] MED-4: Refactor if-else Chain in Device Discovery
