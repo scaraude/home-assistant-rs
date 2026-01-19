@@ -1,6 +1,9 @@
-.PHONY: help build deploy install-deps setup-services start stop restart status logs clean backup restore
+.PHONY: help build build-frontend build-front deploy deploy-back deploy-frontend deploy-both deploy-full deploy-config \
+	install-deps setup-services start stop restart status logs clean backup restore
 
+# =============================================================================
 # Configuration - Set these in .env.deploy (see .env.deploy.example)
+# =============================================================================
 PI_IP=$(PI_HOST)
 
 # Binary and service names
@@ -29,11 +32,17 @@ help: ## Show this help message
 # Load environment variables if .env.deploy exists
 -include .env.deploy
 
+# =============================================================================
+# Validation
+# =============================================================================
 check-ssh: ## Verify SSH connection to Raspberry Pi
 	@echo "$(COLOR_BLUE)Checking SSH connection to $(PI_USER)@$(PI_IP)...$(COLOR_RESET)"
 	@ssh -i $(SSH_KEY) -o ConnectTimeout=5 $(PI_USER)@$(PI_IP) "echo '$(COLOR_GREEN)✓ SSH connection successful$(COLOR_RESET)'" || \
 		(echo "$(COLOR_YELLOW)✗ SSH connection failed. Please check PI_HOST, PI_USER, and SSH_KEY settings.$(COLOR_RESET)" && exit 1)
 
+# =============================================================================
+# Build Targets
+# =============================================================================
 setup-cross-compile: ## Install Rust cross-compilation tools
 	@echo "$(COLOR_BLUE)Setting up Rust cross-compilation for $(RUST_TARGET)...$(COLOR_RESET)"
 	rustup target add $(RUST_TARGET)
@@ -49,6 +58,19 @@ build: ## Build the Rust binary for Raspberry Pi
 	@ls -lh target/$(RUST_TARGET)/release/$(BINARY_NAME)
 	@echo "$(COLOR_GREEN)✓ Build complete$(COLOR_RESET)"
 
+build-frontend: ## Build the Svelte frontend into static/
+	@if [ -d "frontend" ]; then \
+		cd frontend && npm install && npm run build && cd ..; \
+		echo "$(COLOR_GREEN)✓ Frontend build complete$(COLOR_RESET)"; \
+	else \
+		echo "$(COLOR_YELLOW)⚠ No frontend directory found, skipping$(COLOR_RESET)"; \
+	fi
+
+build-front: build-frontend ## Alias for build-frontend
+
+# =============================================================================
+# Setup & Installation
+# =============================================================================
 install-deps: check-ssh ## Install dependencies on Raspberry Pi (Mosquitto, Node.js, npm)
 	@echo "$(COLOR_BLUE)Installing dependencies on Raspberry Pi...$(COLOR_RESET)"
 	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) 'bash -s' < scripts/install-pi-deps.sh
@@ -71,39 +93,13 @@ setup-directories: check-ssh ## Create necessary directories on Raspberry Pi
 		sudo chown -R $(PI_USER):$(PI_USER) $(LOG_DIR)"
 	@echo "$(COLOR_GREEN)✓ Directories created$(COLOR_RESET)"
 
-transfer-binary: build check-ssh setup-directories ## Transfer the compiled binary to Raspberry Pi
-	@echo "$(COLOR_BLUE)Transferring binary to Raspberry Pi...$(COLOR_RESET)"
-	scp -i $(SSH_KEY) target/$(RUST_TARGET)/release/$(BINARY_NAME) $(PI_USER)@$(PI_IP):$(DEPLOY_DIR)/bin/
-	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "chmod +x $(DEPLOY_DIR)/bin/$(BINARY_NAME)"
-	@echo "$(COLOR_GREEN)✓ Binary transferred$(COLOR_RESET)"
-
-transfer-configs: check-ssh setup-directories ## Transfer configuration files to Raspberry Pi
-	@echo "$(COLOR_BLUE)Transferring configuration files...$(COLOR_RESET)"
-	# Transfer Mosquitto config
-	scp -i $(SSH_KEY) configs/mosquitto.conf $(PI_USER)@$(PI_IP):/tmp/
-	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "sudo mv /tmp/mosquitto.conf /etc/mosquitto/mosquitto.conf"
-	# Transfer Zigbee2MQTT config
-	scp -i $(SSH_KEY) configs/zigbee2mqtt-config.yaml $(PI_USER)@$(PI_IP):$(DATA_DIR)/zigbee2mqtt/configuration.yaml
-	# Transfer environment file
-	scp -i $(SSH_KEY) configs/pi.env $(PI_USER)@$(PI_IP):$(DEPLOY_DIR)/.env
-	@echo "$(COLOR_GREEN)✓ Configuration files transferred$(COLOR_RESET)"
-
-transfer-frontend: check-ssh ## Build and transfer frontend to Raspberry Pi
-	@echo "$(COLOR_BLUE)Building and transferring frontend...$(COLOR_RESET)"
-	@if [ -d "frontend" ]; then \
-		cd frontend && npm install && npm run build && cd ..; \
-		ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "mkdir -p $(DEPLOY_DIR)/static"; \
-		scp -i $(SSH_KEY) -r static/* $(PI_USER)@$(PI_IP):$(DEPLOY_DIR)/static/; \
-		echo "$(COLOR_GREEN)✓ Frontend transferred$(COLOR_RESET)"; \
-	else \
-		echo "$(COLOR_YELLOW)⚠ No frontend directory found, skipping$(COLOR_RESET)"; \
-	fi
-
-transfer-monitor: check-ssh ## Transfer monitor.sh script to Raspberry Pi
-	@echo "$(COLOR_BLUE)Transferring monitor.sh script...$(COLOR_RESET)"
-	scp -i $(SSH_KEY) monitor.sh $(PI_USER)@$(PI_IP):$(DEPLOY_DIR)/
-	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "chmod +x $(DEPLOY_DIR)/monitor.sh"
-	@echo "$(COLOR_GREEN)✓ Monitor script transferred$(COLOR_RESET)"
+install-zigbee2mqtt: check-ssh ## Install Zigbee2MQTT on Raspberry Pi
+	@echo "$(COLOR_BLUE)Installing Zigbee2MQTT...$(COLOR_RESET)"
+	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "\
+		cd $(DATA_DIR)/zigbee2mqtt && \
+		sudo npm install -g zigbee2mqtt && \
+		zigbee2mqtt --version"
+	@echo "$(COLOR_GREEN)✓ Zigbee2MQTT installed$(COLOR_RESET)"
 
 setup-services: check-ssh ## Install and enable systemd services
 	@echo "$(COLOR_BLUE)Setting up systemd services...$(COLOR_RESET)"
@@ -121,6 +117,9 @@ setup-services: check-ssh ## Install and enable systemd services
 		sudo systemctl enable system-monitor.service"
 	@echo "$(COLOR_GREEN)✓ Services configured$(COLOR_RESET)"
 
+# =============================================================================
+# Config & Service Templates
+# =============================================================================
 generate-service-files: ## Generate systemd service files
 	@echo "$(COLOR_BLUE)Generating systemd service files...$(COLOR_RESET)"
 	@mkdir -p systemd
@@ -158,13 +157,56 @@ generate-configs: ## Generate configuration files for deployment
 		configs/templates/pi.env > configs/pi.env
 	@echo "$(COLOR_GREEN)✓ Configuration files generated in configs/$(COLOR_RESET)"
 
-install-zigbee2mqtt: check-ssh ## Install Zigbee2MQTT on Raspberry Pi
-	@echo "$(COLOR_BLUE)Installing Zigbee2MQTT...$(COLOR_RESET)"
-	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "\
-		cd $(DATA_DIR)/zigbee2mqtt && \
-		sudo npm install -g zigbee2mqtt && \
-		zigbee2mqtt --version"
-	@echo "$(COLOR_GREEN)✓ Zigbee2MQTT installed$(COLOR_RESET)"
+# =============================================================================
+# Transfer Targets
+# =============================================================================
+transfer-binary: build check-ssh setup-directories ## Transfer the compiled binary to Raspberry Pi
+	@echo "$(COLOR_BLUE)Transferring binary to Raspberry Pi...$(COLOR_RESET)"
+	scp -i $(SSH_KEY) target/$(RUST_TARGET)/release/$(BINARY_NAME) $(PI_USER)@$(PI_IP):$(DEPLOY_DIR)/bin/
+	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "chmod +x $(DEPLOY_DIR)/bin/$(BINARY_NAME)"
+	@echo "$(COLOR_GREEN)✓ Binary transferred$(COLOR_RESET)"
+
+transfer-configs: check-ssh setup-directories ## Transfer configuration files to Raspberry Pi
+	@echo "$(COLOR_BLUE)Transferring configuration files...$(COLOR_RESET)"
+	# Transfer Mosquitto config
+	scp -i $(SSH_KEY) configs/mosquitto.conf $(PI_USER)@$(PI_IP):/tmp/
+	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "sudo mv /tmp/mosquitto.conf /etc/mosquitto/mosquitto.conf"
+	# Transfer Zigbee2MQTT config
+	scp -i $(SSH_KEY) configs/zigbee2mqtt-config.yaml $(PI_USER)@$(PI_IP):$(DATA_DIR)/zigbee2mqtt/configuration.yaml
+	# Transfer environment file
+	scp -i $(SSH_KEY) configs/pi.env $(PI_USER)@$(PI_IP):$(DEPLOY_DIR)/.env
+	@echo "$(COLOR_GREEN)✓ Configuration files transferred$(COLOR_RESET)"
+
+transfer-frontend: build-frontend check-ssh ## Transfer built frontend to Raspberry Pi
+	@echo "$(COLOR_BLUE)Transferring frontend...$(COLOR_RESET)"
+	@if [ -d "frontend" ]; then \
+		ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "mkdir -p $(DEPLOY_DIR)/static"; \
+		scp -i $(SSH_KEY) -r static/* $(PI_USER)@$(PI_IP):$(DEPLOY_DIR)/static/; \
+		echo "$(COLOR_GREEN)✓ Frontend transferred$(COLOR_RESET)"; \
+	else \
+		echo "$(COLOR_YELLOW)⚠ No frontend directory found, skipping$(COLOR_RESET)"; \
+	fi
+
+transfer-monitor: check-ssh ## Transfer monitor.sh script to Raspberry Pi
+	@echo "$(COLOR_BLUE)Transferring monitor.sh script...$(COLOR_RESET)"
+	scp -i $(SSH_KEY) monitor.sh $(PI_USER)@$(PI_IP):$(DEPLOY_DIR)/
+	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "chmod +x $(DEPLOY_DIR)/monitor.sh"
+	@echo "$(COLOR_GREEN)✓ Monitor script transferred$(COLOR_RESET)"
+
+# =============================================================================
+# Deployment Targets
+# =============================================================================
+deploy-back: transfer-binary restart-home-automation ## Build and deploy backend only
+	@echo "$(COLOR_GREEN)✓ Backend deployment complete$(COLOR_RESET)"
+
+deploy-frontend: transfer-frontend restart-home-automation ## Build and deploy frontend only
+	@echo "$(COLOR_GREEN)✓ Frontend deployment complete$(COLOR_RESET)"
+
+deploy-both: transfer-binary transfer-frontend restart-home-automation ## Build and deploy backend + frontend
+	@echo "$(COLOR_GREEN)✓ Backend + frontend deployment complete$(COLOR_RESET)"
+
+deploy-config: generate-configs transfer-configs ## Generate and deploy configs
+	@echo "$(COLOR_GREEN)✓ Config deployment complete$(COLOR_RESET)"
 
 deploy-full: ## Full deployment (build, transfer, configure, and start services)
 	@echo "$(COLOR_BOLD)$(COLOR_BLUE)Starting full deployment...$(COLOR_RESET)"
@@ -194,7 +236,10 @@ quick-deploy:
 
 quick-deploy-frontend: check-ssh transfer-frontend restart-home-automation ## Quick deploy frontend only
 	@echo "$(COLOR_GREEN)✓ Frontend quick deployment complete$(COLOR_RESET)"
-	
+
+# =============================================================================
+# Service Management
+# =============================================================================
 start: check-ssh ## Start all services on Raspberry Pi
 	@echo "$(COLOR_BLUE)Starting services...$(COLOR_RESET)"
 	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "\
@@ -235,6 +280,9 @@ restart-home-automation: check-ssh ## Restart home automation service on Raspber
 		echo '$(COLOR_BOLD)Home Automation RS:$(COLOR_RESET)' && \
 		sudo systemctl status home-automation-rs.service --no-pager -l | head -n 10"
 
+# =============================================================================
+# Logs
+# =============================================================================
 status: check-ssh ## Check status of all services
 	@echo "$(COLOR_BLUE)Service Status:$(COLOR_RESET)"
 	@ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "\
@@ -267,6 +315,9 @@ logs-zigbee2mqtt: check-ssh ## Tail Zigbee2MQTT logs only
 logs-monitor: check-ssh ## Tail System Monitor logs only
 	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "sudo journalctl -f -u system-monitor.service"
 
+# =============================================================================
+# Backup & Restore
+# =============================================================================
 backup: check-ssh ## Backup database and configurations from Raspberry Pi
 	@echo "$(COLOR_BLUE)Creating backup...$(COLOR_RESET)"
 	@mkdir -p backups
@@ -294,6 +345,9 @@ restore: check-ssh ## Restore from backup (usage: make restore BACKUP_FILE=backu
 		sudo systemctl start mosquitto.service zigbee2mqtt.service home-automation-rs.service"
 	@echo "$(COLOR_GREEN)✓ Restore complete$(COLOR_RESET)"
 
+# =============================================================================
+# Maintenance
+# =============================================================================
 clean: ## Clean local build artifacts
 	@echo "$(COLOR_BLUE)Cleaning local build artifacts...$(COLOR_RESET)"
 	cargo clean
@@ -312,6 +366,9 @@ clean-pi: check-ssh ## Remove all deployed files from Raspberry Pi (WARNING: des
 		sudo rm -rf $(DEPLOY_DIR) $(DATA_DIR) $(LOG_DIR)"
 	@echo "$(COLOR_GREEN)✓ Raspberry Pi cleaned$(COLOR_RESET)"
 
+# =============================================================================
+# Utilities
+# =============================================================================
 pi-shell: check-ssh ## Open SSH shell to Raspberry Pi
 	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP)
 
@@ -342,6 +399,9 @@ test-connection: check-ssh ## Test MQTT connection on Raspberry Pi
 		wait"
 	@echo "$(COLOR_GREEN)✓ MQTT test complete$(COLOR_RESET)"
 
+# =============================================================================
+# Hotspot Management
+# =============================================================================
 setup-hotspot: check-ssh ## Setup isolated Wi-Fi hotspot on Raspberry Pi
 	@echo "$(COLOR_BLUE)Setting up isolated Wi-Fi hotspot...$(COLOR_RESET)"
 	@echo "$(COLOR_YELLOW)This will configure a permanent hotspot alongside your existing Wi-Fi connection$(COLOR_RESET)"
