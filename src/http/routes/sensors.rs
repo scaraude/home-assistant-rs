@@ -16,20 +16,18 @@ pub fn serve_sensors(db: &Database) -> Response<Full<Bytes>> {
                 "Retrieved sensors from database"
             );
 
-            match serde_json::to_string(&sensors) {
-                Ok(json) => {
-                    info!(
-                        sensor_count = sensors.len(),
-                        response_size = json.len(),
-                        "Successfully serialized sensors to JSON"
-                    );
-                    json_response(json)
-                }
-                Err(e) => {
-                    error!(error = %e, "Failed to serialize sensors to JSON");
-                    internal_error_response("Failed to serialize response")
-                }
-            }
+            let json = match serialize_to_json(&sensors, "sensors list") {
+                Ok(json) => json,
+                Err(response) => return response,
+            };
+
+            info!(
+                sensor_count = sensors.len(),
+                response_size = json.len(),
+                "Successfully serialized sensors to JSON"
+            );
+
+            json_response(json)
         }
         Err(e) => {
             error!(error = %e, "Database error while fetching sensors");
@@ -83,23 +81,20 @@ pub fn serve_readings(db: &Database, query: Option<&str>) -> Response<Full<Bytes
                 .max()
                 .unwrap_or(since);
 
-            match serde_json::to_string(&readings) {
-                Ok(json) => {
-                    info!(
-                        reading_count = readings.len(),
-                        response_size = json.len(),
-                        device_id = ?device_id,
-                        latest_ts = latest_timestamp,
-                        "Successfully serialized readings to JSON"
-                    );
+            let json = match serialize_to_json(&readings, "sensor readings") {
+                Ok(json) => json,
+                Err(response) => return response,
+            };
 
-                    json_response_with_timestamp(json, latest_timestamp)
-                }
-                Err(e) => {
-                    error!(error = %e, "Failed to serialize readings to JSON");
-                    internal_error_response("Failed to serialize response")
-                }
-            }
+            info!(
+                reading_count = readings.len(),
+                response_size = json.len(),
+                device_id = ?device_id,
+                latest_ts = latest_timestamp,
+                "Successfully serialized readings to JSON"
+            );
+
+            json_response_with_timestamp(json, latest_timestamp)
         }
         Err(e) => {
             error!(error = %e, device_id = ?device_id, since = since, "Database error while fetching readings");

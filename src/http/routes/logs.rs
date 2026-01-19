@@ -13,20 +13,17 @@ pub fn serve_logs_list() -> Response<Full<Bytes>> {
 
     let log_files = logs::list_log_files();
 
-    match serde_json::to_string(&log_files) {
-        Ok(json) => {
-            info!(
-                log_file_count = log_files.len(),
-                response_size = json.len(),
-                "Successfully serialized log files list to JSON"
-            );
-            json_response(json)
-        }
-        Err(e) => {
-            error!(error = %e, "Failed to serialize log files to JSON");
-            internal_error_response("Failed to serialize response")
-        }
-    }
+    let json = match serialize_to_json(&log_files, "log files list") {
+        Ok(json) => json,
+        Err(response) => return response,
+    };
+
+    info!(
+        log_file_count = log_files.len(),
+        response_size = json.len(),
+        "Successfully serialized log files list to JSON"
+    );
+    json_response(json)
 }
 
 pub fn serve_log_view(query: Option<&str>) -> Response<Full<Bytes>> {
@@ -65,23 +62,20 @@ pub fn serve_log_view(query: Option<&str>) -> Response<Full<Bytes>> {
                 "Retrieved log entries"
             );
 
-            match serde_json::to_string(&entries) {
-                Ok(json) => {
-                    info!(
-                        entry_count = entries.len(),
-                        total_lines = total_lines,
-                        response_size = json.len(),
-                        filename = %file,
-                        "Successfully serialized log entries to JSON"
-                    );
+            let json = match serialize_to_json(&entries, "log view entries") {
+                Ok(json) => json,
+                Err(response) => return response,
+            };
 
-                    json_response_with_total_lines(json, total_lines)
-                }
-                Err(e) => {
-                    error!(error = %e, filename = %file, "Failed to serialize log entries to JSON");
-                    internal_error_response(e.to_string().as_str())
-                }
-            }
+            info!(
+                entry_count = entries.len(),
+                total_lines = total_lines,
+                response_size = json.len(),
+                filename = %file,
+                "Successfully serialized log entries to JSON"
+            );
+
+            json_response_with_total_lines(json, total_lines)
         }
         Err(e) => {
             error!(error = %e, filename = %file, "Failed to read log file");
@@ -137,21 +131,18 @@ pub fn serve_log_since(query: Option<&str>) -> Response<Full<Bytes>> {
                 "Retrieved log entries"
             );
 
-            match serde_json::to_string(&entries) {
-                Ok(json) => {
-                    info!(
-                        entry_count = entries.len(),
-                        response_size = json.len(),
-                        filename = %file,
-                        "Successfully serialized log entries to JSON"
-                    );
-                    json_response(json)
-                }
-                Err(e) => {
-                    error!(error = %e, filename = %file, "Failed to serialize log entries to JSON");
-                    internal_error_response(e.to_string().as_str())
-                }
-            }
+            let json = match serialize_to_json(&entries, "log entries since") {
+                Ok(json) => json,
+                Err(response) => return response,
+            };
+
+            info!(
+                entry_count = entries.len(),
+                response_size = json.len(),
+                filename = %file,
+                "Successfully serialized log entries to JSON"
+            );
+            json_response(json)
         }
         Err(e) => {
             error!(error = %e, filename = %file, "Failed to read log file");
@@ -243,23 +234,20 @@ pub fn serve_process_history(query: Option<&str>) -> Response<Full<Bytes>> {
                 "Retrieved process history"
             );
 
-            match serde_json::to_string(&entries) {
-                Ok(json) => {
-                    info!(
-                        entry_count = entries.len(),
-                        response_size = json.len(),
-                        process = %process,
-                        pid = %process_pid,
-                        "Successfully serialized process history to JSON"
-                    );
+            let json = match serialize_to_json(&entries, "process history") {
+                Ok(json) => json,
+                Err(response) => return response,
+            };
 
-                    json_response(json)
-                }
-                Err(e) => {
-                    error!(error = %e, process = %process, pid = %process_pid, "Failed to serialize process history to JSON");
-                    internal_error_response(e.to_string().as_str())
-                }
-            }
+            info!(
+                entry_count = entries.len(),
+                response_size = json.len(),
+                process = %process,
+                pid = %process_pid,
+                "Successfully serialized process history to JSON"
+            );
+
+            json_response(json)
         }
         Err(e) => {
             error!(error = %e, process = %process, pid = %process_pid, "Failed to read process history");

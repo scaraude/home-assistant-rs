@@ -47,20 +47,17 @@ pub fn serve_network_topology(
 
             let topology = NetworkTopology { devices, edges };
 
-            match serde_json::to_string(&topology) {
-                Ok(json) => {
-                    info!(
-                        device_count = topology.devices.len(),
-                        edge_count = topology.edges.len(),
-                        "Served network topology"
-                    );
-                    json_response(json)
-                }
-                Err(e) => {
-                    error!(error = %e, "Failed to serialize network topology");
-                    internal_error_response("Failed to serialize topology")
-                }
-            }
+            let json = match serialize_to_json(&topology, "network topology") {
+                Ok(json) => json,
+                Err(response) => return response,
+            };
+
+            info!(
+                device_count = topology.devices.len(),
+                edge_count = topology.edges.len(),
+                "Served network topology"
+            );
+            json_response(json)
         }
         Err(e) => {
             error!(error = %e, "Failed to fetch devices for topology");

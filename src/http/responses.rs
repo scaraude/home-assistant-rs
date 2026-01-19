@@ -5,6 +5,8 @@
 use http_body_util::Full;
 use hyper::body::Bytes;
 use hyper::{Response, StatusCode};
+use serde::Serialize;
+use tracing::error;
 
 /// Create a successful JSON response (200 OK)
 pub fn json_response(json: String) -> Response<Full<Bytes>> {
@@ -13,6 +15,35 @@ pub fn json_response(json: String) -> Response<Full<Bytes>> {
         .header("Content-Type", "application/json")
         .body(Full::new(Bytes::from(json)))
         .expect("Failed to build JSON response - this should never happen with valid headers")
+}
+
+/// Serialize payload to JSON or return an internal error response
+pub fn serialize_to_json<T: Serialize>(
+    data: &T,
+    error_context: &str,
+) -> Result<String, Response<Full<Bytes>>> {
+    match serde_json::to_string(data) {
+        Ok(json) => Ok(json),
+        Err(e) => {
+            error!(
+                error = %e,
+                context = error_context,
+                "Failed to serialize response"
+            );
+            Err(internal_error_response("Failed to serialize response"))
+        }
+    }
+}
+
+/// Serialize payload to JSON and return a standard JSON response
+pub fn serialize_or_error<T: Serialize>(
+    data: &T,
+    error_context: &str,
+) -> Response<Full<Bytes>> {
+    match serialize_to_json(data, error_context) {
+        Ok(json) => json_response(json),
+        Err(response) => response,
+    }
 }
 
 /// Create a JSON response with custom status code

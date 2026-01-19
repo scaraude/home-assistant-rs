@@ -67,20 +67,17 @@ pub fn serve_switches_list(
         })
         .collect();
 
-    match serde_json::to_string(&switches) {
-        Ok(json) => {
-            info!(
-                switch_count = switches.len(),
-                response_size = json.len(),
-                "Successfully serialized switches list to JSON"
-            );
-            json_response(json)
-        }
-        Err(e) => {
-            error!(error = %e, "Failed to serialize switches to JSON");
-            internal_error_response(e.to_string().as_str())
-        }
-    }
+    let json = match serialize_to_json(&switches, "switches list") {
+        Ok(json) => json,
+        Err(response) => return response,
+    };
+
+    info!(
+        switch_count = switches.len(),
+        response_size = json.len(),
+        "Successfully serialized switches list to JSON"
+    );
+    json_response(json)
 }
 
 pub fn serve_device_state(db: &Arc<Database>, device_id: &str) -> Response<Full<Bytes>> {
@@ -96,22 +93,19 @@ pub fn serve_device_state(db: &Arc<Database>, device_id: &str) -> Response<Full<
                 "last_seen": state.last_seen.timestamp(),
             });
 
-            match serde_json::to_string(&json_data) {
-                Ok(json) => {
-                    info!(
-                        device_id = %device_id,
-                        battery_level = ?state.battery_level,
-                        link_quality = ?state.link_quality,
-                        turbo_mode = ?state.turbo_mode,
-                        "Successfully retrieved device state"
-                    );
-                    json_response(json)
-                }
-                Err(e) => {
-                    error!(error = %e, device_id = %device_id, "Failed to serialize device state");
-                    internal_error_response(e.to_string().as_str())
-                }
-            }
+            let json = match serialize_to_json(&json_data, "device state") {
+                Ok(json) => json,
+                Err(response) => return response,
+            };
+
+            info!(
+                device_id = %device_id,
+                battery_level = ?state.battery_level,
+                link_quality = ?state.link_quality,
+                turbo_mode = ?state.turbo_mode,
+                "Successfully retrieved device state"
+            );
+            json_response(json)
         }
         Ok(None) => {
             debug!(device_id = %device_id, "No device state found");
@@ -128,20 +122,19 @@ pub fn serve_device_states(db: &Arc<Database>) -> Response<Full<Bytes>> {
     debug!("Getting all device states from database");
 
     match db.get_all_device_states() {
-        Ok(states) => match serde_json::to_string(&states) {
-            Ok(json) => {
-                info!(
-                    device_state_count = states.len(),
-                    response_size = json.len(),
-                    "Successfully retrieved device states"
-                );
-                json_response(json)
-            }
-            Err(e) => {
-                error!(error = %e, "Failed to serialize device states");
-                internal_error_response(e.to_string().as_str())
-            }
-        },
+        Ok(states) => {
+            let json = match serialize_to_json(&states, "device states") {
+                Ok(json) => json,
+                Err(response) => return response,
+            };
+
+            info!(
+                device_state_count = states.len(),
+                response_size = json.len(),
+                "Successfully retrieved device states"
+            );
+            json_response(json)
+        }
         Err(e) => {
             error!(error = %e, "Database error while fetching device states");
             internal_error_response(e.to_string().as_str())

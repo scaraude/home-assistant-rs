@@ -15,14 +15,8 @@ use tracing::{error, info, warn};
 pub fn serve_automation_rules(db: &Database) -> Response<Full<Bytes>> {
     match db.get_all_automation_rules() {
         Ok(rules) => {
-            let json = serde_json::to_string(&rules).unwrap_or_else(|e| {
-                error!(error = %e, "Failed to serialize automation rules");
-                "[]".to_string()
-            });
-
             info!(rule_count = rules.len(), "Served automation rules list");
-
-            json_response(json)
+            serialize_or_error(&rules, "automation rules list")
         }
         Err(e) => {
             error!(error = %e, "Failed to get automation rules");
@@ -34,14 +28,8 @@ pub fn serve_automation_rules(db: &Database) -> Response<Full<Bytes>> {
 pub fn serve_automation_rule(db: &Database, rule_id: &str) -> Response<Full<Bytes>> {
     match db.get_automation_rule(rule_id) {
         Ok(Some(rule)) => {
-            let json = serde_json::to_string(&rule).unwrap_or_else(|e| {
-                error!(error = %e, "Failed to serialize automation rule");
-                "{}".to_string()
-            });
-
             info!(rule_id = %rule_id, "Served automation rule");
-
-            json_response(json)
+            serialize_or_error(&rule, "automation rule")
         }
         Ok(None) => {
             warn!(rule_id = %rule_id, "Automation rule not found");
@@ -185,10 +173,10 @@ pub async fn create_automation_rule(
         Ok(_) => {
             info!(rule_id = %rule.id, rule_name = %rule.name, "Created automation rule");
 
-            let json = serde_json::to_string(&rule).unwrap_or_else(|e| {
-                error!(error = %e, "Failed to serialize created rule");
-                "{}".to_string()
-            });
+            let json = match serialize_to_json(&rule, "created automation rule") {
+                Ok(json) => json,
+                Err(response) => return response,
+            };
             json_response_with_status(json, StatusCode::CREATED)
         }
         Err(e) => {
@@ -294,10 +282,10 @@ pub async fn update_automation_rule(
         Ok(_) => {
             info!(rule_id = %rule.id, rule_name = %rule.name, "Updated automation rule");
 
-            let json = serde_json::to_string(&rule).unwrap_or_else(|e| {
-                error!(error = %e, "Failed to serialize updated rule");
-                "{}".to_string()
-            });
+            let json = match serialize_to_json(&rule, "updated automation rule") {
+                Ok(json) => json,
+                Err(response) => return response,
+            };
 
             json_response(json)
         }
@@ -362,14 +350,8 @@ pub fn serve_execution_logs(db: &Database, query: Option<&str>) -> Response<Full
 
     match db.get_execution_logs(limit) {
         Ok(logs) => {
-            let json = serde_json::to_string(&logs).unwrap_or_else(|e| {
-                error!(error = %e, "Failed to serialize execution logs");
-                "[]".to_string()
-            });
-
             info!(log_count = logs.len(), limit = %limit, "Served automation execution logs");
-
-            json_response(json)
+            serialize_or_error(&logs, "automation execution logs")
         }
         Err(e) => {
             error!(error = %e, "Failed to get execution logs");
