@@ -104,7 +104,15 @@
     if (!deviceId) return [];
     const sensor = availableSensors.find((s) => s.device_id === deviceId);
     if (!sensor) return [];
-    return FIELD_OPTIONS_MAP[sensor.capability_subtype] || [];
+    const options = new Map<string, { value: string; label: string }>();
+    for (const cap of sensor.capabilities) {
+      if (cap.type !== "sensor") continue;
+      const fields = FIELD_OPTIONS_MAP[cap.sensor_type] || [];
+      for (const field of fields) {
+        options.set(field.value, field);
+      }
+    }
+    return Array.from(options.values());
   }
 
   const operatorOptions = [

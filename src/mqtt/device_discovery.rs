@@ -1,7 +1,5 @@
 use crate::db::Database;
-use crate::models::{
-    CommanderType, Device, DeviceCapability, DeviceMqttMessage, PowerSource, SensorType,
-};
+use crate::models::{Device, DeviceMqttMessage, PowerSource};
 use tracing::{debug, error, info};
 
 /// Helper function to get or create a device from unified MQTT message
@@ -19,6 +17,39 @@ pub async fn get_or_create_device_unified(
                 mqtt_topic = %mqtt_topic,
                 "Found existing device"
             );
+            let detected_capabilities = msg.detect_capabilities();
+            let detected_fields = msg.available_fields();
+            if !detected_capabilities.is_empty() || !detected_fields.is_empty() {
+                let mut merged_capabilities = device.capabilities.clone();
+                for capability in detected_capabilities {
+                    if !merged_capabilities.contains(&capability) {
+                        merged_capabilities.push(capability);
+                    }
+                }
+
+                let mut merged_fields = device.available_fields.clone();
+                for field in detected_fields {
+                    if !merged_fields.contains(&field) {
+                        merged_fields.push(field);
+                    }
+                }
+                merged_fields.sort_unstable();
+                merged_fields.dedup();
+
+                if merged_capabilities != device.capabilities
+                    || merged_fields != device.available_fields
+                {
+                    if let Err(e) =
+                        db.update_device_metadata(&device.id, &merged_capabilities, &merged_fields)
+                    {
+                        error!(
+                            error = %e,
+                            device_id = %device.id,
+                            "Failed to update device metadata"
+                        );
+                    }
+                }
+            }
             return Some(device.id);
         }
         Ok(None) => {
@@ -28,31 +59,15 @@ pub async fn get_or_create_device_unified(
                 "New device detected, creating entry"
             );
 
-            // Determine device capability based on available fields
-            let capability = if msg.has_sensor_data(&SensorType::TempHumidity) {
-                DeviceCapability::Sensor {
-                    sensor_type: SensorType::TempHumidity,
-                }
-            } else if msg.has_sensor_data(&SensorType::Presence) {
-                DeviceCapability::Sensor {
-                    sensor_type: SensorType::Presence,
-                }
-            } else if msg.has_sensor_data(&SensorType::EnergyMeter) {
-                DeviceCapability::Sensor {
-                    sensor_type: SensorType::EnergyMeter,
-                }
-            } else if msg.has_commander_data(&CommanderType::Switch) || msg.has_switch_config_hint()
-            {
-                DeviceCapability::Commander {
-                    commander_type: CommanderType::Switch,
-                }
-            } else {
+            // Determine device capabilities based on available fields
+            let capabilities = msg.detect_capabilities();
+            if capabilities.is_empty() {
                 error!(
                     mqtt_topic = %mqtt_topic,
-                    "Cannot determine device type from MQTT message"
+                    "Cannot determine device capabilities from MQTT message"
                 );
                 return None;
-            };
+            }
 
             // Determine power source (if battery field exists, assume battery powered)
             let power_source = if msg.battery.is_some() {
@@ -64,7 +79,8 @@ pub async fn get_or_create_device_unified(
             let device = Device::new(
                 mqtt_topic.to_string(),
                 mqtt_topic.to_string(), // Use MQTT topic as default name
-                capability,
+                capabilities,
+                msg.available_fields(),
                 power_source,
             );
 
@@ -73,7 +89,7 @@ pub async fn get_or_create_device_unified(
                     info!(
                         device_id = %device.id,
                         mqtt_topic = %mqtt_topic,
-                        capability = ?device.capability,
+                        capabilities = ?device.capabilities,
                         "Successfully created new device"
                     );
                     Some(device.id)

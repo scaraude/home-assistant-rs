@@ -1,10 +1,6 @@
 import { writable, type Readable } from 'svelte/store';
 import type { AutomationAction, SensorReading, LogEntry } from './api';
-
-type DeviceCapability =
-  | { type: 'sensor'; sensor_type: 'temp_humidity' | 'presence' | 'energy_meter' }
-  | { type: 'commander'; commander_type: 'switch' }
-  | { type: 'coordinator' };
+import type { DeviceCapability } from './api/devices';
 
 export type LogFile = 'system_monitor' | 'process_monitor' | 'top_cpu_consumers' | 'top_ram_consumers';
 
@@ -35,7 +31,7 @@ export type DeviceDiscoveredEvent = {
   event: 'device_discovered';
   device_id: string;
   mqtt_topic: string;
-  capability: DeviceCapability;
+  capabilities: DeviceCapability[];
   timestamp: number;
 };
 

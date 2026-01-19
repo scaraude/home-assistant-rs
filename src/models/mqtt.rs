@@ -3,7 +3,7 @@ use serde::de;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 
-use super::{CommanderType, SensorType};
+use super::{CommanderType, DeviceCapability, SensorType};
 
 /// Unified MQTT message format for all device types
 /// Zigbee2MQTT sends different fields depending on device type,
@@ -106,6 +106,90 @@ impl DeviceMqttMessage {
                     | "external_trigger_mode"
             )
         })
+    }
+
+    /// Detect all capabilities advertised by this message
+    pub fn detect_capabilities(&self) -> Vec<DeviceCapability> {
+        let mut capabilities = Vec::new();
+
+        for sensor_type in [
+            SensorType::TempHumidity,
+            SensorType::Presence,
+            SensorType::EnergyMeter,
+        ] {
+            if self.has_sensor_data(&sensor_type) {
+                capabilities.push(DeviceCapability::Sensor { sensor_type });
+            }
+        }
+
+        if self.has_commander_data(&CommanderType::Switch) || self.has_switch_config_hint() {
+            capabilities.push(DeviceCapability::Commander {
+                commander_type: CommanderType::Switch,
+            });
+        }
+
+        capabilities
+    }
+
+    /// Collect available fields present in this payload
+    pub fn available_fields(&self) -> Vec<String> {
+        let mut fields = Vec::new();
+
+        if self.linkquality.is_some() {
+            fields.push("linkquality".to_string());
+        }
+        if self.battery.is_some() {
+            fields.push("battery".to_string());
+        }
+        if self.temperature.is_some() {
+            fields.push("temperature".to_string());
+        }
+        if self.humidity.is_some() {
+            fields.push("humidity".to_string());
+        }
+        if self.occupancy.is_some() {
+            fields.push("occupancy".to_string());
+        }
+        if self.illumination.is_some() {
+            fields.push("illumination".to_string());
+        }
+        if self.power.is_some() {
+            fields.push("power".to_string());
+        }
+        if self.voltage.is_some() {
+            fields.push("voltage".to_string());
+        }
+        if self.current.is_some() {
+            fields.push("current".to_string());
+        }
+        if self.ac_frequency.is_some() {
+            fields.push("ac_frequency".to_string());
+        }
+        if self.power_factor.is_some() {
+            fields.push("power_factor".to_string());
+        }
+        if self.energy.is_some() {
+            fields.push("energy".to_string());
+        }
+        if self.produced_energy.is_some() {
+            fields.push("produced_energy".to_string());
+        }
+        if self.state.is_some() {
+            fields.push("state".to_string());
+        }
+        if self.turbo_mode.is_some() {
+            fields.push("turbo_mode".to_string());
+        }
+
+        for (key, value) in &self.other {
+            if !value.is_null() {
+                fields.push(key.clone());
+            }
+        }
+
+        fields.sort_unstable();
+        fields.dedup();
+        fields
     }
 }
 

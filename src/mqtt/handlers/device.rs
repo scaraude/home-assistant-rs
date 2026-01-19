@@ -71,35 +71,37 @@ pub async fn handle_device_message(
         }
     };
 
-    // Route based on device capability
-    match &device.capability {
-        DeviceCapability::Sensor { sensor_type } => {
-            handle_sensor_message(
-                sensor_type,
-                &device_id,
-                &msg,
-                event_bus,
-                no_temperature,
-                publish_failures,
-            )
-            .await;
-        }
-        DeviceCapability::Commander { commander_type } => {
-            handle_commander_message(
-                commander_type,
-                &device_id,
-                &msg,
-                event_bus,
-                publish_failures,
-            )
-            .await;
-        }
-        _ => {
-            debug!(
-                device_id = %device_id,
-                capability = ?device.capability,
-                "Device capability not handled, skipping"
-            );
+    // Route based on device capabilities
+    for capability in &device.capabilities {
+        match capability {
+            DeviceCapability::Sensor { sensor_type } => {
+                handle_sensor_message(
+                    sensor_type,
+                    &device_id,
+                    &msg,
+                    event_bus,
+                    no_temperature,
+                    publish_failures,
+                )
+                .await;
+            }
+            DeviceCapability::Commander { commander_type } => {
+                handle_commander_message(
+                    commander_type,
+                    &device_id,
+                    &msg,
+                    event_bus,
+                    publish_failures,
+                )
+                .await;
+            }
+            _ => {
+                debug!(
+                    device_id = %device_id,
+                    capability = ?capability,
+                    "Device capability not handled, skipping"
+                );
+            }
         }
     }
 }

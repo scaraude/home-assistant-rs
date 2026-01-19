@@ -267,7 +267,8 @@ fn ensure_coordinator_device(db: &Database, node: &NetworkNode) {
             let device = Device::new(
                 node.ieee_addr.clone(),
                 coordinator_name,
-                DeviceCapability::Coordinator,
+                vec![DeviceCapability::Coordinator],
+                Vec::new(),
                 PowerSource::Plugged,
             );
 

@@ -1,5 +1,4 @@
 use crate::impl_db_enum;
-use crate::models::db_enum::DbEnum;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -9,6 +8,7 @@ use serde::{Deserialize, Serialize};
 pub enum DeviceCapability {
     Sensor { sensor_type: SensorType },
     Commander { commander_type: CommanderType },
+    Router { turbo_mode: bool },
     Coordinator,
 }
 
@@ -70,8 +70,11 @@ pub struct Device {
     /// Human-readable name for the device
     pub name: String,
 
-    /// What can this device do (sensor or commander)
-    pub capability: DeviceCapability,
+    /// What can this device do (supports multiple capabilities)
+    pub capabilities: Vec<DeviceCapability>,
+
+    /// Available fields reported by the device (from Zigbee2MQTT payloads)
+    pub available_fields: Vec<String>,
 
     /// How the device is powered
     pub power_source: PowerSource,
@@ -92,7 +95,8 @@ impl Device {
     pub fn new(
         mqtt_topic: String,
         name: String,
-        capability: DeviceCapability,
+        capabilities: Vec<DeviceCapability>,
+        available_fields: Vec<String>,
         power_source: PowerSource,
     ) -> Self {
         Self {
@@ -100,7 +104,8 @@ impl Device {
             ieee_addr: mqtt_topic.clone(),
             mqtt_topic,
             name,
-            capability,
+            capabilities,
+            available_fields,
             power_source,
             added_at: Utc::now(),
             is_bridge: false,
@@ -113,30 +118,54 @@ impl Device {
         self.power_source == PowerSource::Battery
     }
 
-    /// Get the capability type and subtype for database storage
-    pub fn capability_to_db(&self) -> (String, String) {
-        match &self.capability {
-            DeviceCapability::Sensor { sensor_type } => {
-                ("sensor".to_string(), sensor_type.to_db_string().to_string())
-            }
-            DeviceCapability::Commander { commander_type } => (
-                "commander".to_string(),
-                commander_type.to_db_string().to_string(),
-            ),
-            DeviceCapability::Coordinator => ("coordinator".to_string(), "coordinator".to_string()),
-        }
+    /// Check if this device has a specific capability
+    pub fn has_capability(&self, capability: &DeviceCapability) -> bool {
+        self.capabilities.iter().any(|cap| cap == capability)
     }
 
-    /// Create capability from database strings
-    pub fn capability_from_db(cap_type: &str, cap_subtype: &str) -> Option<DeviceCapability> {
-        match cap_type {
-            "sensor" => SensorType::from_db_string(cap_subtype)
-                .map(|sensor_type| DeviceCapability::Sensor { sensor_type }),
-            "commander" => CommanderType::from_db_string(cap_subtype)
-                .map(|commander_type| DeviceCapability::Commander { commander_type }),
-            "coordinator" => Some(DeviceCapability::Coordinator),
-            _ => None,
+    /// Check if this device has a specific sensor capability
+    pub fn has_sensor_type(&self, sensor_type: &SensorType) -> bool {
+        self.capabilities.iter().any(|cap| {
+            matches!(cap, DeviceCapability::Sensor { sensor_type: cap_type } if cap_type == sensor_type)
+        })
+    }
+
+    /// Check if this device has a specific commander capability
+    pub fn has_commander_type(&self, commander_type: &CommanderType) -> bool {
+        self.capabilities.iter().any(|cap| {
+            matches!(cap, DeviceCapability::Commander { commander_type: cap_type } if cap_type == commander_type)
+        })
+    }
+
+    /// Check if the device supports turbo mode based on available fields
+    pub fn supports_turbo_mode(&self) -> bool {
+        self.available_fields.iter().any(|field| field == "turbo_mode")
+    }
+
+    /// Serialize capabilities for database storage
+    pub fn capabilities_to_db(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string(&self.capabilities)
+    }
+
+    /// Serialize available fields for database storage
+    pub fn available_fields_to_db(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string(&self.available_fields)
+    }
+
+    /// Deserialize capabilities from database string
+    pub fn capabilities_from_db(value: &str) -> Option<Vec<DeviceCapability>> {
+        if value.trim().is_empty() {
+            return Some(Vec::new());
         }
+        serde_json::from_str(value).ok()
+    }
+
+    /// Deserialize available fields from database string
+    pub fn available_fields_from_db(value: &str) -> Option<Vec<String>> {
+        if value.trim().is_empty() {
+            return Some(Vec::new());
+        }
+        serde_json::from_str(value).ok()
     }
 }
 
@@ -149,11 +178,11 @@ pub struct DeviceInfo {
     /// Human-readable name
     pub name: String,
 
-    /// Device capability type ("sensor" or "commander")
-    pub capability_type: String,
+    /// Device capabilities
+    pub capabilities: Vec<DeviceCapability>,
 
-    /// Device capability subtype ("temp_humidity", "presence", "switch", etc.)
-    pub capability_subtype: String,
+    /// Available fields reported by the device
+    pub available_fields: Vec<String>,
 }
 
 /// Dynamic device state (ephemeral, not persisted to DB)
@@ -249,54 +278,7 @@ mod tests {
         assert_eq!(CommanderType::from_db_string("invalid"), None);
     }
 
-    #[test]
-    fn test_capability_to_db() {
-        let device = Device::new(
-            "0x123".to_string(),
-            "Test Sensor".to_string(),
-            DeviceCapability::Sensor {
-                sensor_type: SensorType::TempHumidity,
-            },
-            PowerSource::Battery,
-        );
-        let (cap_type, cap_subtype) = device.capability_to_db();
-        assert_eq!(cap_type, "sensor");
-        assert_eq!(cap_subtype, "temp_humidity");
-
-        let device = Device::new(
-            "0x456".to_string(),
-            "Test Switch".to_string(),
-            DeviceCapability::Commander {
-                commander_type: CommanderType::Switch,
-            },
-            PowerSource::Plugged,
-        );
-        let (cap_type, cap_subtype) = device.capability_to_db();
-        assert_eq!(cap_type, "commander");
-        assert_eq!(cap_subtype, "switch");
-    }
-
-    #[test]
-    fn test_capability_from_db() {
-        let cap = Device::capability_from_db("sensor", "temp_humidity");
-        assert_eq!(
-            cap,
-            Some(DeviceCapability::Sensor {
-                sensor_type: SensorType::TempHumidity
-            })
-        );
-
-        let cap = Device::capability_from_db("commander", "switch");
-        assert_eq!(
-            cap,
-            Some(DeviceCapability::Commander {
-                commander_type: CommanderType::Switch
-            })
-        );
-
-        let cap = Device::capability_from_db("invalid", "invalid");
-        assert_eq!(cap, None);
-    }
+    // Legacy capability serialization is intentionally not supported.
 
     #[test]
     fn test_power_source_to_db_string() {

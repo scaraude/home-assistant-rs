@@ -3,6 +3,7 @@
   import { dataCache } from "../stores/dataCache";
   import { graphConfig } from "../stores/graphConfig";
   import type { EnergySensorReading } from "../api";
+  import type { DeviceInfo } from "../api/devices";
 
   let editMode = $state(false);
 
@@ -10,10 +11,15 @@
     editMode = !editMode;
   }
 
+  const isEnergyMeter = (device: DeviceInfo | undefined) =>
+    device?.capabilities.some(
+      (cap) => cap.type === "sensor" && cap.sensor_type === "energy_meter"
+    );
+
   let energyMeters = $derived(
     $graphConfig.sensors.filter(s => {
       const device = $dataCache.sensors.devices.find(d => d.device_id === s.deviceId);
-      return device?.capability_subtype === "energy_meter";
+      return isEnergyMeter(device);
     })
   );
 

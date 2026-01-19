@@ -3,7 +3,7 @@ use rusqlite::{Result, params};
 use tracing::{debug, info, warn};
 
 use super::super::connection::{Database, MutexExt};
-use super::utils::timestamp_to_datetime;
+use super::utils::{invalid_column_error, timestamp_to_datetime};
 
 impl Database {
     /// Insert a sensor reading
@@ -162,7 +162,7 @@ impl Database {
         }
     }
 
-    /// Get all sensors with their device info (ID + name + capability)
+    /// Get all sensors with their device info (ID + name + capability metadata)
     pub fn get_all_sensors(&self) -> Result<Vec<DeviceInfo>> {
         debug!("Querying all distinct sensors with device info");
         let start = std::time::Instant::now();
@@ -172,8 +172,8 @@ impl Database {
             "SELECT DISTINCT
                  sensors.device_id,
                  COALESCE(d.name, sensors.device_id) as name,
-                 d.capability_type,
-                 d.capability_subtype
+                 d.capabilities,
+                 d.available_fields
              FROM (
                  SELECT DISTINCT device_id FROM temperature_readings
                  UNION
@@ -187,11 +187,18 @@ impl Database {
 
         let sensors = stmt
             .query_map([], |row| {
+                let capabilities_raw: String = row.get(2)?;
+                let available_fields_raw: String = row.get(3)?;
+                let capabilities = crate::models::Device::capabilities_from_db(&capabilities_raw)
+                    .ok_or_else(|| invalid_column_error(2, "capabilities"))?;
+                let available_fields =
+                    crate::models::Device::available_fields_from_db(&available_fields_raw)
+                        .ok_or_else(|| invalid_column_error(3, "available_fields"))?;
                 Ok(DeviceInfo {
                     device_id: row.get(0)?,
                     name: row.get(1)?,
-                    capability_type: row.get(2)?,
-                    capability_subtype: row.get(3)?,
+                    capabilities,
+                    available_fields,
                 })
             })?
             .collect::<Result<Vec<_>>>()?;

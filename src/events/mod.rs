@@ -34,7 +34,7 @@ pub enum SystemEvent {
     DeviceDiscovered {
         device_id: String,
         mqtt_topic: String,
-        capability: DeviceCapability,
+        capabilities: Vec<DeviceCapability>,
         #[serde(with = "chrono::serde::ts_seconds")]
         timestamp: DateTime<Utc>,
     },

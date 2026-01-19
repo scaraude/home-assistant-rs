@@ -3,12 +3,17 @@
   import EnergyListPanel from "../lib/devices/EnergyListPanel.svelte";
   import PageState from "../lib/shared/PageState.svelte";
   import { fetchSensors, fetchReadings, fetchDeviceStates } from "../lib/api";
+  import type { DeviceInfo } from "../lib/api/devices";
   import { dataCache } from "../lib/stores/dataCache";
   import { graphConfig, TIME_RANGE_HOURS } from "../lib/stores/graphConfig";
   import { onMount } from "svelte";
 
   let loading = $state(true);
   let error = $state<string | null>(null);
+  const isEnergyMeter = (device: DeviceInfo) =>
+    device.capabilities.some(
+      (cap) => cap.type === "sensor" && cap.sensor_type === "energy_meter"
+    );
 
   async function loadData(hours: number, force = false) {
     const sensorState = $dataCache.sensors;
@@ -35,9 +40,7 @@
       );
 
       // Initialize only energy meters in graph config
-      const energyMeterIds = sensors
-        .filter(s => s.capability_subtype === "energy_meter")
-        .map(s => s.device_id);
+      const energyMeterIds = sensors.filter(isEnergyMeter).map((s) => s.device_id);
 
       if ($graphConfig.sensors.length === 0 ||
           $graphConfig.sensors.length !== energyMeterIds.length) {

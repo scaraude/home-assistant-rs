@@ -1,5 +1,5 @@
 use crate::models::db_enum::DbEnum;
-use crate::models::{Device, PowerSource};
+use crate::models::{Device, DeviceCapability, PowerSource};
 use rusqlite::{Result, params};
 use tracing::{debug, error, info};
 
@@ -9,29 +9,41 @@ use super::utils::{invalid_column_error, timestamp_to_datetime};
 impl Database {
     /// Insert a new device into the database
     pub fn insert_device(&self, device: &Device) -> Result<()> {
-        let (capability_type, capability_subtype) = device.capability_to_db();
+        let capabilities_json = match device.capabilities_to_db() {
+            Ok(json) => json,
+            Err(e) => {
+                error!(error = %e, device_id = %device.id, "Failed to serialize device capabilities");
+                return Err(rusqlite::Error::ToSqlConversionFailure(Box::new(e)));
+            }
+        };
+        let available_fields_json = match device.available_fields_to_db() {
+            Ok(json) => json,
+            Err(e) => {
+                error!(error = %e, device_id = %device.id, "Failed to serialize device available fields");
+                return Err(rusqlite::Error::ToSqlConversionFailure(Box::new(e)));
+            }
+        };
 
         debug!(
             device_id = %device.id,
             mqtt_topic = %device.mqtt_topic,
             name = %device.name,
-            capability_type = %capability_type,
-            capability_subtype = %capability_subtype,
+            capabilities = ?device.capabilities,
             power_source = %device.power_source.to_db_string(),
             "Inserting device"
         );
 
         let start = std::time::Instant::now();
         let result = self.conn.lock_or_recover().execute(
-            "INSERT INTO devices (id, mqtt_topic, ieee_addr, name, capability_type, capability_subtype, power_source, added_at, is_bridge, parent_device_id)
+            "INSERT INTO devices (id, mqtt_topic, ieee_addr, name, capabilities, available_fields, power_source, added_at, is_bridge, parent_device_id)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 device.id,
                 device.mqtt_topic,
                 device.ieee_addr,
                 device.name,
-                capability_type,
-                capability_subtype,
+                capabilities_json,
+                available_fields_json,
                 device.power_source.to_db_string(),
                 device.added_at.timestamp(),
                 device.is_bridge as i32,
@@ -68,7 +80,7 @@ impl Database {
 
         let conn = self.conn.lock_or_recover();
         let mut stmt = conn.prepare(
-            "SELECT id, mqtt_topic, ieee_addr, name, capability_type, capability_subtype, power_source, added_at, is_bridge, parent_device_id
+            "SELECT id, mqtt_topic, ieee_addr, name, capabilities, available_fields, power_source, added_at, is_bridge, parent_device_id
              FROM devices
              WHERE id = ?1",
         )?;
@@ -103,7 +115,7 @@ impl Database {
 
         let conn = self.conn.lock_or_recover();
         let mut stmt = conn.prepare(
-            "SELECT id, mqtt_topic, ieee_addr, name, capability_type, capability_subtype, power_source, added_at, is_bridge, parent_device_id
+            "SELECT id, mqtt_topic, ieee_addr, name, capabilities, available_fields, power_source, added_at, is_bridge, parent_device_id
              FROM devices
              WHERE id = ?1",
         )?;
@@ -138,7 +150,7 @@ impl Database {
 
         let conn = self.conn.lock_or_recover();
         let mut stmt = conn.prepare(
-            "SELECT id, mqtt_topic, ieee_addr, name, capability_type, capability_subtype, power_source, added_at, is_bridge, parent_device_id
+            "SELECT id, mqtt_topic, ieee_addr, name, capabilities, available_fields, power_source, added_at, is_bridge, parent_device_id
              FROM devices
              WHERE mqtt_topic = ?1",
         )?;
@@ -174,7 +186,7 @@ impl Database {
 
         let conn = self.conn.lock_or_recover();
         let mut stmt = conn.prepare(
-            "SELECT id, mqtt_topic, ieee_addr, name, capability_type, capability_subtype, power_source, added_at, is_bridge, parent_device_id
+            "SELECT id, mqtt_topic, ieee_addr, name, capabilities, available_fields, power_source, added_at, is_bridge, parent_device_id
              FROM devices
              WHERE ieee_addr = ?1",
         )?;
@@ -210,7 +222,7 @@ impl Database {
 
         let conn = self.conn.lock_or_recover();
         let mut stmt = conn.prepare(
-            "SELECT id, mqtt_topic, ieee_addr, name, capability_type, capability_subtype, power_source, added_at, is_bridge, parent_device_id
+            "SELECT id, mqtt_topic, ieee_addr, name, capabilities, available_fields, power_source, added_at, is_bridge, parent_device_id
              FROM devices
              ORDER BY name",
         )?;
@@ -259,6 +271,65 @@ impl Database {
                     error = %e,
                     device_id = %device_id,
                     "Failed to update device name"
+                );
+                Err(e)
+            }
+        }
+    }
+
+    /// Update device capabilities and available fields
+    pub fn update_device_metadata(
+        &self,
+        device_id: &str,
+        capabilities: &[DeviceCapability],
+        available_fields: &[String],
+    ) -> Result<()> {
+        let capabilities_json = serde_json::to_string(capabilities).map_err(|e| {
+            error!(
+                error = %e,
+                device_id = %device_id,
+                "Failed to serialize device capabilities"
+            );
+            rusqlite::Error::ToSqlConversionFailure(Box::new(e))
+        })?;
+        let available_fields_json = serde_json::to_string(available_fields).map_err(|e| {
+            error!(
+                error = %e,
+                device_id = %device_id,
+                "Failed to serialize device available fields"
+            );
+            rusqlite::Error::ToSqlConversionFailure(Box::new(e))
+        })?;
+
+        debug!(
+            device_id = %device_id,
+            capabilities = ?capabilities,
+            field_count = available_fields.len(),
+            "Updating device capabilities and available fields"
+        );
+
+        let start = std::time::Instant::now();
+        let result = self.conn.lock_or_recover().execute(
+            "UPDATE devices SET capabilities = ?1, available_fields = ?2 WHERE id = ?3",
+            params![capabilities_json, available_fields_json, device_id],
+        );
+
+        match result {
+            Ok(rows) => {
+                let elapsed = start.elapsed();
+                info!(
+                    device_id = %device_id,
+                    rows_affected = rows,
+                    duration_us = elapsed.as_micros(),
+                    "Successfully updated device metadata"
+                );
+                Ok(())
+            }
+            Err(e) => {
+                error!(
+                    error = %e,
+                    device_id = %device_id,
+                    "Failed to update device metadata"
                 );
                 Err(e)
             }
@@ -336,18 +407,21 @@ impl Database {
     ///
     /// Eliminates duplication across get_device_by_id, get_device_by_mqtt_topic, and get_all_devices
     fn map_device_row(row: &rusqlite::Row) -> Result<Device> {
-        let capability_type_str: String = row.get(4)?;
-        let capability_subtype_str: String = row.get(5)?;
+        let capabilities_raw: String = row.get(4)?;
+        let available_fields_raw: String = row.get(5)?;
         let power_source_str: String = row.get(6)?;
         let is_bridge_int: i32 = row.get(8).unwrap_or(0);
-
+        let capabilities = Device::capabilities_from_db(&capabilities_raw)
+            .ok_or_else(|| invalid_column_error(4, "capabilities"))?;
+        let available_fields = Device::available_fields_from_db(&available_fields_raw)
+            .ok_or_else(|| invalid_column_error(5, "available_fields"))?;
         Ok(Device {
             id: row.get(0)?,
             mqtt_topic: row.get(1)?,
             ieee_addr: row.get(2)?,
             name: row.get(3)?,
-            capability: Device::capability_from_db(&capability_type_str, &capability_subtype_str)
-                .ok_or_else(|| invalid_column_error(4, "capability"))?,
+            capabilities,
+            available_fields,
             power_source: PowerSource::from_db_string(&power_source_str)
                 .ok_or_else(|| invalid_column_error(6, "power_source"))?,
             added_at: timestamp_to_datetime(row.get(7)?, "device.added_at"),
@@ -370,11 +444,55 @@ impl Database {
             "Updating device network topology"
         );
 
+        let (capabilities_json, available_fields_json) = match self.get_device(device_id)? {
+            Some(device) => {
+                let mut capabilities = device.capabilities.clone();
+                let has_router = capabilities
+                    .iter()
+                    .any(|cap| matches!(cap, DeviceCapability::Router { .. }));
+                if is_bridge && !has_router {
+                    capabilities.push(DeviceCapability::Router {
+                        turbo_mode: device.supports_turbo_mode(),
+                    });
+                } else if !is_bridge && has_router {
+                    capabilities.retain(|cap| !matches!(cap, DeviceCapability::Router { .. }));
+                }
+
+                let caps_json = serde_json::to_string(&capabilities).map_err(|e| {
+                    error!(
+                        error = %e,
+                        device_id = %device_id,
+                        "Failed to serialize updated device capabilities"
+                    );
+                    rusqlite::Error::ToSqlConversionFailure(Box::new(e))
+                })?;
+                let fields_json = serde_json::to_string(&device.available_fields).map_err(|e| {
+                    error!(
+                        error = %e,
+                        device_id = %device_id,
+                        "Failed to serialize device available fields"
+                    );
+                    rusqlite::Error::ToSqlConversionFailure(Box::new(e))
+                })?;
+                (Some(caps_json), Some(fields_json))
+            }
+            None => (None, None),
+        };
+
         let start = std::time::Instant::now();
-        let result = self.conn.lock_or_recover().execute(
-            "UPDATE devices SET is_bridge = ?1, parent_device_id = ?2 WHERE id = ?3",
-            params![is_bridge as i32, parent_device_id, device_id],
-        );
+        let result = if let (Some(caps_json), Some(fields_json)) =
+            (capabilities_json, available_fields_json)
+        {
+            self.conn.lock_or_recover().execute(
+                "UPDATE devices SET is_bridge = ?1, parent_device_id = ?2, capabilities = ?3, available_fields = ?4 WHERE id = ?5",
+                params![is_bridge as i32, parent_device_id, caps_json, fields_json, device_id],
+            )
+        } else {
+            self.conn.lock_or_recover().execute(
+                "UPDATE devices SET is_bridge = ?1, parent_device_id = ?2 WHERE id = ?3",
+                params![is_bridge as i32, parent_device_id, device_id],
+            )
+        };
 
         match result {
             Ok(rows) => {

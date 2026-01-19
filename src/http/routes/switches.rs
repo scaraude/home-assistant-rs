@@ -31,10 +31,10 @@ pub fn serve_switches_list(
     let switches: Vec<_> = devices
         .into_iter()
         .filter(|device| {
-            matches!(
-                device.capability,
-                crate::models::DeviceCapability::Commander { .. }
-            )
+            device
+                .capabilities
+                .iter()
+                .any(|cap| matches!(cap, crate::models::DeviceCapability::Commander { .. }))
         })
         .map(|device| {
             let current_state = switch_state.get_state(&device.id).unwrap_or_default();

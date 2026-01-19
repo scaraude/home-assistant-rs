@@ -26,7 +26,8 @@ mod tests {
             name: format!("Test Device {}", device_id),
             mqtt_topic: format!("zigbee2mqtt/{}", device_id),
             ieee_addr: format!("0x{}", device_id),
-            capability: DeviceCapability::Sensor { sensor_type },
+            capabilities: vec![DeviceCapability::Sensor { sensor_type }],
+            available_fields: Vec::new(),
             power_source: PowerSource::Battery,
             added_at: Utc::now(),
             is_bridge: false,
@@ -170,9 +171,10 @@ mod tests {
             mqtt_topic: "zigbee2mqtt/sensor1".to_string(),
             ieee_addr: "0x0000000000000001".to_string(),
             name: "sensor1".to_string(),
-            capability: DeviceCapability::Sensor {
+            capabilities: vec![DeviceCapability::Sensor {
                 sensor_type: SensorType::TempHumidity,
-            },
+            }],
+            available_fields: Vec::new(),
             power_source: PowerSource::Battery,
             added_at: Utc::now(),
             is_bridge: false,
@@ -183,9 +185,10 @@ mod tests {
             mqtt_topic: "zigbee2mqtt/sensor2".to_string(),
             ieee_addr: "0x0000000000000002".to_string(),
             name: "sensor2".to_string(),
-            capability: DeviceCapability::Sensor {
+            capabilities: vec![DeviceCapability::Sensor {
                 sensor_type: SensorType::TempHumidity,
-            },
+            }],
+            available_fields: Vec::new(),
             power_source: PowerSource::Battery,
             added_at: Utc::now(),
             is_bridge: false,
@@ -254,9 +257,10 @@ mod tests {
             mqtt_topic: "zigbee2mqtt/energy_meter1".to_string(),
             ieee_addr: "zigbee2mqtt/energy_meter1".to_string(),
             name: "Test Energy Meter".to_string(),
-            capability: DeviceCapability::Sensor {
+            capabilities: vec![DeviceCapability::Sensor {
                 sensor_type: SensorType::EnergyMeter,
-            },
+            }],
+            available_fields: Vec::new(),
             power_source: PowerSource::Plugged,
             added_at: Utc::now(),
             is_bridge: false,
@@ -314,9 +318,10 @@ mod tests {
             mqtt_topic: "zigbee2mqtt/energy_meter1".to_string(),
             ieee_addr: "zigbee2mqtt/energy_meter1".to_string(),
             name: "Test Energy Meter 1".to_string(),
-            capability: DeviceCapability::Sensor {
+            capabilities: vec![DeviceCapability::Sensor {
                 sensor_type: SensorType::EnergyMeter,
-            },
+            }],
+            available_fields: Vec::new(),
             power_source: PowerSource::Plugged,
             added_at: Utc::now(),
             is_bridge: false,
@@ -329,9 +334,10 @@ mod tests {
             mqtt_topic: "zigbee2mqtt/energy_meter2".to_string(),
             ieee_addr: "zigbee2mqtt/energy_meter2".to_string(),
             name: "Test Energy Meter 2".to_string(),
-            capability: DeviceCapability::Sensor {
+            capabilities: vec![DeviceCapability::Sensor {
                 sensor_type: SensorType::EnergyMeter,
-            },
+            }],
+            available_fields: Vec::new(),
             power_source: PowerSource::Plugged,
             added_at: Utc::now(),
             is_bridge: false,
@@ -394,9 +400,10 @@ mod tests {
             mqtt_topic: "zigbee2mqtt/energy_meter1".to_string(),
             ieee_addr: "zigbee2mqtt/energy_meter1".to_string(),
             name: "Test Energy Meter".to_string(),
-            capability: DeviceCapability::Sensor {
+            capabilities: vec![DeviceCapability::Sensor {
                 sensor_type: SensorType::EnergyMeter,
-            },
+            }],
+            available_fields: Vec::new(),
             power_source: PowerSource::Plugged,
             added_at: Utc::now(),
             is_bridge: false,
@@ -454,9 +461,10 @@ mod tests {
             mqtt_topic: "zigbee2mqtt/energy_meter1".to_string(),
             ieee_addr: "zigbee2mqtt/energy_meter1".to_string(),
             name: "Test Energy Meter".to_string(),
-            capability: DeviceCapability::Sensor {
+            capabilities: vec![DeviceCapability::Sensor {
                 sensor_type: SensorType::EnergyMeter,
-            },
+            }],
+            available_fields: Vec::new(),
             power_source: PowerSource::Plugged,
             added_at: Utc::now(),
             is_bridge: false,
@@ -504,9 +512,10 @@ mod tests {
             mqtt_topic: "zigbee2mqtt/device1".to_string(),
             ieee_addr: "zigbee2mqtt/device1".to_string(),
             name: "Living Room Sensor".to_string(),
-            capability: DeviceCapability::Sensor {
+            capabilities: vec![DeviceCapability::Sensor {
                 sensor_type: SensorType::TempHumidity,
-            },
+            }],
+            available_fields: Vec::new(),
             power_source: PowerSource::Battery,
             added_at: Utc::now(),
             is_bridge: false,
@@ -520,12 +529,7 @@ mod tests {
         let retrieved = retrieved.unwrap();
         assert_eq!(retrieved.id, "device1");
         assert_eq!(retrieved.name, "Living Room Sensor");
-        assert!(matches!(
-            retrieved.capability,
-            DeviceCapability::Sensor {
-                sensor_type: SensorType::TempHumidity
-            }
-        ));
+        assert!(retrieved.has_sensor_type(&SensorType::TempHumidity));
         assert_eq!(retrieved.power_source, PowerSource::Battery);
     }
 
@@ -538,9 +542,10 @@ mod tests {
             mqtt_topic: "zigbee2mqtt/device1".to_string(),
             ieee_addr: "zigbee2mqtt/device1".to_string(),
             name: "Living Room Sensor".to_string(),
-            capability: DeviceCapability::Sensor {
+            capabilities: vec![DeviceCapability::Sensor {
                 sensor_type: SensorType::TempHumidity,
-            },
+            }],
+            available_fields: Vec::new(),
             power_source: PowerSource::Battery,
             added_at: Utc::now(),
             is_bridge: false,
@@ -564,9 +569,10 @@ mod tests {
             mqtt_topic: "zigbee2mqtt/device1".to_string(),
             ieee_addr: "zigbee2mqtt/device1".to_string(),
             name: "Device 1".to_string(),
-            capability: DeviceCapability::Sensor {
+            capabilities: vec![DeviceCapability::Sensor {
                 sensor_type: SensorType::TempHumidity,
-            },
+            }],
+            available_fields: Vec::new(),
             power_source: PowerSource::Battery,
             added_at: Utc::now(),
             is_bridge: false,
@@ -578,9 +584,10 @@ mod tests {
             mqtt_topic: "zigbee2mqtt/device2".to_string(),
             ieee_addr: "zigbee2mqtt/device2".to_string(),
             name: "Device 2".to_string(),
-            capability: DeviceCapability::Commander {
+            capabilities: vec![DeviceCapability::Commander {
                 commander_type: CommanderType::Switch,
-            },
+            }],
+            available_fields: Vec::new(),
             power_source: PowerSource::Plugged,
             added_at: Utc::now(),
             is_bridge: false,
@@ -603,9 +610,10 @@ mod tests {
             mqtt_topic: "zigbee2mqtt/device1".to_string(),
             ieee_addr: "zigbee2mqtt/device1".to_string(),
             name: "Old Name".to_string(),
-            capability: DeviceCapability::Sensor {
+            capabilities: vec![DeviceCapability::Sensor {
                 sensor_type: SensorType::TempHumidity,
-            },
+            }],
+            available_fields: Vec::new(),
             power_source: PowerSource::Battery,
             added_at: Utc::now(),
             is_bridge: false,
@@ -628,9 +636,10 @@ mod tests {
             mqtt_topic: "zigbee2mqtt/device1".to_string(),
             ieee_addr: "zigbee2mqtt/device1".to_string(),
             name: "Device 1".to_string(),
-            capability: DeviceCapability::Commander {
+            capabilities: vec![DeviceCapability::Commander {
                 commander_type: CommanderType::Switch,
-            },
+            }],
+            available_fields: Vec::new(),
             power_source: PowerSource::Plugged,
             added_at: Utc::now(),
             is_bridge: false,
@@ -662,9 +671,10 @@ mod tests {
             mqtt_topic: "zigbee2mqtt/sensor1".to_string(),
             ieee_addr: "0x0000000000000001".to_string(),
             name: "Living Room Sensor".to_string(),
-            capability: DeviceCapability::Sensor {
+            capabilities: vec![DeviceCapability::Sensor {
                 sensor_type: SensorType::TempHumidity,
-            },
+            }],
+            available_fields: Vec::new(),
             power_source: PowerSource::Battery,
             added_at: Utc::now(),
             is_bridge: false,
@@ -678,9 +688,10 @@ mod tests {
             mqtt_topic: "zigbee2mqtt/sensor2".to_string(),
             ieee_addr: "0x0000000000000002".to_string(),
             name: "sensor2".to_string(),
-            capability: DeviceCapability::Sensor {
+            capabilities: vec![DeviceCapability::Sensor {
                 sensor_type: SensorType::TempHumidity,
-            },
+            }],
+            available_fields: Vec::new(),
             power_source: PowerSource::Battery,
             added_at: Utc::now(),
             is_bridge: false,
@@ -713,14 +724,18 @@ mod tests {
         // Check that sensor1 has the custom name
         let sensor1 = sensors.iter().find(|s| s.device_id == "sensor1").unwrap();
         assert_eq!(sensor1.name, "Living Room Sensor");
-        assert_eq!(sensor1.capability_type, "sensor");
-        assert_eq!(sensor1.capability_subtype, "temp_humidity");
+        assert!(sensor1
+            .capabilities
+            .iter()
+            .any(|cap| matches!(cap, DeviceCapability::Sensor { sensor_type } if *sensor_type == SensorType::TempHumidity)));
 
         // Check that sensor2 has default name (device_id)
         let sensor2 = sensors.iter().find(|s| s.device_id == "sensor2").unwrap();
         assert_eq!(sensor2.name, "sensor2");
-        assert_eq!(sensor2.capability_type, "sensor");
-        assert_eq!(sensor2.capability_subtype, "temp_humidity");
+        assert!(sensor2
+            .capabilities
+            .iter()
+            .any(|cap| matches!(cap, DeviceCapability::Sensor { sensor_type } if *sensor_type == SensorType::TempHumidity)));
     }
 
     // ==================== Automation Rule Tests ====================
@@ -990,8 +1005,8 @@ mod tests {
         let tx = Transaction::begin(&conn).unwrap();
 
         conn.execute(
-            "INSERT INTO devices (id, mqtt_topic, ieee_addr, name, capability_type, capability_subtype, power_source, added_at)
-             VALUES ('test', 'topic', 'topic', 'name', 'sensor', 'temp_humidity', 'battery', 0)",
+            "INSERT INTO devices (id, mqtt_topic, ieee_addr, name, capabilities, available_fields, power_source, added_at)
+             VALUES ('test', 'topic', 'topic', 'name', '[{\"type\":\"sensor\",\"sensor_type\":\"temp_humidity\"}]', '[]', 'battery', 0)",
             [],
         )
         .unwrap();
@@ -1015,8 +1030,8 @@ mod tests {
             let _tx = Transaction::begin(&conn).unwrap();
 
             conn.execute(
-                "INSERT INTO devices (id, mqtt_topic, ieee_addr, name, capability_type, capability_subtype, power_source, added_at)
-                 VALUES ('test', 'topic', 'topic', 'name', 'sensor', 'temp_humidity', 'battery', 0)",
+                "INSERT INTO devices (id, mqtt_topic, ieee_addr, name, capabilities, available_fields, power_source, added_at)
+                 VALUES ('test', 'topic', 'topic', 'name', '[{\"type\":\"sensor\",\"sensor_type\":\"temp_humidity\"}]', '[]', 'battery', 0)",
                 [],
             )
             .unwrap();
@@ -1040,9 +1055,10 @@ mod tests {
             mqtt_topic: "zigbee2mqtt/device1".to_string(),
             ieee_addr: "zigbee2mqtt/device1".to_string(),
             name: "Device 1".to_string(),
-            capability: DeviceCapability::Sensor {
+            capabilities: vec![DeviceCapability::Sensor {
                 sensor_type: SensorType::TempHumidity,
-            },
+            }],
+            available_fields: Vec::new(),
             power_source: PowerSource::Battery,
             added_at: Utc::now(),
             is_bridge: false,
@@ -1057,9 +1073,10 @@ mod tests {
             mqtt_topic: "zigbee2mqtt/different".to_string(),
             ieee_addr: "zigbee2mqtt/different".to_string(),
             name: "Different".to_string(),
-            capability: DeviceCapability::Commander {
+            capabilities: vec![DeviceCapability::Commander {
                 commander_type: CommanderType::Switch,
-            },
+            }],
+            available_fields: Vec::new(),
             power_source: PowerSource::Plugged,
             added_at: Utc::now(),
             is_bridge: false,
@@ -1079,9 +1096,10 @@ mod tests {
             mqtt_topic: "zigbee2mqtt/device1".to_string(),
             ieee_addr: "zigbee2mqtt/device1".to_string(),
             name: "Device 1".to_string(),
-            capability: DeviceCapability::Sensor {
+            capabilities: vec![DeviceCapability::Sensor {
                 sensor_type: SensorType::TempHumidity,
-            },
+            }],
+            available_fields: Vec::new(),
             power_source: PowerSource::Battery,
             added_at: Utc::now(),
             is_bridge: false,
@@ -1096,9 +1114,10 @@ mod tests {
             mqtt_topic: "zigbee2mqtt/device1".to_string(),
             ieee_addr: "zigbee2mqtt/device1".to_string(),
             name: "Different".to_string(),
-            capability: DeviceCapability::Commander {
+            capabilities: vec![DeviceCapability::Commander {
                 commander_type: CommanderType::Switch,
-            },
+            }],
+            available_fields: Vec::new(),
             power_source: PowerSource::Plugged,
             added_at: Utc::now(),
             is_bridge: false,

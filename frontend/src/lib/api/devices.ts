@@ -1,9 +1,15 @@
 export interface DeviceInfo {
   device_id: string;
   name: string;
-  capability_type: 'sensor' | 'commander';
-  capability_subtype: 'temp_humidity' | 'presence' | 'switch' | 'energy_meter';
+  capabilities: DeviceCapability[];
+  available_fields: string[];
 }
+
+export type DeviceCapability =
+  | { type: 'sensor'; sensor_type: 'temp_humidity' | 'presence' | 'energy_meter' }
+  | { type: 'commander'; commander_type: 'switch' }
+  | { type: 'router'; turbo_mode: boolean }
+  | { type: 'coordinator' };
 
 export interface DeviceState {
   device_id: string;

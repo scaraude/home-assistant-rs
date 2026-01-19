@@ -54,16 +54,6 @@ fn validate_condition_fields(
             .map_err(|e| format!("Database error: {}", e))?
             .ok_or_else(|| format!("Device '{}' not found", condition.device_id))?;
 
-        // Extract capability subtype
-        let subtype = match &device.capability {
-            DeviceCapability::Sensor { sensor_type } => match sensor_type {
-                SensorType::TempHumidity => "temp_humidity",
-                SensorType::Presence => "presence",
-                SensorType::EnergyMeter => "energy_meter",
-            },
-            _ => return Err(format!("Device '{}' is not a sensor", condition.device_id)),
-        };
-
         // Convert SensorField to string for comparison
         let field_str = match condition.field {
             crate::models::SensorField::Temperature => "temperature",
@@ -74,23 +64,58 @@ fn validate_condition_fields(
             crate::models::SensorField::Illumination => "illumination",
         };
 
-        // Validate field compatibility
-        let valid = match (subtype, field_str) {
-            ("temp_humidity", "temperature" | "humidity" | "battery" | "link_quality") => true,
-            ("presence", "presence" | "illumination" | "battery" | "link_quality") => true,
-            _ => false,
-        };
+        let mut valid = false;
+        let mut valid_fields = Vec::new();
+
+        for capability in &device.capabilities {
+            if let DeviceCapability::Sensor { sensor_type } = capability {
+                match sensor_type {
+                    SensorType::TempHumidity => {
+                        valid_fields.extend([
+                            "temperature",
+                            "humidity",
+                            "battery",
+                            "link_quality",
+                        ]);
+                        if matches!(field_str, "temperature" | "humidity" | "battery" | "link_quality")
+                        {
+                            valid = true;
+                        }
+                    }
+                    SensorType::Presence => {
+                        valid_fields.extend([
+                            "presence",
+                            "illumination",
+                            "battery",
+                            "link_quality",
+                        ]);
+                        if matches!(field_str, "presence" | "illumination" | "battery" | "link_quality")
+                        {
+                            valid = true;
+                        }
+                    }
+                    SensorType::EnergyMeter => {
+                        valid_fields.extend(["battery", "link_quality"]);
+                        if matches!(field_str, "battery" | "link_quality") {
+                            valid = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        if valid_fields.is_empty() {
+            return Err(format!("Device '{}' is not a sensor", condition.device_id));
+        }
+        valid_fields.sort_unstable();
+        valid_fields.dedup();
 
         if !valid {
-            let valid_fields = match subtype {
-                "temp_humidity" => "temperature, humidity, battery, link_quality",
-                "presence" => "presence, illumination, battery, link_quality",
-                _ => "unknown",
-            };
-
             return Err(format!(
-                "Field '{}' is not valid for {} sensor. Valid fields: {}",
-                field_str, subtype, valid_fields
+                "Field '{}' is not valid for device '{}'. Valid fields: {}",
+                field_str,
+                condition.device_id,
+                valid_fields.join(", ")
             ));
         }
     }
