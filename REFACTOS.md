@@ -5,19 +5,22 @@
 ## Progress Tracking
 
 ### 🔴 Critical Priority
+
 - [ ] CRIT-1: Security - API Input Validation Framework
 - [x] CRIT-2: Performance - Automation Rule Evaluation N+1 Query
 - [x] CRIT-3: Memory Leak - Unbounded HashMap in Automation Service
 
 ### 🟠 High Priority
+
 - [ ] HIGH-1: Code Quality - Extract HTTP Error Handling Pattern
 - [x] HIGH-2: Architecture - Split routes.rs by Domain
 - [ ] HIGH-3: Testing - HTTP Route Test Coverage
 - [ ] HIGH-4: Frontend - Design System & Style Consolidation
-- [ ] HIGH-5: Frontend - Split api.ts by Domain
+- [x] HIGH-5: Frontend - Split api.ts by Domain
 - [ ] HIGH-6: Frontend - Organize Components by Feature
 
 ### 🟡 Medium Priority
+
 - [ ] MED-1: Naming Improvements Across Codebase
 - [ ] MED-2: Extract Magic Numbers to Constants
 - [ ] MED-3: Refactor Device Capability Model
@@ -29,6 +32,7 @@
 - [ ] MED-9: Makefile Cleanup & Organization
 
 ### 🟢 Low Priority
+
 - [ ] LOW-1: Remove Compilation Warnings
 - [ ] LOW-2: Add RwLock Poisoning Recovery Logging
 - [ ] LOW-3: Implement Timestamps as DateTime Types
@@ -37,6 +41,7 @@
 - [ ] LOW-6: Add API Request Retry Logic (Frontend)
 
 ### 🔵 Future / Nice-to-Have
+
 - [ ] FUTURE-1: Integration Test Suite
 - [ ] FUTURE-2: API Documentation (OpenAPI/Swagger)
 - [ ] FUTURE-3: SQLite Encryption at Rest
@@ -46,12 +51,14 @@
 ---
 
 ## Priority Legend
+
 - 🔴 **Critical**: High impact on performance, security, or stability
 - 🟠 **High**: Significant improvement to code quality or maintainability
 - 🟡 **Medium**: Nice-to-have improvements, reduces technical debt
 - 🟢 **Low**: Cosmetic or minor improvements
 
 ## Cost Estimation Scale
+
 - **XS**: < 1 hour
 - **S**: 1-2 hours
 - **M**: 2-4 hours (half-day)
@@ -64,16 +71,19 @@
 ## 🔴 Critical Priority
 
 ### CRIT-1: Security - API Input Validation Framework
+
 **Cost**: L (4-8 hours)
 **Priority**: 🔴 Critical
 
 **Problem**:
+
 - No validation on device name updates ([routes.rs:191](src/http/routes.rs#L191)) - could accept unlimited length strings
 - Automation rule names/descriptions unchecked - potential DoS via large payloads
 - Query parameters lack bounds (e.g., `hours` parameter could trigger massive DB queries)
 - Exposes system to DoS attacks and unexpected behavior
 
 **Solution**:
+
 1. Create `src/http/validation.rs` module with validation helpers:
    ```rust
    pub fn validate_device_name(name: &str) -> Result<(), ValidationError>
@@ -85,11 +95,13 @@
 4. Add tests for edge cases (empty strings, max lengths, special characters)
 
 **Files to modify**:
+
 - Create: [src/http/validation.rs](src/http/validation.rs)
 - Modify: [src/http/routes.rs](src/http/routes.rs)
 - Add tests: [src/http/tests.rs](src/http/tests.rs)
 
 **Benefits**:
+
 - Prevents DoS attacks via unbounded queries
 - Improves error messages for clients
 - Protects database from malformed inputs
@@ -97,19 +109,23 @@
 ---
 
 ### CRIT-2: Performance - Automation Rule Evaluation N+1 Query
+
 **Cost**: M (2-4 hours)
 **Priority**: 🔴 Critical
 
 **Problem**:
 In [automation.rs:evaluate_conditions](src/services/automation.rs#L200-220), each condition triggers a separate database query:
+
 ```rust
 for condition in &rule.conditions {
     self.db.get_latest_reading_for_sensor(&condition.device_id)?  // ← N queries
 }
 ```
+
 For a rule with 5 conditions, this hits the database 5 times per evaluation. On every sensor update, all applicable rules are evaluated.
 
 **Solution**:
+
 1. Add batch query method to database layer:
    ```rust
    pub fn get_latest_readings_batch(&self, device_ids: &[String])
@@ -121,11 +137,13 @@ For a rule with 5 conditions, this hits the database 5 times per evaluation. On 
    - Evaluate conditions against cached results
 
 **Files to modify**:
+
 - [src/db/queries/sensor.rs](src/db/queries/sensor.rs) - add batch query
 - [src/services/automation.rs](src/services/automation.rs) - refactor evaluation loop
 - [src/db/tests.rs](src/db/tests.rs) - add batch query tests
 
 **Expected Improvement**:
+
 - 5x reduction in DB queries for typical rules
 - Lower SQLite lock contention
 - Faster automation response times on Pi Zero
@@ -133,17 +151,21 @@ For a rule with 5 conditions, this hits the database 5 times per evaluation. On 
 ---
 
 ### CRIT-3: Memory Leak - Unbounded HashMap in Automation Service
+
 **Cost**: S (1-2 hours)
 **Priority**: 🔴 Critical
 
 **Problem**:
 [automation.rs:25](src/services/automation.rs#L25) uses an unbounded HashMap for debounce tracking:
+
 ```rust
 last_triggered: Arc<RwLock<HashMap<String, DateTime<Utc>>>>
 ```
+
 When rules are deleted, their entries remain in memory forever. Over months of operation, this accumulates orphaned entries.
 
 **Solution**:
+
 1. Add cleanup in `delete_rule_from_db()`:
    ```rust
    pub fn delete_rule(&self, rule_id: i64) -> Result<()> {
@@ -155,9 +177,11 @@ When rules are deleted, their entries remain in memory forever. Over months of o
 2. Alternatively, implement periodic cleanup task (scan for non-existent rule IDs every hour)
 
 **Files to modify**:
+
 - [src/services/automation.rs](src/services/automation.rs)
 
 **Benefits**:
+
 - Prevents slow memory leak on long-running systems
 - Keeps HashMap small and performant
 
@@ -166,11 +190,13 @@ When rules are deleted, their entries remain in memory forever. Over months of o
 ## 🟠 High Priority
 
 ### HIGH-1: Code Quality - Extract HTTP Error Handling Pattern
+
 **Cost**: S (1-2 hours)
 **Priority**: 🟠 High
 
 **Problem**:
 In [routes.rs](src/http/routes.rs), this pattern repeats 15+ times:
+
 ```rust
 match db.get_something() {
     Ok(data) => match serde_json::to_string(&data) {
@@ -183,6 +209,7 @@ match db.get_something() {
 
 **Solution**:
 Create generic helper in [http/responses.rs](src/http/responses.rs):
+
 ```rust
 pub fn serialize_or_error<T: Serialize>(
     data: T,
@@ -204,10 +231,12 @@ db.get_all_sensors()
 ```
 
 **Files to modify**:
+
 - [src/http/responses.rs](src/http/responses.rs) - add helper
 - [src/http/routes.rs](src/http/routes.rs) - apply to all endpoints
 
 **Benefits**:
+
 - Reduces ~120 lines of boilerplate
 - Consistent error logging
 - Easier to modify error handling globally
@@ -215,11 +244,13 @@ db.get_all_sensors()
 ---
 
 ### HIGH-2: Architecture - Split routes.rs by Domain
+
 **Cost**: M (2-4 hours)
 **Priority**: 🟠 High
 
 **Problem**:
 [routes.rs](src/http/routes.rs) is 1,301 lines containing 5 different domains:
+
 - Sensor endpoints (readings, devices)
 - Switch endpoints (commands, state)
 - Automation endpoints (rules CRUD, executions)
@@ -228,6 +259,7 @@ db.get_all_sensors()
 
 **Solution**:
 Create domain modules:
+
 ```
 src/http/routes/
 ├── mod.rs          # Router and module exports
@@ -239,6 +271,7 @@ src/http/routes/
 ```
 
 Each module exports its handlers:
+
 ```rust
 // src/http/routes/sensors.rs
 pub fn handle_get_sensors(db: &Database) -> Response<Body> { ... }
@@ -246,6 +279,7 @@ pub fn handle_get_readings(db: &Database, query: &str) -> Response<Body> { ... }
 ```
 
 Main router delegates:
+
 ```rust
 // src/http/routes/mod.rs
 match path {
@@ -256,6 +290,7 @@ match path {
 ```
 
 **Files to create**:
+
 - [src/http/routes/mod.rs](src/http/routes/mod.rs)
 - [src/http/routes/sensors.rs](src/http/routes/sensors.rs)
 - [src/http/routes/switches.rs](src/http/routes/switches.rs)
@@ -264,9 +299,11 @@ match path {
 - [src/http/routes/system.rs](src/http/routes/system.rs)
 
 **Files to remove**:
+
 - [src/http/routes.rs](src/http/routes.rs) (split into modules)
 
 **Benefits**:
+
 - Easier navigation and maintenance
 - Clear separation of concerns
 - Smaller files for code review
@@ -274,10 +311,12 @@ match path {
 ---
 
 ### HIGH-3: Testing - HTTP Route Test Coverage
+
 **Cost**: L (4-8 hours)
 **Priority**: 🟠 High
 
 **Problem**:
+
 - Zero tests for HTTP handlers ([routes.rs](src/http/routes.rs))
 - Only database layer tested (92 tests in [db/tests.rs](src/db/tests.rs))
 - No validation that endpoints return correct status codes
@@ -285,6 +324,7 @@ match path {
 
 **Solution**:
 Create comprehensive test suite:
+
 ```rust
 // src/http/routes/tests.rs
 #[tokio::test]
@@ -301,6 +341,7 @@ async fn test_get_readings_invalid_hours_param() { ... }
 ```
 
 **Test Categories**:
+
 1. Happy path (200 OK with valid data)
 2. Error cases (404, 500 with proper messages)
 3. Input validation (400 Bad Request)
@@ -311,9 +352,11 @@ async fn test_get_readings_invalid_hours_param() { ... }
 **Target Coverage**: All public endpoint handlers
 
 **Files to create**:
+
 - [src/http/routes/tests.rs](src/http/routes/tests.rs) (or per-module tests)
 
 **Benefits**:
+
 - Confidence in refactoring routes
 - Regression detection
 - Documentation of expected behavior
@@ -321,17 +364,21 @@ async fn test_get_readings_invalid_hours_param() { ... }
 ---
 
 ### HIGH-4: Frontend - Design System & Style Consolidation
+
 **Cost**: L (4-8 hours)
 **Priority**: 🟠 High
 
 **Problem**:
+
 - Duplicated styles across [SensorCard.svelte](frontend/src/lib/SensorCard.svelte), [PresenceCard.svelte](frontend/src/lib/PresenceCard.svelte), [EnergyMeterCard.svelte](frontend/src/lib/EnergyMeterCard.svelte)
 - Inconsistent spacing, colors, shadows across components
 - No centralized design tokens (colors, spacing, typography)
 - Harder to maintain consistent UI
 
 **Solution**:
+
 1. Create design system module:
+
    ```
    frontend/src/lib/design-system/
    ├── tokens.ts           # Design tokens (colors, spacing, shadows)
@@ -342,34 +389,36 @@ async fn test_get_readings_invalid_hours_param() { ... }
    ```
 
 2. Define design tokens:
+
    ```typescript
    // tokens.ts
    export const colors = {
-     primary: '#3b82f6',
-     success: '#10b981',
-     warning: '#f59e0b',
-     danger: '#ef4444',
-     background: '#1f2937',
-     cardBg: '#374151',
-     text: '#f3f4f6'
+     primary: "#3b82f6",
+     success: "#10b981",
+     warning: "#f59e0b",
+     danger: "#ef4444",
+     background: "#1f2937",
+     cardBg: "#374151",
+     text: "#f3f4f6",
    };
 
    export const spacing = {
-     xs: '0.25rem',
-     sm: '0.5rem',
-     md: '1rem',
-     lg: '1.5rem',
-     xl: '2rem'
+     xs: "0.25rem",
+     sm: "0.5rem",
+     md: "1rem",
+     lg: "1.5rem",
+     xl: "2rem",
    };
 
    export const shadows = {
-     sm: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-     md: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-     lg: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
+     sm: "0 1px 2px 0 rgba(0, 0, 0, 0.05)",
+     md: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+     lg: "0 10px 15px -3px rgba(0, 0, 0, 0.1)",
    };
    ```
 
 3. Create base Card component:
+
    ```svelte
    <!-- Card.svelte -->
    <script lang="ts">
@@ -387,18 +436,21 @@ async fn test_get_readings_invalid_hours_param() { ... }
 4. Refactor existing cards to use design system components
 
 **Files to create**:
+
 - [frontend/src/lib/design-system/tokens.ts](frontend/src/lib/design-system/tokens.ts)
 - [frontend/src/lib/design-system/Card.svelte](frontend/src/lib/design-system/Card.svelte)
 - [frontend/src/lib/design-system/Button.svelte](frontend/src/lib/design-system/Button.svelte)
 - [frontend/src/lib/design-system/Badge.svelte](frontend/src/lib/design-system/Badge.svelte)
 
 **Files to refactor**:
+
 - [frontend/src/lib/SensorCard.svelte](frontend/src/lib/SensorCard.svelte)
 - [frontend/src/lib/PresenceCard.svelte](frontend/src/lib/PresenceCard.svelte)
 - [frontend/src/lib/SwitchCard.svelte](frontend/src/lib/SwitchCard.svelte)
 - [frontend/src/lib/EnergyMeterCard.svelte](frontend/src/lib/EnergyMeterCard.svelte)
 
 **Benefits**:
+
 - Unified visual design
 - Easier to update styles globally
 - Reduced CSS duplication (~30% reduction estimated)
@@ -407,11 +459,13 @@ async fn test_get_readings_invalid_hours_param() { ... }
 ---
 
 ### HIGH-5: Frontend - Split api.ts by Domain
+
 **Cost**: M (2-4 hours)
 **Priority**: 🟠 High
 
 **Problem**:
 [api.ts](frontend/src/lib/api.ts) contains all API calls in one file (~300+ lines estimated):
+
 - Device APIs
 - Sensor reading APIs
 - Switch control APIs
@@ -421,6 +475,7 @@ async fn test_get_readings_invalid_hours_param() { ... }
 
 **Solution**:
 Split into domain modules:
+
 ```
 frontend/src/lib/api/
 ├── index.ts        # Re-exports all APIs
@@ -433,6 +488,7 @@ frontend/src/lib/api/
 ```
 
 Each module groups related APIs:
+
 ```typescript
 // sensors.ts
 export async function getSensors(): Promise<Device[]> { ... }
@@ -441,17 +497,19 @@ export async function getDeviceState(deviceId: string): Promise<DeviceState> { .
 ```
 
 Main index re-exports:
+
 ```typescript
 // index.ts
-export * from './devices';
-export * from './sensors';
-export * from './switches';
-export * from './automation';
-export * from './system';
-export * from './logs';
+export * from "./devices";
+export * from "./sensors";
+export * from "./switches";
+export * from "./automation";
+export * from "./system";
+export * from "./logs";
 ```
 
 **Files to create**:
+
 - [frontend/src/lib/api/index.ts](frontend/src/lib/api/index.ts)
 - [frontend/src/lib/api/devices.ts](frontend/src/lib/api/devices.ts)
 - [frontend/src/lib/api/sensors.ts](frontend/src/lib/api/sensors.ts)
@@ -461,12 +519,15 @@ export * from './logs';
 - [frontend/src/lib/api/logs.ts](frontend/src/lib/api/logs.ts)
 
 **Files to remove**:
+
 - [frontend/src/lib/api.ts](frontend/src/lib/api.ts) (split into modules)
 
 **Files to update**:
+
 - All components importing from `'./api'` (update to `'./api/index'` or specific modules)
 
 **Benefits**:
+
 - Better code organization
 - Easier to find related API calls
 - Clearer domain boundaries
@@ -475,11 +536,13 @@ export * from './logs';
 ---
 
 ### HIGH-6: Frontend - Organize Components by Feature
+
 **Cost**: M (2-4 hours)
 **Priority**: 🟠 High
 
 **Problem**:
 All components in flat [frontend/src/lib/](frontend/src/lib/) directory:
+
 - SensorCard.svelte
 - PresenceCard.svelte
 - EnergyMeterCard.svelte
@@ -494,6 +557,7 @@ Hard to navigate when looking for feature-specific components.
 
 **Solution**:
 Organize by feature:
+
 ```
 frontend/src/lib/
 ├── devices/
@@ -527,10 +591,12 @@ frontend/src/lib/
 **Files to move**: All existing components
 
 **Files to update**:
+
 - [App.svelte](frontend/src/App.svelte) - update imports
 - All components with cross-component imports
 
 **Benefits**:
+
 - Clear feature boundaries
 - Easier to find related components
 - Better scalability as features grow
@@ -540,6 +606,7 @@ frontend/src/lib/
 ## 🟡 Medium Priority
 
 ### MED-1: Naming Improvements Across Codebase
+
 **Cost**: M (2-4 hours)
 **Priority**: 🟡 Medium
 
@@ -547,17 +614,20 @@ frontend/src/lib/
 Misleading or unclear naming in multiple places:
 
 **Backend**:
+
 - `get_all_sensors()` → actually returns `get_all_sensor_devices()` (devices, not readings)
 - `TemperatureReading` → should be `SensorReading` (handles all sensor types)
 - `has_sensor_data()` → unclear, should be `has_sensor_capability()`
 
 **Frontend**:
+
 - `TemperatureGraph` component → actually `SensorGraph` (shows any sensor type)
 - `field: 'temperature' | 'humidity' | 'battery' | ...` → should use typed unions
 
 **Solution**:
 
 1. Backend renames:
+
    ```rust
    // src/db/queries/device.rs
    - pub fn get_all_sensors() -> Result<Vec<Device>>
@@ -573,20 +643,21 @@ Misleading or unclear naming in multiple places:
    ```
 
 2. Frontend renames:
+
    ```typescript
    // Rename component file
-   - TemperatureGraph.svelte
-   + SensorGraph.svelte
+   -TemperatureGraph.svelte + SensorGraph.svelte;
 
    // Define proper type unions
-   type TempSensorField = 'temperature' | 'humidity';
-   type PresenceSensorField = 'presence' | 'illumination';
-   type DeviceStateField = 'battery' | 'link_quality';
+   type TempSensorField = "temperature" | "humidity";
+   type PresenceSensorField = "presence" | "illumination";
+   type DeviceStateField = "battery" | "link_quality";
 
    type SensorField = TempSensorField | PresenceSensorField | DeviceStateField;
    ```
 
 **Files to modify**:
+
 - [src/db/queries/device.rs](src/db/queries/device.rs)
 - [src/models/mqtt.rs](src/models/mqtt.rs)
 - [src/models/device.rs](src/models/device.rs)
@@ -595,6 +666,7 @@ Misleading or unclear naming in multiple places:
 - [frontend/src/lib/api.ts](frontend/src/lib/api.ts) (update types)
 
 **Benefits**:
+
 - Clearer code intent
 - Easier onboarding for new developers
 - Reduced confusion during debugging
@@ -602,6 +674,7 @@ Misleading or unclear naming in multiple places:
 ---
 
 ### MED-2: Extract Magic Numbers to Constants
+
 **Cost**: S (1-2 hours)
 **Priority**: 🟡 Medium
 
@@ -651,11 +724,13 @@ const DEBOUNCE_SECONDS: i64 = 60;
 ```
 
 **Files to modify**:
+
 - [src/mqtt/client.rs](src/mqtt/client.rs)
 - [src/main.rs](src/main.rs)
 - [src/services/automation.rs](src/services/automation.rs)
 
 **Benefits**:
+
 - Easier to tune performance
 - Documents why values were chosen
 - Single place to update configuration
@@ -663,11 +738,13 @@ const DEBOUNCE_SECONDS: i64 = 60;
 ---
 
 ### MED-3: Refactor Device Capability Model
+
 **Cost**: L (4-8 hours)
 **Priority**: 🟡 Medium
 
 **Problem**:
 Current model ([device.rs](src/models/device.rs)) assumes one capability per device:
+
 ```rust
 pub enum DeviceCapability {
     Sensor { sensor_type: SensorType },
@@ -676,6 +753,7 @@ pub enum DeviceCapability {
 ```
 
 But real devices can have multiple capabilities:
+
 - Switch + Router (Zigbee coordinator)
 - Energy Meter + Router
 - Switch + Energy Meter + Router
@@ -718,6 +796,7 @@ impl Device {
 ```
 
 **Database Migration**:
+
 ```sql
 -- Add migration script
 ALTER TABLE devices ADD COLUMN capabilities TEXT NOT NULL DEFAULT '[]';
@@ -735,6 +814,7 @@ ALTER TABLE devices DROP COLUMN capability_subtype;
 ```
 
 **Files to modify**:
+
 - [src/models/device.rs](src/models/device.rs) - update model
 - [src/db/schema.rs](src/db/schema.rs) - update schema
 - [src/db/queries/device.rs](src/db/queries/device.rs) - update queries
@@ -742,11 +822,13 @@ ALTER TABLE devices DROP COLUMN capability_subtype;
 - Add migration script: [migrations/004_multi_capability.sql](migrations/004_multi_capability.sql)
 
 **Testing Requirements**:
+
 - Test device with multiple capabilities
 - Test queries filtering by capability
 - Test backward compatibility with existing devices
 
 **Benefits**:
+
 - Accurately models real device capabilities
 - Supports router devices properly
 - Allows future expansion (e.g., OTA update capability)
@@ -754,6 +836,7 @@ ALTER TABLE devices DROP COLUMN capability_subtype;
 ---
 
 ### MED-4: Refactor if-else Chain in Device Discovery
+
 **Cost**: S (1-2 hours)
 **Priority**: 🟡 Medium
 
@@ -811,10 +894,12 @@ if capabilities.is_empty() {
 ```
 
 **Files to modify**:
+
 - [src/models/mqtt.rs](src/models/mqtt.rs) - add detection method
 - [src/mqtt/handlers/device.rs](src/mqtt/handlers/device.rs) - use detection method
 
 **Benefits**:
+
 - More maintainable (easy to add new device types)
 - Supports multi-capability devices
 - Clearer logic flow
@@ -822,6 +907,7 @@ if capabilities.is_empty() {
 ---
 
 ### MED-5: Remove Unused Methods from State Stores
+
 **Cost**: XS (< 1 hour)
 **Priority**: 🟡 Medium
 
@@ -837,6 +923,7 @@ pub fn _clear(&self) { ... }                                          // Line 64
 These are never called in the codebase.
 
 **Solution**:
+
 1. Search for any usage of these methods
 2. If truly unused, delete them
 3. If needed for debugging, move to `#[cfg(test)]` block:
@@ -850,10 +937,12 @@ impl DeviceStateStore {
 ```
 
 **Files to modify**:
+
 - [src/state/device.rs](src/state/device.rs)
 - [src/state/switch.rs](src/state/switch.rs) (check for similar unused methods)
 
 **Benefits**:
+
 - Cleaner public API
 - Less code to maintain
 - Clear test-only methods
@@ -861,6 +950,7 @@ impl DeviceStateStore {
 ---
 
 ### MED-6: Improve Error Context in Database Operations
+
 **Cost**: M (2-4 hours)
 **Priority**: 🟡 Medium
 
@@ -874,6 +964,7 @@ db.get_device_by_mqtt_topic(&topic)
 ```
 
 When this fails, you see "Database error: no rows" but don't know:
+
 - Which table was queried
 - What topic was searched
 - Which endpoint triggered it
@@ -901,12 +992,14 @@ db.get_device_by_mqtt_topic(&topic)
 ```
 
 **Files to modify**:
+
 - [src/db/queries/device.rs](src/db/queries/device.rs)
 - [src/db/queries/sensor.rs](src/db/queries/sensor.rs)
 - [src/db/queries/automation.rs](src/db/queries/automation.rs)
 - [src/http/routes.rs](src/http/routes.rs)
 
 **Benefits**:
+
 - Easier debugging in production
 - Better error messages for clients
 - Clearer logs
@@ -914,6 +1007,7 @@ db.get_device_by_mqtt_topic(&topic)
 ---
 
 ### MED-7: Frontend - TypeScript Type Improvements
+
 **Cost**: M (2-4 hours)
 **Priority**: 🟡 Medium
 
@@ -922,8 +1016,13 @@ Union types too broad, losing type safety:
 
 ```typescript
 // From original REFACTOS.md
-field: 'temperature' | 'humidity' | 'battery' | 'link_quality' | 'presence' | 'illumination';
-capability_subtype: 'temp_humidity' | 'presence' | 'switch';
+field: "temperature" |
+  "humidity" |
+  "battery" |
+  "link_quality" |
+  "presence" |
+  "illumination";
+capability_subtype: "temp_humidity" | "presence" | "switch";
 ```
 
 **Solution**:
@@ -931,36 +1030,39 @@ Create specific type hierarchies:
 
 ```typescript
 // types/sensors.ts
-export type TempHumiditySensorField = 'temperature' | 'humidity';
-export type PresenceSensorField = 'presence' | 'illumination';
-export type EnergyMeterField = 'power' | 'voltage' | 'current' | 'energy';
+export type TempHumiditySensorField = "temperature" | "humidity";
+export type PresenceSensorField = "presence" | "illumination";
+export type EnergyMeterField = "power" | "voltage" | "current" | "energy";
 
 export type SensorField =
   | TempHumiditySensorField
   | PresenceSensorField
   | EnergyMeterField;
 
-export type DeviceStateField = 'battery' | 'link_quality';
+export type DeviceStateField = "battery" | "link_quality";
 
 // Capability subtypes
 export enum CapabilitySubType {
-  TempHumidity = 'temp_humidity',
-  Presence = 'presence',
-  EnergyMeter = 'energy_meter',
-  Switch = 'switch'
+  TempHumidity = "temp_humidity",
+  Presence = "presence",
+  EnergyMeter = "energy_meter",
+  Switch = "switch",
 }
 
 // Type guards
-export function isTempHumidityField(field: string): field is TempHumiditySensorField {
-  return field === 'temperature' || field === 'humidity';
+export function isTempHumidityField(
+  field: string,
+): field is TempHumiditySensorField {
+  return field === "temperature" || field === "humidity";
 }
 
 export function isPresenceField(field: string): field is PresenceSensorField {
-  return field === 'presence' || field === 'illumination';
+  return field === "presence" || field === "illumination";
 }
 ```
 
 Usage in components:
+
 ```typescript
 <script lang="ts">
   import type { TempHumiditySensorField } from './types/sensors';
@@ -972,14 +1074,17 @@ Usage in components:
 ```
 
 **Files to create**:
+
 - [frontend/src/lib/types/sensors.ts](frontend/src/lib/types/sensors.ts)
 - [frontend/src/lib/types/devices.ts](frontend/src/lib/types/devices.ts)
 
 **Files to modify**:
+
 - [frontend/src/lib/api.ts](frontend/src/lib/api.ts) - use new types
 - All components using device/sensor types
 
 **Benefits**:
+
 - Better IntelliSense/autocomplete
 - Compile-time error detection
 - Self-documenting code
@@ -987,6 +1092,7 @@ Usage in components:
 ---
 
 ### MED-8: Add Frontend Component Tests
+
 **Cost**: L (4-8 hours)
 **Priority**: 🟡 Medium
 
@@ -1027,12 +1133,14 @@ describe('SwitchCard', () => {
 ```
 
 **Testing Priorities**:
+
 1. SwitchCard (state management + API calls)
 2. AutomationRulePanel (complex form logic)
 3. dataCache store (WebSocket event handling)
 4. graphConfig store (data transformations)
 
 **Files to create**:
+
 - [frontend/vitest.config.ts](frontend/vitest.config.ts)
 - [frontend/src/lib/SwitchCard.test.ts](frontend/src/lib/SwitchCard.test.ts)
 - [frontend/src/lib/AutomationRulePanel.test.ts](frontend/src/lib/AutomationRulePanel.test.ts)
@@ -1040,9 +1148,11 @@ describe('SwitchCard', () => {
 - [frontend/src/lib/stores/graphConfig.test.ts](frontend/src/lib/stores/graphConfig.test.ts)
 
 **Files to modify**:
+
 - [frontend/package.json](frontend/package.json) - add test deps and script
 
 **Benefits**:
+
 - Confidence in refactoring
 - Catch regressions early
 - Better component API design
@@ -1050,11 +1160,13 @@ describe('SwitchCard', () => {
 ---
 
 ### MED-9: Makefile Cleanup & Organization
+
 **Cost**: S (1-2 hours)
 **Priority**: 🟡 Medium
 
 **Problem**:
 From original REFACTOS.md:
+
 - Inconsistent naming (build-frontend vs quick-deploy)
 - No clear sections
 - Missing deploy-config target
@@ -1157,10 +1269,12 @@ help: ## Show this help message
 ```
 
 **Files to modify**:
+
 - [Makefile](Makefile)
 - [.env.deploy](configs/.env.deploy) - ensure all vars documented
 
 **Benefits**:
+
 - Easier to find commands
 - Consistent naming convention
 - Self-documenting with `make help`
@@ -1170,6 +1284,7 @@ help: ## Show this help message
 ## 🟢 Low Priority
 
 ### LOW-1: Remove Compilation Warnings
+
 **Cost**: S (1-2 hours)
 **Priority**: 🟢 Low
 
@@ -1177,6 +1292,7 @@ help: ## Show this help message
 Compilation produces warnings (need to run build to identify specific warnings).
 
 **Solution**:
+
 1. Run `cargo build` and `cargo clippy` to identify all warnings
 2. Fix each warning category:
    - Unused imports
@@ -1190,6 +1306,7 @@ Compilation produces warnings (need to run build to identify specific warnings).
 **Files to modify**: TBD (depends on warnings found)
 
 **Benefits**:
+
 - Cleaner build output
 - Catches potential bugs early
 - Better code quality
@@ -1197,6 +1314,7 @@ Compilation produces warnings (need to run build to identify specific warnings).
 ---
 
 ### LOW-2: Add RwLock Poisoning Recovery Logging
+
 **Cost**: XS (< 1 hour)
 **Priority**: 🟢 Low
 
@@ -1234,15 +1352,18 @@ pub fn lock_or_recover<T>(mutex: &Mutex<T>) -> MutexGuard<T> {
 ```
 
 **Files to modify**:
+
 - [src/db/connection.rs](src/db/connection.rs)
 
 **Benefits**:
+
 - Visibility into threading issues
 - Easier debugging of rare race conditions
 
 ---
 
 ### LOW-3: Implement Timestamps as DateTime Types
+
 **Cost**: M (2-4 hours)
 **Priority**: 🟢 Low
 
@@ -1254,6 +1375,7 @@ Currently using `i64` Unix timestamps everywhere.
 **Solution**:
 
 **Backend** (Rust has `chrono::DateTime`):
+
 ```rust
 // Already using DateTime<Utc> in many places!
 // Just need consistency across all timestamp fields
@@ -1267,10 +1389,11 @@ pub struct SensorReading {
 ```
 
 **Frontend** (use Date objects):
+
 ```typescript
 // Before
 interface Reading {
-  timestamp: number;  // Unix timestamp
+  timestamp: number; // Unix timestamp
 }
 
 // After
@@ -1280,21 +1403,23 @@ interface Reading {
 
 // API response parsing
 export async function getReadings(): Promise<Reading[]> {
-  const response = await fetch('/api/readings');
+  const response = await fetch("/api/readings");
   const data = await response.json();
-  return data.map(r => ({
+  return data.map((r) => ({
     ...r,
-    timestamp: new Date(r.timestamp * 1000)  // Convert Unix to Date
+    timestamp: new Date(r.timestamp * 1000), // Convert Unix to Date
   }));
 }
 ```
 
 **Files to modify**:
+
 - [frontend/src/lib/api.ts](frontend/src/lib/api.ts) - parse timestamps
 - [frontend/src/lib/types/sensors.ts](frontend/src/lib/types/sensors.ts) - update types
 - All components using timestamps
 
 **Benefits**:
+
 - Better type safety
 - Easier date manipulation
 - Clearer intent
@@ -1304,11 +1429,13 @@ export async function getReadings(): Promise<Reading[]> {
 ---
 
 ### LOW-4: Add Service Health Monitoring
+
 **Cost**: L (4-8 hours)
 **Priority**: 🟢 Low
 
 **Problem**:
 No monitoring of service health:
+
 - Services could silently stop processing events
 - No indication if event bus is lagging
 - No deadletter queue for failed events
@@ -1359,6 +1486,7 @@ impl HealthMonitor {
 ```
 
 Add health endpoint:
+
 ```rust
 // src/http/routes.rs
 "/api/health" => {
@@ -1368,13 +1496,16 @@ Add health endpoint:
 ```
 
 **Files to create**:
+
 - [src/services/health_monitor.rs](src/services/health_monitor.rs)
 
 **Files to modify**:
+
 - [src/main.rs](src/main.rs) - spawn health monitor
 - [src/http/routes.rs](src/http/routes.rs) - add health endpoint
 
 **Benefits**:
+
 - Early detection of service issues
 - Visibility into system health
 - Supports automated monitoring
@@ -1382,6 +1513,7 @@ Add health endpoint:
 ---
 
 ### LOW-5: Add MQTT Device Whitelist
+
 **Cost**: M (2-4 hours)
 **Priority**: 🟢 Low
 
@@ -1407,6 +1539,7 @@ ids = [
 ```
 
 Validation in device discovery:
+
 ```rust
 // src/mqtt/handlers/device.rs
 pub fn validate_device(msg: &DeviceMqttMessage, config: &DeviceConfig) -> Result<()> {
@@ -1429,13 +1562,16 @@ pub fn validate_device(msg: &DeviceMqttMessage, config: &DeviceConfig) -> Result
 ```
 
 **Files to create**:
+
 - [configs/devices.toml.example](configs/devices.toml.example)
 
 **Files to modify**:
+
 - [src/mqtt/handlers/device.rs](src/mqtt/handlers/device.rs)
 - [src/main.rs](src/main.rs) - load device config
 
 **Benefits**:
+
 - Security against rogue devices
 - Explicit device authorization
 - Audit trail of allowed devices
@@ -1443,6 +1579,7 @@ pub fn validate_device(msg: &DeviceMqttMessage, config: &DeviceConfig) -> Result
 ---
 
 ### LOW-6: Add API Request Retry Logic (Frontend)
+
 **Cost**: S (1-2 hours)
 **Priority**: 🟢 Low
 
@@ -1466,8 +1603,8 @@ export async function fetchWithRetry<T>(
   retryOpts: RetryOptions = {
     maxAttempts: 3,
     baseDelayMs: 1000,
-    maxDelayMs: 10000
-  }
+    maxDelayMs: 10000,
+  },
 ): Promise<T> {
   let lastError: Error | null = null;
 
@@ -1491,11 +1628,14 @@ export async function fetchWithRetry<T>(
         // Exponential backoff: 1s, 2s, 4s, ...
         const delay = Math.min(
           retryOpts.baseDelayMs * Math.pow(2, attempt - 1),
-          retryOpts.maxDelayMs
+          retryOpts.maxDelayMs,
         );
 
-        console.warn(`Request failed (attempt ${attempt}/${retryOpts.maxAttempts}), retrying in ${delay}ms...`, error);
-        await new Promise(resolve => setTimeout(resolve, delay));
+        console.warn(
+          `Request failed (attempt ${attempt}/${retryOpts.maxAttempts}), retrying in ${delay}ms...`,
+          error,
+        );
+        await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
   }
@@ -1505,20 +1645,24 @@ export async function fetchWithRetry<T>(
 ```
 
 Usage:
+
 ```typescript
 // api/sensors.ts
 export async function getSensors(): Promise<Device[]> {
-  return fetchWithRetry<Device[]>('/api/sensors');
+  return fetchWithRetry<Device[]>("/api/sensors");
 }
 ```
 
 **Files to create**:
+
 - [frontend/src/lib/api/retry.ts](frontend/src/lib/api/retry.ts)
 
 **Files to modify**:
+
 - [frontend/src/lib/api/index.ts](frontend/src/lib/api/index.ts) - use retry wrapper
 
 **Benefits**:
+
 - More resilient to network issues
 - Better user experience
 - Reduces failed requests
@@ -1528,11 +1672,13 @@ export async function getSensors(): Promise<Device[]> {
 ## 🔵 Nice-to-Have / Future
 
 ### FUTURE-1: Integration Test Suite
+
 **Cost**: XL (1-2 days)
 **Priority**: 🔵 Future
 
 **Description**:
 End-to-end tests for full event flow:
+
 1. Mock MQTT broker publishes sensor reading
 2. Verify event propagates through system
 3. Verify database write
@@ -1540,6 +1686,7 @@ End-to-end tests for full event flow:
 5. Verify automation rule triggers
 
 **Requires**:
+
 - Test MQTT broker setup
 - Test database fixtures
 - WebSocket client for testing
@@ -1547,11 +1694,13 @@ End-to-end tests for full event flow:
 ---
 
 ### FUTURE-2: API Documentation (OpenAPI/Swagger)
+
 **Cost**: M (2-4 hours)
 **Priority**: 🔵 Future
 
 **Description**:
 Generate OpenAPI spec from code or manually document:
+
 - All endpoints
 - Request/response schemas
 - Status codes
@@ -1562,11 +1711,13 @@ Serve at `/api/docs`.
 ---
 
 ### FUTURE-3: SQLite Encryption at Rest
+
 **Cost**: L (4-8 hours)
 **Priority**: 🔵 Future
 
 **Description**:
 Use SQLCipher to encrypt sensor data at rest. Requires:
+
 - Key management strategy
 - Migration for existing databases
 - Performance testing on Pi Zero
@@ -1574,11 +1725,13 @@ Use SQLCipher to encrypt sensor data at rest. Requires:
 ---
 
 ### FUTURE-4: Optimize RwLock Usage in State Stores
+
 **Cost**: M (2-4 hours)
 **Priority**: 🔵 Future
 
 **Description**:
 Evaluate if RwLock is necessary or if Mutex would be simpler:
+
 - Profile lock contention
 - Measure read vs write frequency
 - Consider lock-free alternatives (dashmap, etc.)
@@ -1586,11 +1739,13 @@ Evaluate if RwLock is necessary or if Mutex would be simpler:
 ---
 
 ### FUTURE-5: Event Filtering at Subscription Level
+
 **Cost**: L (4-8 hours)
 **Priority**: 🔵 Future
 
 **Description**:
 Allow services to subscribe to specific event types only:
+
 ```rust
 let sensor_events = event_rx.filter(|e| matches!(e, SystemEvent::SensorReading { .. }));
 ```
@@ -1602,6 +1757,7 @@ Reduces unnecessary event processing in each service.
 ## Summary Statistics
 
 ### By Priority
+
 - 🔴 Critical: 3 tickets
 - 🟠 High: 6 tickets
 - 🟡 Medium: 9 tickets
@@ -1611,6 +1767,7 @@ Reduces unnecessary event processing in each service.
 **Total**: 29 tickets
 
 ### By Cost
+
 - XS (< 1h): 2 tickets
 - S (1-2h): 6 tickets
 - M (2-4h): 11 tickets
@@ -1621,24 +1778,28 @@ Reduces unnecessary event processing in each service.
 ### Recommended Roadmap
 
 **Phase 1 - Security & Performance (1-2 weeks)**:
+
 1. CRIT-1: API Input Validation (security)
 2. CRIT-2: Automation N+1 Query (performance)
 3. CRIT-3: Memory Leak Fix (stability)
 4. HIGH-1: Extract HTTP Error Pattern (code quality)
 
 **Phase 2 - Code Organization (1-2 weeks)**:
+
 1. HIGH-2: Split routes.rs by Domain
 2. HIGH-5: Split api.ts by Domain
 3. HIGH-6: Organize Components by Feature
 4. MED-9: Makefile Cleanup
 
 **Phase 3 - Testing & Quality (2-3 weeks)**:
+
 1. HIGH-3: HTTP Route Tests
 2. MED-8: Frontend Component Tests
 3. HIGH-4: Design System (reduces duplication)
 4. MED-1: Naming Improvements
 
 **Phase 4 - Technical Debt (1-2 weeks)**:
+
 1. MED-3: Device Capability Model Refactor
 2. MED-4: Refactor if-else Chain
 3. MED-5: Remove Unused Methods
@@ -1646,5 +1807,6 @@ Reduces unnecessary event processing in each service.
 5. LOW-1: Remove Compilation Warnings
 
 **Phase 5 - Polish & Future (ongoing)**:
-- LOW-* tickets as time permits
-- FUTURE-* tickets for major version bumps
+
+- LOW-\* tickets as time permits
+- FUTURE-\* tickets for major version bumps
