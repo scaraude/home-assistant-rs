@@ -137,7 +137,7 @@ impl Device {
     }
 }
 
-/// Minimal device info for API responses (ID + name only)
+/// Minimal device info for API responses (ID + name + capability)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeviceInfo {
     /// Device ID
@@ -145,6 +145,12 @@ pub struct DeviceInfo {
 
     /// Human-readable name
     pub name: String,
+
+    /// Device capability type ("sensor" or "commander")
+    pub capability_type: String,
+
+    /// Device capability subtype ("temp_humidity", "presence", "switch", etc.)
+    pub capability_subtype: String,
 }
 
 /// Dynamic device state (ephemeral, not persisted to DB)

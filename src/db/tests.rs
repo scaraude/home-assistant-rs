@@ -148,6 +148,36 @@ mod tests {
     fn test_get_all_sensors() {
         let (db, _temp_dir) = create_test_db();
 
+        // Insert devices first (required for INNER JOIN)
+        let device1 = Device {
+            id: "sensor1".to_string(),
+            mqtt_topic: "zigbee2mqtt/sensor1".to_string(),
+            ieee_addr: "0x0000000000000001".to_string(),
+            name: "sensor1".to_string(),
+            capability: DeviceCapability::Sensor {
+                sensor_type: SensorType::TempHumidity,
+            },
+            power_source: PowerSource::Battery,
+            added_at: Utc::now(),
+            is_bridge: false,
+            parent_device_id: None,
+        };
+        let device2 = Device {
+            id: "sensor2".to_string(),
+            mqtt_topic: "zigbee2mqtt/sensor2".to_string(),
+            ieee_addr: "0x0000000000000002".to_string(),
+            name: "sensor2".to_string(),
+            capability: DeviceCapability::Sensor {
+                sensor_type: SensorType::TempHumidity,
+            },
+            power_source: PowerSource::Battery,
+            added_at: Utc::now(),
+            is_bridge: false,
+            parent_device_id: None,
+        };
+        db.insert_device(&device1).unwrap();
+        db.insert_device(&device2).unwrap();
+
         // Insert readings from multiple sensors
         let timestamp = Utc::now();
         let reading1 = SensorReading::TempHumidity {
@@ -359,11 +389,11 @@ mod tests {
     fn test_get_all_sensors_with_device_names() {
         let (db, _temp_dir) = create_test_db();
 
-        // Insert a device
-        let device = Device {
+        // Insert device with custom name
+        let device1 = Device {
             id: "sensor1".to_string(),
             mqtt_topic: "zigbee2mqtt/sensor1".to_string(),
-            ieee_addr: "zigbee2mqtt/sensor1".to_string(),
+            ieee_addr: "0x0000000000000001".to_string(),
             name: "Living Room Sensor".to_string(),
             capability: DeviceCapability::Sensor {
                 sensor_type: SensorType::TempHumidity,
@@ -373,9 +403,25 @@ mod tests {
             is_bridge: false,
             parent_device_id: None,
         };
-        db.insert_device(&device).unwrap();
+        db.insert_device(&device1).unwrap();
 
-        // Insert a reading for this device
+        // Insert device with default name (device_id)
+        let device2 = Device {
+            id: "sensor2".to_string(),
+            mqtt_topic: "zigbee2mqtt/sensor2".to_string(),
+            ieee_addr: "0x0000000000000002".to_string(),
+            name: "sensor2".to_string(),
+            capability: DeviceCapability::Sensor {
+                sensor_type: SensorType::TempHumidity,
+            },
+            power_source: PowerSource::Battery,
+            added_at: Utc::now(),
+            is_bridge: false,
+            parent_device_id: None,
+        };
+        db.insert_device(&device2).unwrap();
+
+        // Insert a reading for device1
         let timestamp = Utc::now();
         let reading = SensorReading::TempHumidity {
             device_id: "sensor1".to_string(),
@@ -385,7 +431,7 @@ mod tests {
         };
         db.insert_reading(&reading).unwrap();
 
-        // Insert a reading for a device without a name
+        // Insert a reading for device2
         let reading2 = SensorReading::TempHumidity {
             device_id: "sensor2".to_string(),
             temperature: 18.0,
@@ -400,10 +446,14 @@ mod tests {
         // Check that sensor1 has the custom name
         let sensor1 = sensors.iter().find(|s| s.device_id == "sensor1").unwrap();
         assert_eq!(sensor1.name, "Living Room Sensor");
+        assert_eq!(sensor1.capability_type, "sensor");
+        assert_eq!(sensor1.capability_subtype, "temp_humidity");
 
-        // Check that sensor2 falls back to device_id
+        // Check that sensor2 has default name (device_id)
         let sensor2 = sensors.iter().find(|s| s.device_id == "sensor2").unwrap();
         assert_eq!(sensor2.name, "sensor2");
+        assert_eq!(sensor2.capability_type, "sensor");
+        assert_eq!(sensor2.capability_subtype, "temp_humidity");
     }
 
     // ==================== Automation Rule Tests ====================

@@ -1,6 +1,6 @@
 use super::connection::{Database, MutexExt};
 use rusqlite::Result;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 impl Database {
     /// Initialize the database schema
@@ -158,6 +158,63 @@ impl Database {
             }
         } else {
             debug!("Illumination column already exists");
+        }
+
+        // Migration: Ensure all sensors have capability metadata in devices table
+        debug!("Checking for sensors without capability metadata");
+
+        // Count devices missing capability info
+        let missing_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM (
+                    SELECT device_id FROM temperature_readings
+                    UNION
+                    SELECT device_id FROM presence_readings
+                ) WHERE device_id NOT IN (SELECT id FROM devices)",
+            [],
+            |row| row.get(0),
+        )?;
+
+        if missing_count > 0 {
+            warn!(
+                missing_devices = missing_count,
+                "Found sensors without capability metadata, inserting records"
+            );
+
+            // Insert missing temperature sensors
+            let temp_inserted = conn.execute(
+                "INSERT OR IGNORE INTO devices (id, name, mqtt_topic, capability_type, capability_subtype)
+                 SELECT DISTINCT
+                     device_id,
+                     device_id,
+                     'zigbee2mqtt/' || device_id,
+                     'sensor',
+                     'temp_humidity'
+                 FROM temperature_readings
+                 WHERE device_id NOT IN (SELECT id FROM devices)",
+                [],
+            )?;
+
+            // Insert missing presence sensors
+            let presence_inserted = conn.execute(
+                "INSERT OR IGNORE INTO devices (id, name, mqtt_topic, capability_type, capability_subtype)
+                 SELECT DISTINCT
+                     device_id,
+                     device_id,
+                     'zigbee2mqtt/' || device_id,
+                     'sensor',
+                     'presence'
+                 FROM presence_readings
+                 WHERE device_id NOT IN (SELECT id FROM devices)",
+                [],
+            )?;
+
+            info!(
+                temp_sensors_inserted = temp_inserted,
+                presence_sensors_inserted = presence_inserted,
+                "Migration: Inserted capability metadata for all sensors"
+            );
+        } else {
+            debug!("All sensors already have capability metadata");
         }
 
         Ok(())

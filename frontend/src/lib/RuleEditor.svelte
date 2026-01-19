@@ -83,12 +83,29 @@
   let createOppositeRule = $state(false);
   let oppositeValue = $state<number>(20);
 
-  const fieldOptions = [
-    { value: "temperature", label: "Temperature" },
-    { value: "humidity", label: "Humidity" },
-    { value: "battery", label: "Battery" },
-    { value: "link_quality", label: "Link Quality" },
-  ];
+  // Define field sets per sensor type
+  const FIELD_OPTIONS_MAP: Record<string, Array<{ value: string; label: string }>> = {
+    temp_humidity: [
+      { value: "temperature", label: "Temperature (°C)" },
+      { value: "humidity", label: "Humidity (%)" },
+      { value: "battery", label: "Battery Level (%)" },
+      { value: "link_quality", label: "Link Quality" },
+    ],
+    presence: [
+      { value: "presence", label: "Occupancy" },
+      { value: "illumination", label: "Light Level" },
+      { value: "battery", label: "Battery Level (%)" },
+      { value: "link_quality", label: "Link Quality" },
+    ],
+  };
+
+  // Helper function to get available fields for a specific device_id
+  function getFieldsForDevice(deviceId: string) {
+    if (!deviceId) return [];
+    const sensor = availableSensors.find((s) => s.device_id === deviceId);
+    if (!sensor) return [];
+    return FIELD_OPTIONS_MAP[sensor.capability_subtype] || [];
+  }
 
   const operatorOptions = [
     { value: "equal", label: "=" },
@@ -137,12 +154,16 @@
   }
 
   function addCondition() {
+    const firstSensor = availableSensors[0];
+    const defaultFields = firstSensor ? getFieldsForDevice(firstSensor.device_id) : [];
+    const defaultField = defaultFields[0]?.value || "temperature";
+
     conditions = [
       ...conditions,
       {
         id: conditionIdCounter++,
-        device_id: availableSensors[0]?.device_id || "",
-        field: "temperature",
+        device_id: firstSensor?.device_id || "",
+        field: defaultField,
         operator: "greater_than",
         value: 20,
       },
@@ -516,7 +537,7 @@
                       bind:value={condition.field}
                       required
                     >
-                      {#each fieldOptions as field (field.value)}
+                      {#each getFieldsForDevice(condition.device_id) as field (field.value)}
                         <option value={field.value}>{field.label}</option>
                       {/each}
                     </select>
@@ -539,13 +560,40 @@
 
                   <div class="input-group">
                     <label for="condition-value-{condition.id}">Value</label>
-                    <input
-                      id="condition-value-{condition.id}"
-                      type="number"
-                      step="0.1"
-                      bind:value={condition.value}
-                      required
-                    />
+
+                    {#if condition.field === 'illumination'}
+                      <!-- Special dropdown for illumination: "Dim" (0) or "Bright" (1) -->
+                      <select
+                        id="condition-value-{condition.id}"
+                        bind:value={condition.value}
+                        required
+                      >
+                        <option value={0}>Dim</option>
+                        <option value={1}>Bright</option>
+                      </select>
+                    {:else if condition.field === 'presence'}
+                      <!-- Special dropdown for presence: "Not Occupied" (0) or "Occupied" (1) -->
+                      <select
+                        id="condition-value-{condition.id}"
+                        bind:value={condition.value}
+                        required
+                      >
+                        <option value={0}>Not Occupied</option>
+                        <option value={1}>Occupied</option>
+                      </select>
+                    {:else}
+                      <!-- Regular numeric input for temperature, humidity, battery, link_quality -->
+                      <input
+                        id="condition-value-{condition.id}"
+                        type="number"
+                        step={condition.field === 'temperature' ||
+                        condition.field === 'humidity'
+                          ? '0.1'
+                          : '1'}
+                        bind:value={condition.value}
+                        required
+                      />
+                    {/if}
                   </div>
                 </div>
 

@@ -4,8 +4,8 @@ use crate::http::responses::*;
 use crate::logs::{self, LogFile};
 use crate::models::{
     AutomationAction, AutomationCondition, AutomationRule, CreateAutomationRuleRequest,
-    NetworkEdge, NetworkTopology, SwitchCommand, SwitchCommandMessage, TimeWindowRequest,
-    UpdateAutomationRuleRequest,
+    DeviceCapability, NetworkEdge, NetworkTopology, SensorType, SwitchCommand,
+    SwitchCommandMessage, TimeWindowRequest, UpdateAutomationRuleRequest,
 };
 use crate::mqtt::MqttClient;
 use crate::mqtt::topic::ZigbeeTopic;
@@ -912,6 +912,61 @@ pub fn serve_automation_rule(db: &Database, rule_id: &str) -> Response<Full<Byte
     }
 }
 
+/// Validate that automation conditions use fields compatible with their device types
+fn validate_condition_fields(
+    db: &Database,
+    conditions: &[AutomationCondition],
+) -> Result<(), String> {
+    for condition in conditions {
+        // Get device from database
+        let device = db
+            .get_device(&condition.device_id)
+            .map_err(|e| format!("Database error: {}", e))?
+            .ok_or_else(|| format!("Device '{}' not found", condition.device_id))?;
+
+        // Extract capability subtype
+        let subtype = match &device.capability {
+            DeviceCapability::Sensor { sensor_type } => match sensor_type {
+                SensorType::TempHumidity => "temp_humidity",
+                SensorType::Presence => "presence",
+            },
+            _ => return Err(format!("Device '{}' is not a sensor", condition.device_id)),
+        };
+
+        // Convert SensorField to string for comparison
+        let field_str = match condition.field {
+            crate::models::SensorField::Temperature => "temperature",
+            crate::models::SensorField::Humidity => "humidity",
+            crate::models::SensorField::Battery => "battery",
+            crate::models::SensorField::LinkQuality => "link_quality",
+            crate::models::SensorField::Presence => "presence",
+            crate::models::SensorField::Illumination => "illumination",
+        };
+
+        // Validate field compatibility
+        let valid = match (subtype, field_str) {
+            ("temp_humidity", "temperature" | "humidity" | "battery" | "link_quality") => true,
+            ("presence", "presence" | "illumination" | "battery" | "link_quality") => true,
+            _ => false,
+        };
+
+        if !valid {
+            let valid_fields = match subtype {
+                "temp_humidity" => "temperature, humidity, battery, link_quality",
+                "presence" => "presence, illumination, battery, link_quality",
+                _ => "unknown",
+            };
+
+            return Err(format!(
+                "Field '{}' is not valid for {} sensor. Valid fields: {}",
+                field_str, subtype, valid_fields
+            ));
+        }
+    }
+
+    Ok(())
+}
+
 pub async fn create_automation_rule(
     req: Request<hyper::body::Incoming>,
     db: &Database,
@@ -953,6 +1008,12 @@ pub async fn create_automation_rule(
         .into_iter()
         .map(|c| AutomationCondition::new(c.device_id, c.field, c.operator, c.value))
         .collect();
+
+    // Validate that condition fields are compatible with device types
+    if let Err(err) = validate_condition_fields(db, &conditions) {
+        warn!(error = %err, "Automation rule validation failed");
+        return bad_request_response(&err);
+    }
 
     let actions: Vec<AutomationAction> = request
         .actions
@@ -1054,10 +1115,18 @@ pub async fn update_automation_rule(
         if conditions.is_empty() {
             return bad_request_response("At least one condition is required");
         }
-        rule.conditions = conditions
+        let new_conditions: Vec<AutomationCondition> = conditions
             .into_iter()
             .map(|c| AutomationCondition::new(c.device_id, c.field, c.operator, c.value))
             .collect();
+
+        // Validate that condition fields are compatible with device types
+        if let Err(err) = validate_condition_fields(db, &new_conditions) {
+            warn!(error = %err, "Automation rule update validation failed");
+            return bad_request_response(&err);
+        }
+
+        rule.conditions = new_conditions;
     }
 
     if let Some(actions) = update.actions {

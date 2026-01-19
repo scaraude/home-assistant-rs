@@ -29,6 +29,8 @@ export interface LegacySensorReading {
 export interface DeviceInfo {
   device_id: string;
   name: string;
+  capability_type: 'sensor' | 'commander';
+  capability_subtype: 'temp_humidity' | 'presence' | 'switch';
 }
 
 export interface SensorData {
@@ -431,7 +433,7 @@ export async function fetchDeviceStates(): Promise<DeviceState[]> {
 export interface AutomationCondition {
   id: string;
   device_id: string;
-  field: 'temperature' | 'humidity' | 'battery' | 'link_quality' | 'presence';
+  field: 'temperature' | 'humidity' | 'battery' | 'link_quality' | 'presence' | 'illumination';
   operator: 'equal' | 'not_equal' | 'greater_than' | 'greater_than_or_equal' | 'less_than' | 'less_than_or_equal';
   value: number;
 }

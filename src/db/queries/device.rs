@@ -96,6 +96,41 @@ impl Database {
         }
     }
 
+    /// Get a device by its ID
+    pub fn get_device(&self, device_id: &str) -> Result<Option<Device>> {
+        debug!(device_id = %device_id, "Querying device by ID");
+        let start = std::time::Instant::now();
+
+        let conn = self.conn.lock_or_recover();
+        let mut stmt = conn.prepare(
+            "SELECT id, mqtt_topic, ieee_addr, name, capability_type, capability_subtype, power_source, added_at, is_bridge, parent_device_id
+             FROM devices
+             WHERE id = ?1",
+        )?;
+
+        let result = stmt.query_row(params![device_id], Self::map_device_row);
+
+        let elapsed = start.elapsed();
+        match result {
+            Ok(device) => {
+                debug!(
+                    device_id = %device_id,
+                    duration_us = elapsed.as_micros(),
+                    "Found device"
+                );
+                Ok(Some(device))
+            }
+            Err(rusqlite::Error::QueryReturnedNoRows) => {
+                debug!(device_id = %device_id, "Device not found");
+                Ok(None)
+            }
+            Err(e) => {
+                error!(error = %e, device_id = %device_id, "Failed to query device");
+                Err(e)
+            }
+        }
+    }
+
     /// Get a device by its MQTT topic
     pub fn get_device_by_mqtt_topic(&self, mqtt_topic: &str) -> Result<Option<Device>> {
         debug!(mqtt_topic = %mqtt_topic, "Querying device by MQTT topic");

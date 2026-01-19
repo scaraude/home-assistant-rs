@@ -321,6 +321,22 @@ impl AutomationService {
                         None
                     }
                 }),
+            SensorField::Illumination => self
+                .db
+                .get_latest_reading_for_sensor(&condition.device_id)
+                .ok()
+                .flatten()
+                .and_then(|reading| {
+                    if let SensorReading::Presence { illumination, .. } = reading {
+                        illumination.as_ref().map(|ill| match ill.as_str() {
+                            "bright" => 1.0,
+                            "dim" => 0.0,
+                            _ => 0.0, // default to dim for unknown values
+                        })
+                    } else {
+                        None
+                    }
+                }),
             SensorField::Battery => self
                 .device_state
                 .get_battery(&condition.device_id)

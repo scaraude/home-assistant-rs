@@ -103,20 +103,24 @@ impl Database {
         }
     }
 
-    /// Get all sensors with their device info (ID + name)
+    /// Get all sensors with their device info (ID + name + capability)
     pub fn get_all_sensors(&self) -> Result<Vec<DeviceInfo>> {
         debug!("Querying all distinct sensors with device info");
         let start = std::time::Instant::now();
 
         let conn = self.conn.lock_or_recover();
         let mut stmt = conn.prepare(
-            "SELECT DISTINCT sensors.device_id, COALESCE(d.name, sensors.device_id) as name
+            "SELECT DISTINCT
+                 sensors.device_id,
+                 COALESCE(d.name, sensors.device_id) as name,
+                 d.capability_type,
+                 d.capability_subtype
              FROM (
                  SELECT DISTINCT device_id FROM temperature_readings
                  UNION
                  SELECT DISTINCT device_id FROM presence_readings
              ) sensors
-             LEFT JOIN devices d ON sensors.device_id = d.id
+             INNER JOIN devices d ON sensors.device_id = d.id
              ORDER BY name",
         )?;
 
@@ -125,6 +129,8 @@ impl Database {
                 Ok(DeviceInfo {
                     device_id: row.get(0)?,
                     name: row.get(1)?,
+                    capability_type: row.get(2)?,
+                    capability_subtype: row.get(3)?,
                 })
             })?
             .collect::<Result<Vec<_>>>()?;
@@ -133,7 +139,7 @@ impl Database {
         info!(
             sensor_count = sensors.len(),
             duration_ms = elapsed.as_millis(),
-            "Retrieved all sensors with device info"
+            "Retrieved all sensors with device info and capabilities"
         );
         debug!(sensors = ?sensors, "Sensor device info");
 
