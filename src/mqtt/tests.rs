@@ -79,7 +79,7 @@ mod tests {
         let json = r#"{
             "state": "ON",
             "battery": 75,
-            "voltage": 3000,
+            "custom_field": 3000,
             "linkquality": 200
         }"#;
 
@@ -88,8 +88,8 @@ mod tests {
         assert_eq!(msg.linkquality, Some(200));
         // battery is a known field, so it goes into the battery field, not other
         assert_eq!(msg.battery, Some(75));
-        // voltage is unknown, so it goes into other
-        assert!(msg.other.contains_key("voltage"));
+        // custom_field is unknown, so it goes into other
+        assert!(msg.other.contains_key("custom_field"));
     }
 
     #[test]

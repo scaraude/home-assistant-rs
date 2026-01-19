@@ -23,6 +23,9 @@ impl Database {
         // Create presence_readings table
         self.create_presence_readings_table(&conn)?;
 
+        // Create energy_readings table
+        self.create_energy_readings_table(&conn)?;
+
         // Create automation tables
         self.create_automation_tables(&conn)?;
 
@@ -215,6 +218,49 @@ impl Database {
             );
         } else {
             debug!("All sensors already have capability metadata");
+        }
+
+        Ok(())
+    }
+
+    /// Create energy_readings table and indexes
+    fn create_energy_readings_table(&self, conn: &rusqlite::Connection) -> Result<()> {
+        debug!("Creating energy_readings table if not exists");
+        match conn.execute(
+            "CREATE TABLE IF NOT EXISTS energy_readings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                device_id TEXT NOT NULL,
+                power REAL NOT NULL,
+                energy REAL NOT NULL,
+                produced_energy REAL NOT NULL,
+                voltage REAL NOT NULL,
+                current REAL NOT NULL,
+                ac_frequency REAL NOT NULL,
+                power_factor REAL NOT NULL,
+                timestamp INTEGER NOT NULL,
+                FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE
+            )",
+            [],
+        ) {
+            Ok(_) => debug!("Energy readings table created/verified"),
+            Err(e) => {
+                error!(error = %e, "Failed to create energy_readings table");
+                return Err(e);
+            }
+        }
+
+        // Index for efficient queries by device and time
+        debug!("Creating index idx_energy_time if not exists");
+        match conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_energy_time
+             ON energy_readings(device_id, timestamp DESC)",
+            [],
+        ) {
+            Ok(_) => debug!("Index idx_energy_time created/verified"),
+            Err(e) => {
+                error!(error = %e, "Failed to create index idx_energy_time");
+                return Err(e);
+            }
         }
 
         Ok(())

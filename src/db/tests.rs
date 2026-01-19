@@ -226,6 +226,257 @@ mod tests {
         }
     }
 
+    // ==================== Energy Reading Tests ====================
+
+    #[test]
+    fn test_insert_energy_reading() {
+        let (db, _temp_dir) = create_test_db();
+
+        // Create device first
+        let device = Device {
+            id: "energy_meter1".to_string(),
+            mqtt_topic: "zigbee2mqtt/energy_meter1".to_string(),
+            ieee_addr: "zigbee2mqtt/energy_meter1".to_string(),
+            name: "Test Energy Meter".to_string(),
+            capability: DeviceCapability::Sensor {
+                sensor_type: SensorType::EnergyMeter,
+            },
+            power_source: PowerSource::Plugged,
+            added_at: Utc::now(),
+            is_bridge: false,
+            parent_device_id: None,
+        };
+        db.insert_device(&device).unwrap();
+
+        let timestamp = Utc::now();
+        let reading = SensorReading::EnergyMeter {
+            device_id: "energy_meter1".to_string(),
+            power: 1500.0,
+            energy: 10.5,
+            produced_energy: 0.0,
+            voltage: 230.0,
+            current: 6.5,
+            ac_frequency: 50.0,
+            power_factor: 0.98,
+            timestamp,
+        };
+
+        // Insert reading
+        db.insert_reading(&reading).unwrap();
+
+        // Retrieve readings
+        let readings = db.get_readings_since(timestamp.timestamp() - 1).unwrap();
+        assert_eq!(readings.len(), 1);
+
+        // Pattern match to verify the reading
+        match &readings[0] {
+            SensorReading::EnergyMeter {
+                device_id,
+                power,
+                energy,
+                voltage,
+                current,
+                ..
+            } => {
+                assert_eq!(device_id, "energy_meter1");
+                assert_eq!(*power, 1500.0);
+                assert_eq!(*energy, 10.5);
+                assert_eq!(*voltage, 230.0);
+                assert_eq!(*current, 6.5);
+            }
+            _ => panic!("Expected EnergyMeter reading"),
+        }
+    }
+
+    #[test]
+    fn test_get_energy_readings_for_sensor() {
+        let (db, _temp_dir) = create_test_db();
+
+        // Create devices first
+        let device1 = Device {
+            id: "energy_meter1".to_string(),
+            mqtt_topic: "zigbee2mqtt/energy_meter1".to_string(),
+            ieee_addr: "zigbee2mqtt/energy_meter1".to_string(),
+            name: "Test Energy Meter 1".to_string(),
+            capability: DeviceCapability::Sensor {
+                sensor_type: SensorType::EnergyMeter,
+            },
+            power_source: PowerSource::Plugged,
+            added_at: Utc::now(),
+            is_bridge: false,
+            parent_device_id: None,
+        };
+        db.insert_device(&device1).unwrap();
+
+        let device2 = Device {
+            id: "energy_meter2".to_string(),
+            mqtt_topic: "zigbee2mqtt/energy_meter2".to_string(),
+            ieee_addr: "zigbee2mqtt/energy_meter2".to_string(),
+            name: "Test Energy Meter 2".to_string(),
+            capability: DeviceCapability::Sensor {
+                sensor_type: SensorType::EnergyMeter,
+            },
+            power_source: PowerSource::Plugged,
+            added_at: Utc::now(),
+            is_bridge: false,
+            parent_device_id: None,
+        };
+        db.insert_device(&device2).unwrap();
+
+        let timestamp = Utc::now();
+        let reading1 = SensorReading::EnergyMeter {
+            device_id: "energy_meter1".to_string(),
+            power: 2000.0,
+            energy: 15.0,
+            produced_energy: 0.0,
+            voltage: 235.0,
+            current: 8.5,
+            ac_frequency: 50.0,
+            power_factor: 0.99,
+            timestamp,
+        };
+
+        let reading2 = SensorReading::EnergyMeter {
+            device_id: "energy_meter2".to_string(),
+            power: 500.0,
+            energy: 5.0,
+            produced_energy: 0.0,
+            voltage: 230.0,
+            current: 2.2,
+            ac_frequency: 50.0,
+            power_factor: 0.95,
+            timestamp,
+        };
+
+        db.insert_reading(&reading1).unwrap();
+        db.insert_reading(&reading2).unwrap();
+
+        // Get readings for energy_meter1 only
+        let readings = db
+            .get_readings_for_sensor_since("energy_meter1", timestamp.timestamp() - 1)
+            .unwrap();
+        assert_eq!(readings.len(), 1);
+
+        match &readings[0] {
+            SensorReading::EnergyMeter {
+                device_id, power, ..
+            } => {
+                assert_eq!(device_id, "energy_meter1");
+                assert_eq!(*power, 2000.0);
+            }
+            _ => panic!("Expected EnergyMeter reading"),
+        }
+    }
+
+    #[test]
+    fn test_get_latest_energy_reading() {
+        let (db, _temp_dir) = create_test_db();
+
+        // Create device first
+        let device = Device {
+            id: "energy_meter1".to_string(),
+            mqtt_topic: "zigbee2mqtt/energy_meter1".to_string(),
+            ieee_addr: "zigbee2mqtt/energy_meter1".to_string(),
+            name: "Test Energy Meter".to_string(),
+            capability: DeviceCapability::Sensor {
+                sensor_type: SensorType::EnergyMeter,
+            },
+            power_source: PowerSource::Plugged,
+            added_at: Utc::now(),
+            is_bridge: false,
+            parent_device_id: None,
+        };
+        db.insert_device(&device).unwrap();
+
+        let now = Utc::now();
+        let old_reading = SensorReading::EnergyMeter {
+            device_id: "energy_meter1".to_string(),
+            power: 1000.0,
+            energy: 10.0,
+            produced_energy: 0.0,
+            voltage: 230.0,
+            current: 4.3,
+            ac_frequency: 50.0,
+            power_factor: 0.97,
+            timestamp: now - chrono::Duration::seconds(60),
+        };
+
+        let new_reading = SensorReading::EnergyMeter {
+            device_id: "energy_meter1".to_string(),
+            power: 1500.0,
+            energy: 10.5,
+            produced_energy: 0.0,
+            voltage: 232.0,
+            current: 6.5,
+            ac_frequency: 50.0,
+            power_factor: 0.98,
+            timestamp: now,
+        };
+
+        db.insert_reading(&old_reading).unwrap();
+        db.insert_reading(&new_reading).unwrap();
+
+        // Get latest reading
+        let latest = db.get_latest_reading_for_sensor("energy_meter1").unwrap();
+        assert!(latest.is_some());
+
+        match latest.unwrap() {
+            SensorReading::EnergyMeter { power, .. } => {
+                assert_eq!(power, 1500.0); // Should be the newer reading
+            }
+            _ => panic!("Expected EnergyMeter reading"),
+        }
+    }
+
+    #[test]
+    fn test_energy_readings_foreign_key_cascade() {
+        let (db, _temp_dir) = create_test_db();
+
+        // Create device first
+        let device = Device {
+            id: "energy_meter1".to_string(),
+            mqtt_topic: "zigbee2mqtt/energy_meter1".to_string(),
+            ieee_addr: "zigbee2mqtt/energy_meter1".to_string(),
+            name: "Test Energy Meter".to_string(),
+            capability: DeviceCapability::Sensor {
+                sensor_type: SensorType::EnergyMeter,
+            },
+            power_source: PowerSource::Plugged,
+            added_at: Utc::now(),
+            is_bridge: false,
+            parent_device_id: None,
+        };
+
+        db.insert_device(&device).unwrap();
+
+        // Insert reading
+        let timestamp = Utc::now();
+        let reading = SensorReading::EnergyMeter {
+            device_id: "energy_meter1".to_string(),
+            power: 1500.0,
+            energy: 10.5,
+            produced_energy: 0.0,
+            voltage: 230.0,
+            current: 6.5,
+            ac_frequency: 50.0,
+            power_factor: 0.98,
+            timestamp,
+        };
+
+        db.insert_reading(&reading).unwrap();
+
+        // Verify reading exists
+        let readings = db.get_readings_since(timestamp.timestamp() - 1).unwrap();
+        assert_eq!(readings.len(), 1);
+
+        // Delete device
+        db._delete_device("energy_meter1").unwrap();
+
+        // Verify reading was cascade deleted
+        let readings = db.get_readings_since(timestamp.timestamp() - 1).unwrap();
+        assert_eq!(readings.len(), 0);
+    }
+
     // ==================== Device Tests ====================
 
     #[test]

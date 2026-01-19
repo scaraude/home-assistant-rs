@@ -100,13 +100,64 @@ impl Database {
                     }
                 }
             }
-            SensorReading::EnergyMeter { device_id, .. } => {
-                // TODO: Implement energy_readings table insertion in Phase 2
-                info!(
+            SensorReading::EnergyMeter {
+                device_id,
+                power,
+                energy,
+                produced_energy,
+                voltage,
+                current,
+                ac_frequency,
+                power_factor,
+                timestamp,
+            } => {
+                debug!(
                     device_id = %device_id,
-                    "Energy reading received (table not yet implemented)"
+                    power = %power,
+                    energy = %energy,
+                    timestamp = %timestamp,
+                    "Inserting energy reading"
                 );
-                Ok(())
+
+                let start = std::time::Instant::now();
+                let result = self.conn.lock_or_recover().execute(
+                    "INSERT INTO energy_readings
+                     (device_id, power, energy, produced_energy, voltage,
+                      current, ac_frequency, power_factor, timestamp)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                    params![
+                        device_id,
+                        power,
+                        energy,
+                        produced_energy,
+                        voltage,
+                        current,
+                        ac_frequency,
+                        power_factor,
+                        timestamp.timestamp()
+                    ],
+                );
+
+                match result {
+                    Ok(rows) => {
+                        let elapsed = start.elapsed();
+                        debug!(
+                            device_id = %device_id,
+                            rows_affected = rows,
+                            duration_us = elapsed.as_micros(),
+                            "Successfully inserted energy reading"
+                        );
+                        Ok(())
+                    }
+                    Err(e) => {
+                        tracing::error!(
+                            error = %e,
+                            device_id = %device_id,
+                            "Database insert failed for energy reading"
+                        );
+                        Err(e)
+                    }
+                }
             }
         }
     }
@@ -127,6 +178,8 @@ impl Database {
                  SELECT DISTINCT device_id FROM temperature_readings
                  UNION
                  SELECT DISTINCT device_id FROM presence_readings
+                 UNION
+                 SELECT DISTINCT device_id FROM energy_readings
              ) sensors
              INNER JOIN devices d ON sensors.device_id = d.id
              ORDER BY name",
@@ -189,6 +242,21 @@ impl Database {
             .collect::<Result<Vec<_>>>()?;
 
         readings.append(&mut presence_readings);
+
+        // Get energy readings
+        let mut stmt = conn.prepare(
+            "SELECT device_id, power, energy, produced_energy, voltage,
+                    current, ac_frequency, power_factor, timestamp
+             FROM energy_readings
+             WHERE timestamp > ?1
+             ORDER BY device_id, timestamp DESC",
+        )?;
+
+        let mut energy_readings = stmt
+            .query_map(params![since_timestamp], Self::map_energy_reading_row)?
+            .collect::<Result<Vec<_>>>()?;
+
+        readings.append(&mut energy_readings);
 
         let elapsed = start.elapsed();
         info!(
@@ -255,6 +323,24 @@ impl Database {
 
         readings.append(&mut presence_readings);
 
+        // Try energy readings
+        let mut stmt = conn.prepare(
+            "SELECT device_id, power, energy, produced_energy, voltage,
+                    current, ac_frequency, power_factor, timestamp
+             FROM energy_readings
+             WHERE device_id = ?1 AND timestamp > ?2
+             ORDER BY timestamp DESC",
+        )?;
+
+        let mut energy_readings = stmt
+            .query_map(
+                params![device_id, since_timestamp],
+                Self::map_energy_reading_row,
+            )?
+            .collect::<Result<Vec<_>>>()?;
+
+        readings.append(&mut energy_readings);
+
         let elapsed = start.elapsed();
         info!(
             device_id = %device_id,
@@ -309,7 +395,25 @@ impl Database {
             .query_map(params![device_id], Self::map_presence_reading_row)?
             .collect::<Result<Vec<_>>>()?;
 
-        Ok(presence_readings.pop())
+        if let Some(reading) = presence_readings.pop() {
+            return Ok(Some(reading));
+        }
+
+        // Try energy readings
+        let mut stmt = conn.prepare(
+            "SELECT device_id, power, energy, produced_energy, voltage,
+                    current, ac_frequency, power_factor, timestamp
+             FROM energy_readings
+             WHERE device_id = ?1
+             ORDER BY timestamp DESC
+             LIMIT 1",
+        )?;
+
+        let mut energy_readings = stmt
+            .query_map(params![device_id], Self::map_energy_reading_row)?
+            .collect::<Result<Vec<_>>>()?;
+
+        Ok(energy_readings.pop())
     }
 
     /// Helper to map a database row to a SensorReading enum
@@ -331,6 +435,21 @@ impl Database {
             occupied: row.get::<_, i32>(1)? != 0,
             illumination: row.get(2)?,
             timestamp: timestamp_to_datetime(row.get(3)?, "presence_reading.timestamp"),
+        })
+    }
+
+    /// Helper to map a database row to an Energy SensorReading
+    fn map_energy_reading_row(row: &rusqlite::Row) -> Result<SensorReading> {
+        Ok(SensorReading::EnergyMeter {
+            device_id: row.get(0)?,
+            power: row.get(1)?,
+            energy: row.get(2)?,
+            produced_energy: row.get(3)?,
+            voltage: row.get(4)?,
+            current: row.get(5)?,
+            ac_frequency: row.get(6)?,
+            power_factor: row.get(7)?,
+            timestamp: timestamp_to_datetime(row.get(8)?, "energy_reading.timestamp"),
         })
     }
 }

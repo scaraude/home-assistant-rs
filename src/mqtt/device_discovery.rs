@@ -37,6 +37,10 @@ pub async fn get_or_create_device_unified(
                 DeviceCapability::Sensor {
                     sensor_type: SensorType::Presence,
                 }
+            } else if msg.has_sensor_data(&SensorType::EnergyMeter) {
+                DeviceCapability::Sensor {
+                    sensor_type: SensorType::EnergyMeter,
+                }
             } else if msg.has_commander_data(&CommanderType::Switch) || msg.has_switch_config_hint()
             {
                 DeviceCapability::Commander {
