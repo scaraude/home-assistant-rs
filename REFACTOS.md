@@ -25,7 +25,7 @@
 - [ ] MED-2: Extract Magic Numbers to Constants
 - [ ] MED-3: Refactor Device Capability Model
 - [ ] MED-4: Refactor if-else Chain in Device Discovery
-- [ ] MED-5: Remove Unused Methods from State Stores
+- [x] MED-5: Remove Unused Methods from State Stores
 - [ ] MED-6: Improve Error Context in Database Operations
 - [ ] MED-7: Frontend - TypeScript Type Improvements
 - [ ] MED-8: Add Frontend Component Tests

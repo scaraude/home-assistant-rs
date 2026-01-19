@@ -46,26 +46,6 @@ impl DeviceStateStore {
             .and_then(|state| state.link_quality)
     }
 
-    /// Get all known device states
-    pub fn _get_all_states(&self) -> HashMap<String, DeviceState> {
-        self.states
-            .read()
-            .ok()
-            .map(|guard| guard.clone())
-            .unwrap_or_default()
-    }
-
-    /// Remove a device state from memory
-    pub fn _remove_state(&self, device_id: &str) -> Option<DeviceState> {
-        self.states.write().ok()?.remove(device_id)
-    }
-
-    /// Clear all device states
-    pub fn _clear(&self) {
-        if let Ok(mut states) = self.states.write() {
-            states.clear();
-        }
-    }
 }
 
 impl Default for DeviceStateStore {
