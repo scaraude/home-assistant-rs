@@ -3,6 +3,7 @@
   import { executeCommand, fetchAutomationRules } from "../api";
   import { formatDistanceToNow } from "date-fns";
   import StatusBadge from "../shared/StatusBadge.svelte";
+  import Card from "../design-system/Card.svelte";
   import EditableDeviceName from "./EditableDeviceName.svelte";
   import AutomationRulePanel from "../automation/AutomationRulePanel.svelte";
   import { icons } from "../icons";
@@ -94,7 +95,7 @@
   });
 </script>
 
-<div class="switch-card">
+<Card class="switch-card" size="lg">
   <div class="card-header">
     <div class="device-icon" class:on={device.state}>
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
@@ -191,20 +192,17 @@
       />
     </div>
   {/if}
-</div>
+</Card>
 
 <style>
-  .switch-card {
-    background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
-    padding: 1.25rem;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    transition: box-shadow 0.2s ease;
+  :global(.switch-card) {
+    border-width: 1px;
+    box-shadow: var(--shadow-xs);
+    transition: box-shadow var(--transition-base);
   }
 
-  .switch-card:hover {
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  :global(.switch-card:hover) {
+    box-shadow: var(--shadow-md);
   }
 
   .card-header {
@@ -243,13 +241,13 @@
 
   .device-id {
     font-size: 0.75rem;
-    color: #9ca3af;
-    font-family: monospace;
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
   }
 
   .last-update {
     font-size: 0.75rem;
-    color: #6b7280;
+    color: var(--color-text-muted);
     margin-top: 0.125rem;
   }
 
@@ -258,7 +256,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 0.75rem;
-    background: #f9fafb;
+    background: var(--color-surface-muted);
     border-radius: 6px;
     margin-bottom: 1rem;
   }
@@ -266,7 +264,7 @@
   .status-label {
     font-size: 0.875rem;
     font-weight: 500;
-    color: #6b7280;
+    color: var(--color-text-muted);
   }
 
   .status-indicator {
@@ -275,7 +273,7 @@
     gap: 0.5rem;
     font-size: 0.875rem;
     font-weight: 600;
-    color: #6b7280;
+    color: var(--color-text-muted);
   }
 
   .status-indicator.on {
@@ -286,7 +284,7 @@
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    background: #d1d5db;
+    background: var(--color-card-border-hover);
     transition: all 0.3s ease;
   }
 
@@ -307,14 +305,14 @@
     justify-content: center;
     gap: 0.5rem;
     padding: 0.75rem 1rem;
-    border: 2px solid #e5e7eb;
+    border: 2px solid var(--color-card-border);
     border-radius: 8px;
-    background: white;
-    color: #374151;
+    background: var(--color-card-bg);
+    color: var(--color-text-strong);
     font-weight: 600;
     font-size: 0.875rem;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all var(--transition-base);
   }
 
   .toggle-btn svg {
@@ -323,8 +321,8 @@
   }
 
   .toggle-btn:hover:not(:disabled) {
-    background: #f9fafb;
-    border-color: #d1d5db;
+    background: var(--color-surface-muted);
+    border-color: var(--color-card-border-hover);
     transform: translateY(-2px);
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   }
@@ -374,10 +372,10 @@
     gap: 0.5rem;
     margin-top: 0.75rem;
     padding: 0.75rem;
-    background: rgba(239, 68, 68, 0.1);
-    border: 1px solid rgba(239, 68, 68, 0.3);
+    background: var(--color-badge-danger-bg);
+    border: 1px solid var(--color-badge-danger-border);
     border-radius: 6px;
-    color: #dc2626;
+    color: var(--color-badge-danger-text);
     font-size: 0.875rem;
   }
 
@@ -393,20 +391,20 @@
     align-items: center;
     justify-content: space-between;
     padding: 0.75rem 1rem;
-    background: #f9fafb;
-    border: 1px solid #e5e7eb;
+    background: var(--color-surface-muted);
+    border: 1px solid var(--color-card-border);
     border-radius: 8px;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all var(--transition-base);
     margin-top: 0.75rem;
     font-size: 0.875rem;
     font-weight: 500;
-    color: #374151;
+    color: var(--color-text-strong);
   }
 
   .automation-toggle-btn:hover {
-    background: #f3f4f6;
-    border-color: #d1d5db;
+    background: var(--color-surface-soft);
+    border-color: var(--color-card-border-hover);
   }
 
   .automation-toggle-content {
@@ -418,13 +416,13 @@
   .automation-icon {
     width: 20px;
     height: 20px;
-    color: #6b7280;
+    color: var(--color-text-muted);
   }
 
   .chevron {
     width: 20px;
     height: 20px;
-    color: #9ca3af;
+    color: var(--color-text-subtle);
     transition: transform 0.2s ease;
   }
 
@@ -433,7 +431,7 @@
   }
 
   .automation-section {
-    border-top: 1px solid #e5e7eb;
+    border-top: 1px solid var(--color-card-border);
     margin-top: 0.75rem;
   }
 </style>

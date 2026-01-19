@@ -1,5 +1,6 @@
 <script lang="ts">
   import ColorPickerModal from "../shared/ColorPickerModal.svelte";
+  import Card from "../design-system/Card.svelte";
   import EditableDeviceName from "./EditableDeviceName.svelte";
   import StatusBadge from "../shared/StatusBadge.svelte";
   import { graphConfig } from "../stores/graphConfig";
@@ -58,11 +59,11 @@
   }
 </script>
 
-<div
-  class="sensor-card"
-  class:active={sensor.visible}
+<Card
+  active={sensor.visible}
+  interactive
   onclick={handleCardClick}
-  onkeydown={(e) => e.key === "Enter" && handleCardClick()}
+  onkeydown={(e: KeyboardEvent) => e.key === "Enter" && handleCardClick()}
   role="button"
   tabindex="0"
   aria-pressed={sensor.visible}
@@ -122,7 +123,7 @@
       <div class="no-reading">No data</div>
     {/if}
   </div>
-</div>
+</Card>
 
 {#if showColorPicker}
   <ColorPickerModal
@@ -133,28 +134,6 @@
 {/if}
 
 <style>
-  .sensor-card {
-    position: relative;
-    background: white;
-    border: 2px solid #e5e7eb;
-    border-radius: 8px;
-    padding: 0.875rem;
-    cursor: pointer;
-    transition: all 0.15s;
-    user-select: none;
-  }
-
-  .sensor-card:hover {
-    border-color: #d1d5db;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  }
-
-  .sensor-card.active {
-    border-color: #3b82f6;
-    background: #eff6ff;
-    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
-  }
-
   .corner-badges {
     position: absolute;
     top: 0.375rem;
@@ -212,7 +191,7 @@
   .sensor-name {
     font-size: 0.9375rem;
     font-weight: 600;
-    color: #111827;
+    color: var(--color-text);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -220,7 +199,7 @@
 
   .time-ago {
     font-size: 0.625rem;
-    color: #9ca3af;
+    color: var(--color-text-subtle);
   }
 
   .sensor-readings {
@@ -230,7 +209,7 @@
 
   .reading {
     flex: 1;
-    background: #f9fafb;
+    background: var(--color-surface-muted);
     padding: 0.5rem 0.625rem;
     border-radius: 6px;
     display: flex;
@@ -240,7 +219,7 @@
 
   .reading-label {
     font-size: 0.6875rem;
-    color: #6b7280;
+    color: var(--color-text-muted);
     font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.025em;
@@ -249,13 +228,13 @@
   .reading-value {
     font-size: 1rem;
     font-weight: 600;
-    color: #111827;
+    color: var(--color-text);
   }
 
   .no-reading {
     flex: 1;
     text-align: center;
-    color: #9ca3af;
+    color: var(--color-text-subtle);
     font-size: 0.875rem;
     padding: 0.5rem;
   }

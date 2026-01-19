@@ -1,5 +1,6 @@
 <script lang="ts">
   import ColorPickerModal from "../shared/ColorPickerModal.svelte";
+  import Card from "../design-system/Card.svelte";
   import EditableDeviceName from "./EditableDeviceName.svelte";
   import StatusBadge from "../shared/StatusBadge.svelte";
   import { graphConfig } from "../stores/graphConfig";
@@ -58,11 +59,11 @@
   }
 </script>
 
-<div
-  class="presence-card"
-  class:active={sensor.visible}
+<Card
+  active={sensor.visible}
+  interactive
   onclick={handleCardClick}
-  onkeydown={(e) => e.key === "Enter" && handleCardClick()}
+  onkeydown={(e: KeyboardEvent) => e.key === "Enter" && handleCardClick()}
   role="button"
   tabindex="0"
   aria-pressed={sensor.visible}
@@ -139,7 +140,7 @@
       <div class="no-reading">No data</div>
     {/if}
   </div>
-</div>
+</Card>
 
 {#if showColorPicker}
   <ColorPickerModal
@@ -150,28 +151,6 @@
 {/if}
 
 <style>
-  .presence-card {
-    position: relative;
-    background: white;
-    border: 2px solid #e5e7eb;
-    border-radius: 8px;
-    padding: 0.875rem;
-    cursor: pointer;
-    transition: all 0.15s;
-    user-select: none;
-  }
-
-  .presence-card:hover {
-    border-color: #d1d5db;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  }
-
-  .presence-card.active {
-    border-color: #3b82f6;
-    background: #eff6ff;
-    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
-  }
-
   .corner-badges {
     position: absolute;
     top: 0.375rem;
@@ -229,7 +208,7 @@
   .sensor-name {
     font-size: 0.9375rem;
     font-weight: 600;
-    color: #111827;
+    color: var(--color-text);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -237,7 +216,7 @@
 
   .time-ago {
     font-size: 0.625rem;
-    color: #9ca3af;
+    color: var(--color-text-subtle);
   }
 
   .presence-indicator {
@@ -276,7 +255,7 @@
     width: 40px;
     height: 40px;
     border-radius: 50%;
-    background: #d1d5db;
+    background: var(--color-card-border-hover);
     box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
     transition: all 0.3s ease;
   }
@@ -310,7 +289,7 @@
   .presence-label {
     font-size: 0.875rem;
     font-weight: 600;
-    color: #6b7280;
+    color: var(--color-text-muted);
     text-transform: uppercase;
     letter-spacing: 0.05em;
   }
@@ -324,11 +303,11 @@
     align-items: center;
     gap: 0.25rem;
     padding: 0.25rem 0.5rem;
-    background: #f3f4f6;
+    background: var(--color-surface-soft);
     border-radius: 4px;
     font-size: 0.6875rem;
     font-weight: 500;
-    color: #6b7280;
+    color: var(--color-text-muted);
     text-transform: capitalize;
   }
 
@@ -343,7 +322,7 @@
 
   .no-reading {
     text-align: center;
-    color: #9ca3af;
+    color: var(--color-text-subtle);
     font-size: 0.875rem;
     padding: 0.5rem;
   }
