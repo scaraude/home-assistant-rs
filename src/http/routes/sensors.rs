@@ -2,8 +2,8 @@ use crate::db::Database;
 use crate::http::query::QueryParams;
 use crate::http::responses::*;
 use http_body_util::Full;
-use hyper::body::Bytes;
 use hyper::Response;
+use hyper::body::Bytes;
 use tracing::{debug, error, info};
 
 pub fn serve_sensors(db: &Database) -> Response<Full<Bytes>> {

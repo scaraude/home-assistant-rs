@@ -569,11 +569,7 @@ impl Database {
         Ok(false)
     }
 
-    fn rebuild_table_with_device_fk(
-        &self,
-        conn: &rusqlite::Connection,
-        table: &str,
-    ) -> Result<()> {
+    fn rebuild_table_with_device_fk(&self, conn: &rusqlite::Connection, table: &str) -> Result<()> {
         let (create_sql, insert_sql, index_sql) = match table {
             "device_state" => (
                 "CREATE TABLE device_state_rebuild (
@@ -656,9 +652,8 @@ impl Database {
         let drop_sql = format!("DROP TABLE {}", table);
         let rename_sql = format!("ALTER TABLE {} RENAME TO {}", rebuild_table, table);
 
-        conn.execute_batch(
-            &format!(
-                "PRAGMA foreign_keys=OFF;
+        conn.execute_batch(&format!(
+            "PRAGMA foreign_keys=OFF;
                  BEGIN;
                  {};
                  {};
@@ -667,9 +662,8 @@ impl Database {
                  {};
                  COMMIT;
                  PRAGMA foreign_keys=ON;",
-                create_sql, insert_sql, drop_sql, rename_sql, index_sql
-            ),
-        )?;
+            create_sql, insert_sql, drop_sql, rename_sql, index_sql
+        ))?;
 
         Ok(())
     }

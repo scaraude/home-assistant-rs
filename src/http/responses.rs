@@ -38,10 +38,7 @@ pub fn serialize_to_json<T: Serialize>(
 }
 
 /// Serialize payload to JSON and return a standard JSON response
-pub fn serialize_or_error<T: Serialize>(
-    data: &T,
-    error_context: &str,
-) -> Response<Full<Bytes>> {
+pub fn serialize_or_error<T: Serialize>(data: &T, error_context: &str) -> Response<Full<Bytes>> {
     match serialize_to_json(data, error_context) {
         Ok(json) => json_response(json),
         Err(response) => *response,

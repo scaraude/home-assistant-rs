@@ -45,7 +45,6 @@ impl DeviceStateStore {
         self.get_state(device_id)
             .and_then(|state| state.link_quality)
     }
-
 }
 
 impl Default for DeviceStateStore {

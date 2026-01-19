@@ -38,11 +38,8 @@ pub async fn get_or_create_device_unified(
 
                 if (merged_capabilities != device.capabilities
                     || merged_fields != device.available_fields)
-                    && let Err(e) = db.update_device_metadata(
-                        &device.id,
-                        &merged_capabilities,
-                        &merged_fields,
-                    )
+                    && let Err(e) =
+                        db.update_device_metadata(&device.id, &merged_capabilities, &merged_fields)
                 {
                     error!(
                         error = %e,

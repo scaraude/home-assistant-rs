@@ -1,8 +1,8 @@
 use crate::db::Database;
 use crate::http::responses::*;
 use crate::models::{SwitchCommand, SwitchCommandMessage};
-use crate::mqtt::topic::ZigbeeTopic;
 use crate::mqtt::MqttClient;
+use crate::mqtt::topic::ZigbeeTopic;
 use crate::state::{DeviceStateStore, SwitchStateStore};
 use http_body_util::{BodyExt, Full};
 use hyper::body::Bytes;

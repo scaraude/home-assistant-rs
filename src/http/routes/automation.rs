@@ -71,14 +71,11 @@ fn validate_condition_fields(
             if let DeviceCapability::Sensor { sensor_type } = capability {
                 match sensor_type {
                     SensorType::TempHumidity => {
-                        valid_fields.extend([
-                            "temperature",
-                            "humidity",
-                            "battery",
-                            "link_quality",
-                        ]);
-                        if matches!(field_str, "temperature" | "humidity" | "battery" | "link_quality")
-                        {
+                        valid_fields.extend(["temperature", "humidity", "battery", "link_quality"]);
+                        if matches!(
+                            field_str,
+                            "temperature" | "humidity" | "battery" | "link_quality"
+                        ) {
                             valid = true;
                         }
                     }
@@ -89,8 +86,10 @@ fn validate_condition_fields(
                             "battery",
                             "link_quality",
                         ]);
-                        if matches!(field_str, "presence" | "illumination" | "battery" | "link_quality")
-                        {
+                        if matches!(
+                            field_str,
+                            "presence" | "illumination" | "battery" | "link_quality"
+                        ) {
                             valid = true;
                         }
                     }

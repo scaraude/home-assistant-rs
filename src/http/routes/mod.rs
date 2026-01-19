@@ -6,8 +6,8 @@ mod system;
 
 use crate::http::responses::success_response;
 use http_body_util::Full;
-use hyper::body::Bytes;
 use hyper::Response;
+use hyper::body::Bytes;
 
 pub use automation::{
     create_automation_rule, delete_automation_rule, serve_automation_rule, serve_automation_rules,

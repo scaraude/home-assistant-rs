@@ -133,9 +133,7 @@ impl DbWriterService {
                         rule_name = %rule_name,
                         "Failed to insert automation execution log"
                     );
-                } else if success
-                    && let Err(e) = self.db.record_rule_trigger(&rule_id)
-                {
+                } else if success && let Err(e) = self.db.record_rule_trigger(&rule_id) {
                     error!(error = %e, rule_id = %rule_id, "Failed to record rule trigger");
                 }
             }

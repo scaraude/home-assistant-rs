@@ -142,7 +142,9 @@ impl Device {
 
     /// Check if the device supports turbo mode based on available fields
     pub fn supports_turbo_mode(&self) -> bool {
-        self.available_fields.iter().any(|field| field == "turbo_mode")
+        self.available_fields
+            .iter()
+            .any(|field| field == "turbo_mode")
     }
 
     /// Serialize capabilities for database storage
