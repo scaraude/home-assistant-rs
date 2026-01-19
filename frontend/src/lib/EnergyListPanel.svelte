@@ -18,10 +18,13 @@
   );
 
   function getLatestReading(deviceId: string): EnergySensorReading | null {
-    const readings = $dataCache.sensorReadings[deviceId];
-    if (!readings || readings.length === 0) return null;
+    const deviceReadings = $dataCache.sensors.readings
+      .filter(r => r.device_id === deviceId)
+      .sort((a, b) => b.timestamp - a.timestamp);
 
-    const latestReading = readings[0];
+    if (deviceReadings.length === 0) return null;
+
+    const latestReading = deviceReadings[0];
     return latestReading.type === "energy_meter" ? latestReading : null;
   }
 </script>

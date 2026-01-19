@@ -35,6 +35,11 @@
       : "Never"
   );
 
+  // Replace "less than a minute ago" with "now"
+  let displayTimeAgo = $derived(
+    timeAgo === "less than a minute ago" ? "now" : timeAgo
+  );
+
   async function toggleSwitch() {
     if (isToggling) return;
 
@@ -103,7 +108,7 @@
         class="last-update"
         title={device.last_seen ? new Date(device.last_seen * 1000).toLocaleString() : "Never"}
       >
-        {timeAgo}
+        {displayTimeAgo}
       </div>
     </div>
     <div class="badges">

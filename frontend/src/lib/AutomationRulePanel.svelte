@@ -125,6 +125,13 @@
     const daysLabel = formatActiveDays(rule.time_window.active_days);
     return `${start}–${end} · ${daysLabel}`;
   }
+
+  function formatTimeAgo(timestamp: string) {
+    const timeAgo = formatDistanceToNow(new Date(timestamp), {
+      addSuffix: true,
+    });
+    return timeAgo === "less than a minute ago" ? "now" : timeAgo;
+  }
 </script>
 
 {#if showEditor}
@@ -316,10 +323,7 @@
                     />
                   </svg>
                   <span>
-                    Last triggered {formatDistanceToNow(
-                      new Date(rule.last_triggered_at),
-                      { addSuffix: true }
-                    )}
+                    Last triggered {formatTimeAgo(rule.last_triggered_at)}
                   </span>
                   <span class="trigger-count">
                     {rule.trigger_count}

@@ -72,7 +72,7 @@
   }
 
   const borderColor = $derived(
-    isCoordinator ? "#f59e0b" : isBridge ? "#3b82f6" : "#6b7280"
+    isCoordinator ? "#f59e0b" : isBridge ? "#3b82f6" : "#6b7280",
   );
 
   async function toggleTurboMode() {

@@ -40,6 +40,11 @@
       : ""
   );
 
+  // Replace "less than a minute ago" with "now"
+  let displayTimeAgo = $derived(
+    timeAgo === "less than a minute ago" ? "now" : timeAgo
+  );
+
   function handleColorClick() {
     showColorPicker = true;
   }
@@ -95,8 +100,8 @@
       {:else}
         <div class="name-time">
           <span class="sensor-name">{deviceName}</span>
-          {#if timeAgo}
-            <span class="time-ago">{timeAgo}</span>
+          {#if displayTimeAgo}
+            <span class="time-ago">{displayTimeAgo}</span>
           {/if}
         </div>
       {/if}
