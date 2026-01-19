@@ -15,7 +15,7 @@
     BarElement,
   } from "chart.js";
   import "chartjs-adapter-date-fns";
-  import type { SensorReading } from "./api";
+  import type { SensorReading } from "../api";
 
   // Register Chart.js components
   Chart.register(

@@ -1,8 +1,8 @@
 <script lang="ts">
   import EnergyMeterCard from "./EnergyMeterCard.svelte";
-  import { dataCache } from "./stores/dataCache";
-  import { graphConfig } from "./stores/graphConfig";
-  import type { EnergySensorReading } from "./api";
+  import { dataCache } from "../stores/dataCache";
+  import { graphConfig } from "../stores/graphConfig";
+  import type { EnergySensorReading } from "../api";
 
   let editMode = $state(false);
 

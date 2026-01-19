@@ -12,7 +12,7 @@
     Legend,
   } from 'chart.js';
   import 'chartjs-adapter-date-fns';
-  import { fetchProcessHistory, type ProcessMonitorEntry } from './api';
+  import { fetchProcessHistory, type ProcessMonitorEntry } from "../api";
 
   Chart.register(
     LineController,

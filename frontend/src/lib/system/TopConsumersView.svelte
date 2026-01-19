@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { TopConsumerEntry } from './api';
-  import ProcessHistoryGraph from './ProcessHistoryGraph.svelte';
+  import type { TopConsumerEntry } from "../api";
+  import ProcessHistoryGraph from "./ProcessHistoryGraph.svelte";
 
   let {
     entries = [],

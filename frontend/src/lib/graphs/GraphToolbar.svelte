@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { graphConfig } from "./stores/graphConfig";
-  import type { GraphState } from "./stores/graphConfig";
+  import { graphConfig } from "../stores/graphConfig";
+  import type { GraphState } from "../stores/graphConfig";
 
   let {
     someHidden = false,

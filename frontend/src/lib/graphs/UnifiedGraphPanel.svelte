@@ -1,7 +1,7 @@
 <script lang="ts">
   import GraphToolbar from "./GraphToolbar.svelte";
   import UnifiedChart from "./UnifiedChart.svelte";
-  import { graphConfig } from "./stores/graphConfig";
+  import { graphConfig } from "../stores/graphConfig";
 
   let {
     metricType = "temperature"

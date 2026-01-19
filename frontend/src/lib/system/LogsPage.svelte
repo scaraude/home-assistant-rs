@@ -6,12 +6,12 @@
     type ProcessMonitorEntry,
     type TopConsumerEntry,
     type TimeRange,
-  } from "./api";
+  } from "../api";
   import SystemMetricsView from "./SystemMetricsView.svelte";
   import ProcessTableView from "./ProcessTableView.svelte";
   import TopConsumersView from "./TopConsumersView.svelte";
-  import { cache } from "./stores/cache";
-  import { eventStream, type LogEntriesEvent } from "./websocket";
+  import { cache } from "../stores/cache";
+  import { eventStream, type LogEntriesEvent } from "../websocket";
 
   type Tab = "system" | "processes" | "top-cpu" | "top-ram";
 

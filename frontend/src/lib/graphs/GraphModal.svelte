@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import TemperatureGraph from "./TemperatureGraph.svelte";
-  import type { SensorReading } from "./api";
+  import type { SensorReading } from "../api";
 
   let {
     isOpen = $bindable(false),

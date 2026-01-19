@@ -1,14 +1,14 @@
 <script lang="ts">
-  import type { SwitchDevice, AutomationRule } from "./api";
-  import { executeCommand, fetchAutomationRules } from "./api";
+  import type { SwitchDevice, AutomationRule } from "../api";
+  import { executeCommand, fetchAutomationRules } from "../api";
   import { formatDistanceToNow } from "date-fns";
-  import StatusBadge from "./StatusBadge.svelte";
+  import StatusBadge from "../shared/StatusBadge.svelte";
   import EditableDeviceName from "./EditableDeviceName.svelte";
-  import AutomationRulePanel from "./AutomationRulePanel.svelte";
-  import { icons } from "./icons";
+  import AutomationRulePanel from "../automation/AutomationRulePanel.svelte";
+  import { icons } from "../icons";
   import { slide } from "svelte/transition";
-  import { rulesByDevice } from "./stores/automations";
-  import { dataCache } from "./stores/dataCache";
+  import { rulesByDevice } from "../stores/automations";
+  import { dataCache } from "../stores/dataCache";
 
   let { device }: { device: SwitchDevice } = $props();
 

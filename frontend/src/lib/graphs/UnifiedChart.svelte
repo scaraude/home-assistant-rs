@@ -14,8 +14,8 @@
   } from "chart.js";
   import zoomPlugin from "chartjs-plugin-zoom";
   import "chartjs-adapter-date-fns";
-  import type { SensorUIConfig } from "./stores/graphConfig";
-  import { dataCache } from "./stores/dataCache";
+  import type { SensorUIConfig } from "../stores/graphConfig";
+  import { dataCache } from "../stores/dataCache";
 
   // Register Chart.js components
   Chart.register(

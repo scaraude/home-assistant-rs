@@ -1,12 +1,12 @@
 <script lang="ts">
-  import ColorPickerModal from "./ColorPickerModal.svelte";
+  import ColorPickerModal from "../shared/ColorPickerModal.svelte";
   import EditableDeviceName from "./EditableDeviceName.svelte";
-  import StatusBadge from "./StatusBadge.svelte";
-  import { graphConfig } from "./stores/graphConfig";
-  import { dataCache } from "./stores/dataCache";
+  import StatusBadge from "../shared/StatusBadge.svelte";
+  import { graphConfig } from "../stores/graphConfig";
+  import { dataCache } from "../stores/dataCache";
   import { formatDistanceToNow } from "date-fns";
-  import type { SensorUIConfig } from "./stores/graphConfig";
-  import type { SensorReading } from "./api";
+  import type { SensorUIConfig } from "../stores/graphConfig";
+  import type { SensorReading } from "../api";
 
   let {
     sensor,

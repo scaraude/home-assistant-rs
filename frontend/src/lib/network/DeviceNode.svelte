@@ -2,8 +2,8 @@
   import { Handle, Position } from "@xyflow/svelte";
   import type { Node, NodeProps } from "@xyflow/svelte";
   import { setDeviceOption } from "../api";
-  import EditableDeviceName from "../EditableDeviceName.svelte";
-  import StatusBadge from "../StatusBadge.svelte";
+  import EditableDeviceName from "../devices/EditableDeviceName.svelte";
+  import StatusBadge from "../shared/StatusBadge.svelte";
 
   type DeviceData = Record<string, unknown> & {
     device: {

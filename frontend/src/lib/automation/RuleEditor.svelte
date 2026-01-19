@@ -5,9 +5,9 @@
     SwitchDevice,
     CreateAutomationRuleRequest,
     UpdateAutomationRuleRequest,
-  } from "./api";
-  import { createAutomationRule, updateAutomationRule } from "./api";
-  import { automationStore } from "./stores/automations";
+  } from "../api";
+  import { createAutomationRule, updateAutomationRule } from "../api";
+  import { automationStore } from "../stores/automations";
   import { fade, scale } from "svelte/transition";
 
   let {

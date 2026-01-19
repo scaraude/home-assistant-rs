@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { RECOMMENDED_COLORS } from "./stores/graphConfig";
+  import { RECOMMENDED_COLORS } from "../stores/graphConfig";
 
   let {
     currentColor,

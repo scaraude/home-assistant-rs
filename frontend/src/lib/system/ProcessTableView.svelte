@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { ProcessMonitorEntry } from './api';
-  import ProcessHistoryGraph from './ProcessHistoryGraph.svelte';
+  import type { ProcessMonitorEntry } from "../api";
+  import ProcessHistoryGraph from "./ProcessHistoryGraph.svelte";
 
   let {
     entries = [],

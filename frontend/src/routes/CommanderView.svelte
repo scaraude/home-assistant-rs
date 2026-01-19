@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import SwitchCard from '../lib/SwitchCard.svelte';
-  import PageState from '../lib/PageState.svelte';
+  import SwitchCard from '../lib/devices/SwitchCard.svelte';
+  import PageState from '../lib/shared/PageState.svelte';
   import { fetchSwitches, fetchAutomationRules } from '../lib/api';
   import { automationStore } from '../lib/stores/automations';
   import { dataCache } from '../lib/stores/dataCache';

@@ -1,9 +1,9 @@
 <script lang="ts">
   import CompactSensorCard from "./CompactSensorCard.svelte";
   import PresenceCard from "./PresenceCard.svelte";
-  import { graphConfig } from "./stores/graphConfig";
-  import { dataCache } from "./stores/dataCache";
-  import type { SensorReading } from "./api";
+  import { graphConfig } from "../stores/graphConfig";
+  import { dataCache } from "../stores/dataCache";
+  import type { SensorReading } from "../api";
 
   const sensors = $derived($graphConfig.sensors);
   const readings = $derived($dataCache.sensors.readings);

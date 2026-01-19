@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { updateDeviceName } from "./api";
-  import { dataCache } from "./stores/dataCache";
+  import { updateDeviceName } from "../api";
+  import { dataCache } from "../stores/dataCache";
 
   let {
     deviceId,

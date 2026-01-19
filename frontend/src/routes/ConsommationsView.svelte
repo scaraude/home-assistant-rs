@@ -1,7 +1,7 @@
 <script lang="ts">
-  import UnifiedGraphPanel from "../lib/UnifiedGraphPanel.svelte";
-  import EnergyListPanel from "../lib/EnergyListPanel.svelte";
-  import PageState from "../lib/PageState.svelte";
+  import UnifiedGraphPanel from "../lib/graphs/UnifiedGraphPanel.svelte";
+  import EnergyListPanel from "../lib/devices/EnergyListPanel.svelte";
+  import PageState from "../lib/shared/PageState.svelte";
   import { fetchSensors, fetchReadings, fetchDeviceStates } from "../lib/api";
   import { dataCache } from "../lib/stores/dataCache";
   import { graphConfig, TIME_RANGE_HOURS } from "../lib/stores/graphConfig";

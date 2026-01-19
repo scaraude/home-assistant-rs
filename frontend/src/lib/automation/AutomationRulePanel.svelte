@@ -1,12 +1,12 @@
 <script lang="ts">
-  import type { SwitchDevice, AutomationRule, DeviceInfo } from "./api";
+  import type { SwitchDevice, AutomationRule, DeviceInfo } from "../api";
   import {
     deleteAutomationRule,
     updateAutomationRule,
     fetchSensors,
     fetchSwitches,
-  } from "./api";
-  import { automationStore } from "./stores/automations";
+  } from "../api";
+  import { automationStore } from "../stores/automations";
   import { formatDistanceToNow } from "date-fns";
   import { slide, fade } from "svelte/transition";
   import RuleEditor from "./RuleEditor.svelte";

@@ -13,7 +13,7 @@
   } from 'chart.js';
   import zoomPlugin from 'chartjs-plugin-zoom';
   import 'chartjs-adapter-date-fns';
-  import type { SystemMonitorEntry } from './api';
+  import type { SystemMonitorEntry } from "../api";
 
   Chart.register(
     LineController,
