@@ -21,7 +21,7 @@ pub fn json_response(json: String) -> Response<Full<Bytes>> {
 pub fn serialize_to_json<T: Serialize>(
     data: &T,
     error_context: &str,
-) -> Result<String, Response<Full<Bytes>>> {
+) -> Result<String, Box<Response<Full<Bytes>>>> {
     match serde_json::to_string(data) {
         Ok(json) => Ok(json),
         Err(e) => {
@@ -30,7 +30,9 @@ pub fn serialize_to_json<T: Serialize>(
                 context = error_context,
                 "Failed to serialize response"
             );
-            Err(internal_error_response("Failed to serialize response"))
+            Err(Box::new(internal_error_response(
+                "Failed to serialize response",
+            )))
         }
     }
 }
@@ -42,7 +44,7 @@ pub fn serialize_or_error<T: Serialize>(
 ) -> Response<Full<Bytes>> {
     match serialize_to_json(data, error_context) {
         Ok(json) => json_response(json),
-        Err(response) => response,
+        Err(response) => *response,
     }
 }
 

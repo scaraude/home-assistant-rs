@@ -30,7 +30,7 @@ impl DbWriterService {
                     processed_events += 1;
                     self.handle_event(event);
 
-                    if processed_events % 100 == 0 {
+                    if processed_events.is_multiple_of(100) {
                         info!(processed_events, "DbWriterService processed events batch");
                     }
                 }
@@ -133,10 +133,10 @@ impl DbWriterService {
                         rule_name = %rule_name,
                         "Failed to insert automation execution log"
                     );
-                } else if success {
-                    if let Err(e) = self.db.record_rule_trigger(&rule_id) {
-                        error!(error = %e, rule_id = %rule_id, "Failed to record rule trigger");
-                    }
+                } else if success
+                    && let Err(e) = self.db.record_rule_trigger(&rule_id)
+                {
+                    error!(error = %e, rule_id = %rule_id, "Failed to record rule trigger");
                 }
             }
             _ => {

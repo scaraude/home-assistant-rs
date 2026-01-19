@@ -23,7 +23,7 @@ pub async fn handle_websocket_upgrade(
 ) -> Result<Response<Full<Bytes>>, hyper::Error> {
     let sec_websocket_key = match validate_websocket_request(&req) {
         Ok(key) => key,
-        Err(response) => return Ok(response),
+        Err(response) => return Ok(*response),
     };
 
     let accept_key = derive_accept_key(sec_websocket_key.as_bytes());
@@ -50,23 +50,25 @@ pub async fn handle_websocket_upgrade(
     Ok(response)
 }
 
-fn validate_websocket_request(req: &Request<Incoming>) -> Result<String, Response<Full<Bytes>>> {
+fn validate_websocket_request(
+    req: &Request<Incoming>,
+) -> Result<String, Box<Response<Full<Bytes>>>> {
     if req.method() != Method::GET {
-        return Err(responses::bad_request_response(
+        return Err(Box::new(responses::bad_request_response(
             "WebSocket upgrade requires GET request",
-        ));
+        )));
     }
 
     if !header_contains(req.headers().get(CONNECTION), "upgrade") {
-        return Err(responses::bad_request_response(
+        return Err(Box::new(responses::bad_request_response(
             "Missing Connection: upgrade header",
-        ));
+        )));
     }
 
     if !header_equals(req.headers().get(UPGRADE), "websocket") {
-        return Err(responses::bad_request_response(
+        return Err(Box::new(responses::bad_request_response(
             "Missing Upgrade: websocket header",
-        ));
+        )));
     }
 
     if req
@@ -75,9 +77,9 @@ fn validate_websocket_request(req: &Request<Incoming>) -> Result<String, Respons
         .and_then(|v| v.to_str().ok())
         != Some("13")
     {
-        return Err(responses::bad_request_response(
+        return Err(Box::new(responses::bad_request_response(
             "Unsupported WebSocket version",
-        ));
+        )));
     }
 
     let sec_key = req
@@ -85,7 +87,11 @@ fn validate_websocket_request(req: &Request<Incoming>) -> Result<String, Respons
         .get(SEC_WEBSOCKET_KEY)
         .and_then(|value| value.to_str().ok())
         .map(|s| s.to_string())
-        .ok_or_else(|| responses::bad_request_response("Missing Sec-WebSocket-Key header"))?;
+        .ok_or_else(|| {
+            Box::new(responses::bad_request_response(
+                "Missing Sec-WebSocket-Key header",
+            ))
+        })?;
 
     Ok(sec_key)
 }

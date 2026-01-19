@@ -12,6 +12,7 @@ pub struct NetworkMapResponse {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct NetworkMapData {
     pub routes: bool,
     #[serde(rename = "type")]
@@ -36,6 +37,7 @@ pub struct NetworkNode {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct NetworkLink {
     pub relationship: u8,
     #[serde(rename = "linkquality")]

@@ -69,7 +69,7 @@ pub fn serve_switches_list(
 
     let json = match serialize_to_json(&switches, "switches list") {
         Ok(json) => json,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
 
     info!(
@@ -95,7 +95,7 @@ pub fn serve_device_state(db: &Arc<Database>, device_id: &str) -> Response<Full<
 
             let json = match serialize_to_json(&json_data, "device state") {
                 Ok(json) => json,
-                Err(response) => return response,
+                Err(response) => return *response,
             };
 
             info!(
@@ -125,7 +125,7 @@ pub fn serve_device_states(db: &Arc<Database>) -> Response<Full<Bytes>> {
         Ok(states) => {
             let json = match serialize_to_json(&states, "device states") {
                 Ok(json) => json,
-                Err(response) => return response,
+                Err(response) => return *response,
             };
 
             info!(

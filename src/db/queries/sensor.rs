@@ -369,6 +369,7 @@ impl Database {
     }
 
     /// Get the latest reading for a specific device (optimized for automation conditions)
+    #[cfg(test)]
     pub fn get_latest_reading_for_sensor(&self, device_id: &str) -> Result<Option<SensorReading>> {
         let conn = self.conn.lock_or_recover();
 

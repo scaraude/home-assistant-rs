@@ -36,21 +36,22 @@ pub async fn get_or_create_device_unified(
                 merged_fields.sort_unstable();
                 merged_fields.dedup();
 
-                if merged_capabilities != device.capabilities
-                    || merged_fields != device.available_fields
+                if (merged_capabilities != device.capabilities
+                    || merged_fields != device.available_fields)
+                    && let Err(e) = db.update_device_metadata(
+                        &device.id,
+                        &merged_capabilities,
+                        &merged_fields,
+                    )
                 {
-                    if let Err(e) =
-                        db.update_device_metadata(&device.id, &merged_capabilities, &merged_fields)
-                    {
-                        error!(
-                            error = %e,
-                            device_id = %device.id,
-                            "Failed to update device metadata"
-                        );
-                    }
+                    error!(
+                        error = %e,
+                        device_id = %device.id,
+                        "Failed to update device metadata"
+                    );
                 }
             }
-            return Some(device.id);
+            Some(device.id)
         }
         Ok(None) => {
             // Device doesn't exist, create it

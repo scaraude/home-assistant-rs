@@ -211,12 +211,12 @@ fn read_lines_from_end_until(
             }
 
             // Parse timestamp from line to check cutoff
-            if let Some(ts) = parse_timestamp_from_line(line) {
-                if ts < cutoff {
-                    // We've gone past our cutoff, reverse result and return
-                    result_lines.reverse();
-                    return Ok(result_lines);
-                }
+            if let Some(ts) = parse_timestamp_from_line(line)
+                && ts < cutoff
+            {
+                // We've gone past our cutoff, reverse result and return
+                result_lines.reverse();
+                return Ok(result_lines);
             }
 
             result_lines.push(line.to_string());
@@ -226,12 +226,13 @@ fn read_lines_from_end_until(
     }
 
     // Handle any remaining leftover at the start of file
-    if !leftover.is_empty() && !leftover.starts_with("Timestamp") && !leftover.trim().is_empty() {
-        if let Some(ts) = parse_timestamp_from_line(&leftover) {
-            if ts >= cutoff {
-                result_lines.push(leftover);
-            }
-        }
+    if !leftover.is_empty()
+        && !leftover.starts_with("Timestamp")
+        && !leftover.trim().is_empty()
+        && let Some(ts) = parse_timestamp_from_line(&leftover)
+        && ts >= cutoff
+    {
+        result_lines.push(leftover);
     }
 
     // Reverse to get chronological order
@@ -268,18 +269,17 @@ pub fn read_log_file_with_offset(
 
     // For delta mode with since_line, use the legacy full-read approach
     // This is rarely used now that frontend uses timestamp-based fetching
-    if since_line.is_some() {
+    if let Some(offset) = since_line {
         let file = File::open(&file_path).map_err(|e| format!("Failed to open log file: {}", e))?;
         let reader = BufReader::new(file);
 
         let all_lines: Vec<String> = reader
             .lines()
-            .filter_map(|line| line.ok())
+            .map_while(Result::ok)
             .filter(|line| !line.starts_with("Timestamp") && !line.trim().is_empty())
             .collect();
 
         let total_lines = all_lines.len();
-        let offset = since_line.unwrap();
         let lines = if offset < all_lines.len() {
             all_lines[offset..].to_vec()
         } else {
@@ -332,7 +332,7 @@ pub fn read_process_history(
     let mut buffer: Vec<String> = Vec::with_capacity(max_lines);
     let mut count = 0;
 
-    for line in reader.lines().filter_map(|l| l.ok()) {
+    for line in reader.lines().map_while(Result::ok) {
         // Skip header and empty lines
         if line.starts_with("Timestamp") || line.trim().is_empty() {
             continue;

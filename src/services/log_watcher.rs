@@ -76,15 +76,15 @@ impl LogWatcherService {
     fn seek_to_end_all(&mut self) {
         for log_file in LogFile::ALL {
             let path = self.log_dir.join(log_file.filename());
-            if let Ok(metadata) = std::fs::metadata(&path) {
-                if let Some(state) = self.file_states.get_mut(&log_file) {
-                    state.position = metadata.len();
-                    debug!(
-                        file = %log_file.filename(),
-                        position = state.position,
-                        "Initialized log file position"
-                    );
-                }
+            if let Ok(metadata) = std::fs::metadata(&path)
+                && let Some(state) = self.file_states.get_mut(&log_file)
+            {
+                state.position = metadata.len();
+                debug!(
+                    file = %log_file.filename(),
+                    position = state.position,
+                    "Initialized log file position"
+                );
             }
         }
     }
@@ -155,10 +155,10 @@ impl LogWatcherService {
             if let Some(entry) = Self::parse_line(log_file, &line) {
                 // Check if this entry is newer than the last one we saw
                 let entry_ts = Self::get_entry_timestamp(&entry);
-                if let Some(last_ts) = state.last_timestamp {
-                    if entry_ts <= last_ts {
-                        continue;
-                    }
+                if let Some(last_ts) = state.last_timestamp
+                    && entry_ts <= last_ts
+                {
+                    continue;
                 }
                 state.last_timestamp = Some(entry_ts);
                 new_entries.push(entry);

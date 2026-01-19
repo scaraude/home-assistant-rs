@@ -57,7 +57,7 @@ impl Database {
             })
         })?;
 
-        Ok(rows.next().transpose()?)
+        rows.next().transpose()
     }
 
     /// Get all device states from database

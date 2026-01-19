@@ -200,7 +200,7 @@ pub async fn create_automation_rule(
 
             let json = match serialize_to_json(&rule, "created automation rule") {
                 Ok(json) => json,
-                Err(response) => return response,
+                Err(response) => return *response,
             };
             json_response_with_status(json, StatusCode::CREATED)
         }
@@ -309,7 +309,7 @@ pub async fn update_automation_rule(
 
             let json = match serialize_to_json(&rule, "updated automation rule") {
                 Ok(json) => json,
-                Err(response) => return response,
+                Err(response) => return *response,
             };
 
             json_response(json)

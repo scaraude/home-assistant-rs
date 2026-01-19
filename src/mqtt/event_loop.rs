@@ -168,7 +168,7 @@ pub(super) fn spawn_event_loop(
             }
 
             // Periodic statistics logging
-            if message_count % 100 == 0 && message_count > 0 {
+            if message_count.is_multiple_of(100) && message_count > 0 {
                 info!(
                     total_messages = message_count,
                     errors = error_count,

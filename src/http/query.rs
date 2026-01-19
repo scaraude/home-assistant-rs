@@ -17,10 +17,10 @@ impl<'a> QueryParams<'a> {
     pub fn get(&self, key: &str) -> Option<&'a str> {
         self.query.and_then(|q| {
             for param in q.split('&') {
-                if let Some((k, v)) = param.split_once('=') {
-                    if k == key {
-                        return Some(v);
-                    }
+                if let Some((k, v)) = param.split_once('=')
+                    && k == key
+                {
+                    return Some(v);
                 }
             }
             None

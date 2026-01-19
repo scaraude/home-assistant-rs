@@ -202,9 +202,10 @@ pub struct DeviceStateFields {
 }
 
 /// Switch state enum
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum SwitchState {
     On,
+    #[default]
     Off,
 }
 
@@ -218,7 +219,7 @@ impl SwitchState {
         }
     }
 
-    pub fn to_mqtt_string(&self) -> &'static str {
+    pub fn to_mqtt_string(self) -> &'static str {
         match self {
             SwitchState::On => "ON",
             SwitchState::Off => "OFF",
@@ -226,11 +227,11 @@ impl SwitchState {
     }
 
     /// Convert to boolean (ON = true, OFF = false)
-    pub fn to_bool(&self) -> bool {
+    pub fn to_bool(self) -> bool {
         matches!(self, SwitchState::On)
     }
 
-    pub fn to_integer(&self) -> i32 {
+    pub fn to_integer(self) -> i32 {
         match self {
             SwitchState::On => 1,
             SwitchState::Off => 0,
@@ -297,12 +298,6 @@ impl<'de> Deserialize<'de> for SwitchState {
         }
 
         deserializer.deserialize_any(SwitchStateVisitor)
-    }
-}
-
-impl Default for SwitchState {
-    fn default() -> Self {
-        SwitchState::Off
     }
 }
 

@@ -119,11 +119,13 @@ impl Device {
     }
 
     /// Check if this device has a specific capability
+    #[cfg(test)]
     pub fn has_capability(&self, capability: &DeviceCapability) -> bool {
         self.capabilities.iter().any(|cap| cap == capability)
     }
 
     /// Check if this device has a specific sensor capability
+    #[cfg(test)]
     pub fn has_sensor_type(&self, sensor_type: &SensorType) -> bool {
         self.capabilities.iter().any(|cap| {
             matches!(cap, DeviceCapability::Sensor { sensor_type: cap_type } if cap_type == sensor_type)
@@ -131,6 +133,7 @@ impl Device {
     }
 
     /// Check if this device has a specific commander capability
+    #[cfg(test)]
     pub fn has_commander_type(&self, commander_type: &CommanderType) -> bool {
         self.capabilities.iter().any(|cap| {
             matches!(cap, DeviceCapability::Commander { commander_type: cap_type } if cap_type == commander_type)

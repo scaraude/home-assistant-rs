@@ -49,7 +49,7 @@ pub fn serve_network_topology(
 
             let json = match serialize_to_json(&topology, "network topology") {
                 Ok(json) => json,
-                Err(response) => return response,
+                Err(response) => return *response,
             };
 
             info!(

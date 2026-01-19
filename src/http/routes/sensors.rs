@@ -18,7 +18,7 @@ pub fn serve_sensors(db: &Database) -> Response<Full<Bytes>> {
 
             let json = match serialize_to_json(&sensors, "sensors list") {
                 Ok(json) => json,
-                Err(response) => return response,
+                Err(response) => return *response,
             };
 
             info!(
@@ -83,7 +83,7 @@ pub fn serve_readings(db: &Database, query: Option<&str>) -> Response<Full<Bytes
 
             let json = match serialize_to_json(&readings, "sensor readings") {
                 Ok(json) => json,
-                Err(response) => return response,
+                Err(response) => return *response,
             };
 
             info!(

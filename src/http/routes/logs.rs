@@ -15,7 +15,7 @@ pub fn serve_logs_list() -> Response<Full<Bytes>> {
 
     let json = match serialize_to_json(&log_files, "log files list") {
         Ok(json) => json,
-        Err(response) => return response,
+        Err(response) => return *response,
     };
 
     info!(
@@ -64,7 +64,7 @@ pub fn serve_log_view(query: Option<&str>) -> Response<Full<Bytes>> {
 
             let json = match serialize_to_json(&entries, "log view entries") {
                 Ok(json) => json,
-                Err(response) => return response,
+                Err(response) => return *response,
             };
 
             info!(
@@ -133,7 +133,7 @@ pub fn serve_log_since(query: Option<&str>) -> Response<Full<Bytes>> {
 
             let json = match serialize_to_json(&entries, "log entries since") {
                 Ok(json) => json,
-                Err(response) => return response,
+                Err(response) => return *response,
             };
 
             info!(
@@ -156,37 +156,37 @@ fn parse_since_param(s: &str) -> chrono::DateTime<Utc> {
     let now = Utc::now();
 
     // Try duration format first: 24h, 1w, 1m, 1y
-    if let Some(hours) = s.strip_suffix('h') {
-        if let Ok(h) = hours.parse::<i64>() {
-            return now - Duration::hours(h);
-        }
+    if let Some(hours) = s.strip_suffix('h')
+        && let Ok(h) = hours.parse::<i64>()
+    {
+        return now - Duration::hours(h);
     }
-    if let Some(days) = s.strip_suffix('d') {
-        if let Ok(d) = days.parse::<i64>() {
-            return now - Duration::days(d);
-        }
+    if let Some(days) = s.strip_suffix('d')
+        && let Ok(d) = days.parse::<i64>()
+    {
+        return now - Duration::days(d);
     }
-    if let Some(weeks) = s.strip_suffix('w') {
-        if let Ok(w) = weeks.parse::<i64>() {
-            return now - Duration::weeks(w);
-        }
+    if let Some(weeks) = s.strip_suffix('w')
+        && let Ok(w) = weeks.parse::<i64>()
+    {
+        return now - Duration::weeks(w);
     }
-    if let Some(months) = s.strip_suffix('m') {
-        if let Ok(m) = months.parse::<i64>() {
-            return now - Duration::days(m * 30);
-        }
+    if let Some(months) = s.strip_suffix('m')
+        && let Ok(m) = months.parse::<i64>()
+    {
+        return now - Duration::days(m * 30);
     }
-    if let Some(years) = s.strip_suffix('y') {
-        if let Ok(y) = years.parse::<i64>() {
-            return now - Duration::days(y * 365);
-        }
+    if let Some(years) = s.strip_suffix('y')
+        && let Ok(y) = years.parse::<i64>()
+    {
+        return now - Duration::days(y * 365);
     }
 
     // Try parsing as Unix timestamp (seconds)
-    if let Ok(ts) = s.parse::<i64>() {
-        if let Some(dt) = chrono::DateTime::from_timestamp(ts, 0) {
-            return dt;
-        }
+    if let Ok(ts) = s.parse::<i64>()
+        && let Some(dt) = chrono::DateTime::from_timestamp(ts, 0)
+    {
+        return dt;
     }
 
     // Try parsing as ISO timestamp
@@ -236,7 +236,7 @@ pub fn serve_process_history(query: Option<&str>) -> Response<Full<Bytes>> {
 
             let json = match serialize_to_json(&entries, "process history") {
                 Ok(json) => json,
-                Err(response) => return response,
+                Err(response) => return *response,
             };
 
             info!(

@@ -55,7 +55,7 @@ impl StateManagerService {
                 turbo_mode,
                 timestamp,
             } => {
-                let log_timestamp = timestamp.clone();
+                let log_timestamp = timestamp;
                 let id_for_log = device_id.clone();
                 self.device_state.update_state(device_id, move |state| {
                     if let Some(level) = battery {
