@@ -5,6 +5,7 @@
   import LogsView from "./routes/LogsView.svelte";
   import CommanderView from "./routes/CommanderView.svelte";
   import NetworkView from "./routes/NetworkView.svelte";
+  import ConsommationsView from "./routes/ConsommationsView.svelte";
   import {
     fetchSensors,
     fetchReadings,
@@ -18,6 +19,7 @@
   const routes = {
     "/": SensorsView,
     "/sensors": SensorsView,
+    "/consommations": ConsommationsView,
     "/commander": CommanderView,
     "/network": NetworkView,
     "/logs": LogsView,
@@ -175,6 +177,7 @@
   // Track current route for active state
   let currentPath = $derived($location);
   let isOnSensors = $derived(currentPath === "/" || currentPath === "/sensors");
+  let isOnConsommations = $derived(currentPath === "/consommations");
   let isOnCommander = $derived(currentPath === "/commander");
   let isOnNetwork = $derived(currentPath === "/network");
   let isOnLogs = $derived(currentPath === "/logs");
@@ -202,6 +205,9 @@
 
       <nav class="nav-buttons">
         <a href="#/" class="nav-button" class:active={isOnSensors}> Sensors </a>
+        <a href="#/consommations" class="nav-button" class:active={isOnConsommations}>
+          Consommations
+        </a>
         <a href="#/commander" class="nav-button" class:active={isOnCommander}>
           Commander
         </a>

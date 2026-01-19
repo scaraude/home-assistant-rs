@@ -3,6 +3,12 @@
   import UnifiedChart from "./UnifiedChart.svelte";
   import { graphConfig } from "./stores/graphConfig";
 
+  let {
+    metricType = "temperature"
+  }: {
+    metricType?: "temperature" | "power";
+  } = $props();
+
   let sensors = $derived($graphConfig.sensors);
   let metric = $derived($graphConfig.metric);
   let timeRange = $derived($graphConfig.timeRange);
@@ -11,11 +17,11 @@
 
 <div class="graph-panel">
   <div class="panel-header">
-    <GraphToolbar {someHidden} />
+    <GraphToolbar {someHidden} {metricType} />
   </div>
 
   <div class="chart-wrapper">
-    <UnifiedChart {sensors} {metric} {timeRange} />
+    <UnifiedChart {sensors} {metric} {timeRange} {metricType} />
   </div>
 </div>
 

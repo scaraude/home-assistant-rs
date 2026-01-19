@@ -34,11 +34,13 @@
   let {
     sensors = [],
     metric = 'temperature',
-    timeRange = '24h'
+    timeRange = '24h',
+    metricType = 'temperature'
   }: {
     sensors?: SensorUIConfig[];
     metric?: 'temperature' | 'humidity' | 'both';
     timeRange?: string;
+    metricType?: 'temperature' | 'power';
   } = $props();
 
   let canvas = $state<HTMLCanvasElement>();
@@ -73,19 +75,18 @@
 
       if (sensorReadings.length === 0) continue;
 
-      const timestamps = sensorReadings.map(r => r.timestamp * 1000);
-      const temperatures = sensorReadings.map(r => r.type === 'temp_humidity' ? r.temperature : 0);
-      const humidities = sensorReadings.map(r => r.type === 'temp_humidity' ? r.humidity : 0);
-
       const deviceName = deviceMap.get(sensor.deviceId)?.name || sensor.deviceId;
 
-      // Temperature dataset
-      if (metric === 'temperature' || metric === 'both') {
+      // Power metric (for energy meters)
+      if (metricType === 'power') {
+        const timestamps = sensorReadings.map(r => r.timestamp * 1000);
+        const powerValues = sensorReadings.map(r => r.type === 'energy_meter' ? r.power : 0);
+
         datasets.push({
-          label: `${deviceName} (Temp)`,
-          data: timestamps.map((t, i) => ({ x: t, y: temperatures[i] })),
+          label: deviceName,
+          data: timestamps.map((t, i) => ({ x: t, y: powerValues[i] })),
           borderColor: sensor.color,
-          backgroundColor: `${sensor.color}20`, // 20 = 12.5% opacity in hex
+          backgroundColor: `${sensor.color}20`,
           yAxisID: 'y',
           tension: 0.4,
           pointRadius: POINT_RADIUS,
@@ -93,21 +94,42 @@
           fill: false,
         });
       }
+      // Temperature/Humidity metrics
+      else {
+        const timestamps = sensorReadings.map(r => r.timestamp * 1000);
+        const temperatures = sensorReadings.map(r => r.type === 'temp_humidity' ? r.temperature : 0);
+        const humidities = sensorReadings.map(r => r.type === 'temp_humidity' ? r.humidity : 0);
 
-      // Humidity dataset
-      if (metric === 'humidity' || metric === 'both') {
-        datasets.push({
-          label: `${deviceName} (Humidity)`,
-          data: timestamps.map((t, i) => ({ x: t, y: humidities[i] })),
-          borderColor: sensor.color,
-          backgroundColor: `${sensor.color}20`,
-          yAxisID: metric === 'both' ? 'y1' : 'y',
-          tension: 0.4,
-          pointRadius: POINT_RADIUS,
-          pointHoverRadius: POINT_RADIUS_HOVER,
-          fill: false,
-          borderDash: metric === 'both' ? [5, 5] : [], // Dashed line for humidity when both shown
-        });
+        // Temperature dataset
+        if (metric === 'temperature' || metric === 'both') {
+          datasets.push({
+            label: `${deviceName} (Temp)`,
+            data: timestamps.map((t, i) => ({ x: t, y: temperatures[i] })),
+            borderColor: sensor.color,
+            backgroundColor: `${sensor.color}20`, // 20 = 12.5% opacity in hex
+            yAxisID: 'y',
+            tension: 0.4,
+            pointRadius: POINT_RADIUS,
+            pointHoverRadius: POINT_RADIUS_HOVER,
+            fill: false,
+          });
+        }
+
+        // Humidity dataset
+        if (metric === 'humidity' || metric === 'both') {
+          datasets.push({
+            label: `${deviceName} (Humidity)`,
+            data: timestamps.map((t, i) => ({ x: t, y: humidities[i] })),
+            borderColor: sensor.color,
+            backgroundColor: `${sensor.color}20`,
+            yAxisID: metric === 'both' ? 'y1' : 'y',
+            tension: 0.4,
+            pointRadius: POINT_RADIUS,
+            pointHoverRadius: POINT_RADIUS_HOVER,
+            fill: false,
+            borderDash: metric === 'both' ? [5, 5] : [], // Dashed line for humidity when both shown
+          });
+        }
       }
     }
 
@@ -212,7 +234,7 @@
             position: "left",
             title: {
               display: true,
-              text: metric === 'humidity' ? '%' : '°C',
+              text: metricType === 'power' ? 'W' : (metric === 'humidity' ? '%' : '°C'),
               font: { size: 12 },
             },
             grid: {
@@ -254,7 +276,7 @@
     // Update Y-axis configuration
     const yAxis = chart.options.scales?.y as any;
     if (yAxis?.title) {
-      yAxis.title.text = metric === 'humidity' ? '%' : '°C';
+      yAxis.title.text = metricType === 'power' ? 'W' : (metric === 'humidity' ? '%' : '°C');
     }
 
     const y1Axis = chart.options.scales?.y1 as any;

@@ -2,7 +2,13 @@
   import { graphConfig } from "./stores/graphConfig";
   import type { GraphState } from "./stores/graphConfig";
 
-  let { someHidden = false }: { someHidden?: boolean } = $props();
+  let {
+    someHidden = false,
+    metricType = "temperature"
+  }: {
+    someHidden?: boolean;
+    metricType?: "temperature" | "power";
+  } = $props();
 
   const currentMetric = $derived($graphConfig.metric);
   const currentTimeRange = $derived($graphConfig.timeRange);
@@ -21,34 +27,36 @@
 </script>
 
 <div class="toolbar">
-  <div class="toolbar-section">
-    <span class="section-label">Metric:</span>
-    <div class="button-group">
-      <button
-        class="toolbar-btn"
-        class:active={currentMetric === 'temperature'}
-        onclick={() => setMetric('temperature')}
-      >
-        Temp
-      </button>
-      <button
-        class="toolbar-btn"
-        class:active={currentMetric === 'humidity'}
-        onclick={() => setMetric('humidity')}
-      >
-        Humidity
-      </button>
-      <button
-        class="toolbar-btn"
-        class:active={currentMetric === 'both'}
-        onclick={() => setMetric('both')}
-      >
-        Both
-      </button>
+  {#if metricType === "temperature"}
+    <div class="toolbar-section">
+      <span class="section-label">Metric:</span>
+      <div class="button-group">
+        <button
+          class="toolbar-btn"
+          class:active={currentMetric === 'temperature'}
+          onclick={() => setMetric('temperature')}
+        >
+          Temp
+        </button>
+        <button
+          class="toolbar-btn"
+          class:active={currentMetric === 'humidity'}
+          onclick={() => setMetric('humidity')}
+        >
+          Humidity
+        </button>
+        <button
+          class="toolbar-btn"
+          class:active={currentMetric === 'both'}
+          onclick={() => setMetric('both')}
+        >
+          Both
+        </button>
+      </div>
     </div>
-  </div>
 
-  <div class="toolbar-divider"></div>
+    <div class="toolbar-divider"></div>
+  {/if}
 
   <div class="toolbar-section">
     <span class="section-label">Range:</span>
