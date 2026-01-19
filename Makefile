@@ -196,16 +196,7 @@ transfer-monitor: check-ssh ## Transfer monitor.sh script to Raspberry Pi
 # =============================================================================
 # Deployment Targets
 # =============================================================================
-deploy-back: transfer-binary restart-home-automation ## Build and deploy backend only
-	@echo "$(COLOR_GREEN)✓ Backend deployment complete$(COLOR_RESET)"
-
-deploy-frontend: transfer-frontend restart-home-automation ## Build and deploy frontend only
-	@echo "$(COLOR_GREEN)✓ Frontend deployment complete$(COLOR_RESET)"
-
-deploy-both: transfer-binary transfer-frontend restart-home-automation ## Build and deploy backend + frontend
-	@echo "$(COLOR_GREEN)✓ Backend + frontend deployment complete$(COLOR_RESET)"
-
-deploy-config: generate-configs transfer-configs ## Generate and deploy configs
+deploy-config: generate-configs transfer-configs restart## Generate and deploy configs
 	@echo "$(COLOR_GREEN)✓ Config deployment complete$(COLOR_RESET)"
 
 deploy-full: ## Full deployment (build, transfer, configure, and start services)
@@ -225,17 +216,17 @@ deploy-full: ## Full deployment (build, transfer, configure, and start services)
 	@echo "$(COLOR_BOLD)$(COLOR_GREEN)✓ Full deployment complete!$(COLOR_RESET)"
 	$(MAKE) status
 
-deploy: deploy-full ## Alias for deploy-full
-
-quick-deploy:
+deploy-back:
 	@echo "$(COLOR_BLUE)Stopping services...$(COLOR_RESET)"
 	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "sudo systemctl stop home-automation-rs.service"
 	@echo "$(COLOR_GREEN)✓ Service stopped$(COLOR_RESET)"
 	$(MAKE) build transfer-binary restart-home-automation ## Quick deploy: build, transfer binary, and restart service
 	@echo "$(COLOR_GREEN)✓ Quick deployment complete$(COLOR_RESET)"
 
-quick-deploy-frontend: check-ssh transfer-frontend restart-home-automation ## Quick deploy frontend only
+deploy-front: check-ssh transfer-frontend restart-home-automation ## Quick deploy frontend only
 	@echo "$(COLOR_GREEN)✓ Frontend quick deployment complete$(COLOR_RESET)"
+
+deploy-both: check-ssh deploy-back deploy-front ## Quick deploy binary and frontend
 
 # =============================================================================
 # Service Management
