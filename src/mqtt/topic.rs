@@ -12,6 +12,8 @@ pub const BRIDGE_RESPONSE_PREFIX: &str = "bridge/response/";
 pub const BRIDGE_EVENT_PREFIX: &str = "bridge/event";
 /// Suffix used for command topics (publish-only).
 pub const COMMAND_SUFFIX: &str = "/set";
+/// Suffix used for availability topics (should be ignored).
+pub const AVAILABILITY_SUFFIX: &str = "/availability";
 
 /// Strongly-typed view over a Zigbee2MQTT topic.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -44,6 +46,11 @@ impl<'a> ZigbeeTopic<'a> {
     /// Whether this topic points to the command channel ("/set").
     pub fn is_command_channel(&self) -> bool {
         self.tail.ends_with(COMMAND_SUFFIX)
+    }
+
+    /// Whether this topic is an availability topic ("/availability").
+    pub fn is_availability(&self) -> bool {
+        self.tail.ends_with(AVAILABILITY_SUFFIX)
     }
 
     /// Return the device identifier for telemetry topics.

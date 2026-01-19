@@ -52,6 +52,7 @@ pub enum SensorField {
     Humidity,
     Battery,
     LinkQuality,
+    Presence,
 }
 
 // Implement database string conversion using the DbEnum trait
@@ -59,7 +60,8 @@ impl_db_enum!(SensorField {
     Temperature => "temperature",
     Humidity => "humidity",
     Battery => "battery",
-    LinkQuality => "link_quality"
+    LinkQuality => "link_quality",
+    Presence => "presence"
 });
 
 /// A single condition in an automation rule
@@ -363,6 +365,7 @@ mod tests {
             (SensorField::Humidity, "humidity"),
             (SensorField::Battery, "battery"),
             (SensorField::LinkQuality, "link_quality"),
+            (SensorField::Presence, "presence"),
         ];
 
         for (field, expected_str) in fields {

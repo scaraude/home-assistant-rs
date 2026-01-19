@@ -11,7 +11,7 @@
   }: {
     isOpen?: boolean;
     readings: SensorReading[];
-    selectedMetric: "temperature" | "humidity" | null;
+    selectedMetric: "temperature" | "humidity" | "presence" | null;
     sensorName: string;
   } = $props();
 

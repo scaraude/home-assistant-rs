@@ -52,10 +52,53 @@ impl Database {
                     }
                 }
             }
-            SensorReading::Presence { .. } => {
-                // TODO: Implement presence sensor storage when needed
-                warn!("Presence sensor readings not yet supported in database");
-                Ok(())
+            SensorReading::Presence {
+                device_id,
+                occupied,
+                illumination,
+                timestamp,
+            } => {
+                debug!(
+                    device_id = %device_id,
+                    occupied = %occupied,
+                    illumination = ?illumination,
+                    timestamp = %timestamp,
+                    "Inserting presence reading"
+                );
+
+                let start = std::time::Instant::now();
+                let result = self.conn.lock_or_recover().execute(
+                    "INSERT INTO presence_readings
+                     (device_id, occupied, illumination, timestamp)
+                     VALUES (?1, ?2, ?3, ?4)",
+                    params![
+                        device_id,
+                        *occupied as i32,
+                        illumination,
+                        timestamp.timestamp()
+                    ],
+                );
+
+                match result {
+                    Ok(rows) => {
+                        let elapsed = start.elapsed();
+                        debug!(
+                            device_id = %device_id,
+                            rows_affected = rows,
+                            duration_us = elapsed.as_micros(),
+                            "Successfully inserted presence reading"
+                        );
+                        Ok(())
+                    }
+                    Err(e) => {
+                        tracing::error!(
+                            error = %e,
+                            device_id = %device_id,
+                            "Database insert failed for presence reading"
+                        );
+                        Err(e)
+                    }
+                }
             }
         }
     }
@@ -67,9 +110,13 @@ impl Database {
 
         let conn = self.conn.lock_or_recover();
         let mut stmt = conn.prepare(
-            "SELECT DISTINCT tr.device_id, COALESCE(d.name, tr.device_id) as name
-             FROM temperature_readings tr
-             LEFT JOIN devices d ON tr.device_id = d.id
+            "SELECT DISTINCT sensors.device_id, COALESCE(d.name, sensors.device_id) as name
+             FROM (
+                 SELECT DISTINCT device_id FROM temperature_readings
+                 UNION
+                 SELECT DISTINCT device_id FROM presence_readings
+             ) sensors
+             LEFT JOIN devices d ON sensors.device_id = d.id
              ORDER BY name",
         )?;
 
@@ -102,6 +149,8 @@ impl Database {
         let start = std::time::Instant::now();
 
         let conn = self.conn.lock_or_recover();
+
+        // Get temperature readings
         let mut stmt = conn.prepare(
             "SELECT device_id, temperature, humidity, timestamp
              FROM temperature_readings
@@ -109,9 +158,23 @@ impl Database {
              ORDER BY device_id, timestamp DESC",
         )?;
 
-        let readings = stmt
+        let mut readings = stmt
             .query_map(params![since_timestamp], Self::map_sensor_reading_row)?
             .collect::<Result<Vec<_>>>()?;
+
+        // Get presence readings
+        let mut stmt = conn.prepare(
+            "SELECT device_id, occupied, illumination, timestamp
+             FROM presence_readings
+             WHERE timestamp > ?1
+             ORDER BY device_id, timestamp DESC",
+        )?;
+
+        let mut presence_readings = stmt
+            .query_map(params![since_timestamp], Self::map_presence_reading_row)?
+            .collect::<Result<Vec<_>>>()?;
+
+        readings.append(&mut presence_readings);
 
         let elapsed = start.elapsed();
         info!(
@@ -145,6 +208,8 @@ impl Database {
         let start = std::time::Instant::now();
 
         let conn = self.conn.lock_or_recover();
+
+        // Try temperature readings first
         let mut stmt = conn.prepare(
             "SELECT device_id, temperature, humidity, timestamp
              FROM temperature_readings
@@ -152,12 +217,29 @@ impl Database {
              ORDER BY timestamp DESC",
         )?;
 
-        let readings = stmt
+        let mut readings = stmt
             .query_map(
                 params![device_id, since_timestamp],
                 Self::map_sensor_reading_row,
             )?
             .collect::<Result<Vec<_>>>()?;
+
+        // Try presence readings
+        let mut stmt = conn.prepare(
+            "SELECT device_id, occupied, illumination, timestamp
+             FROM presence_readings
+             WHERE device_id = ?1 AND timestamp > ?2
+             ORDER BY timestamp DESC",
+        )?;
+
+        let mut presence_readings = stmt
+            .query_map(
+                params![device_id, since_timestamp],
+                Self::map_presence_reading_row,
+            )?
+            .collect::<Result<Vec<_>>>()?;
+
+        readings.append(&mut presence_readings);
 
         let elapsed = start.elapsed();
         info!(
@@ -182,6 +264,8 @@ impl Database {
     /// Get the latest reading for a specific device (optimized for automation conditions)
     pub fn get_latest_reading_for_sensor(&self, device_id: &str) -> Result<Option<SensorReading>> {
         let conn = self.conn.lock_or_recover();
+
+        // Try temperature readings first
         let mut stmt = conn.prepare(
             "SELECT device_id, temperature, humidity, timestamp
              FROM temperature_readings
@@ -194,7 +278,24 @@ impl Database {
             .query_map(params![device_id], Self::map_sensor_reading_row)?
             .collect::<Result<Vec<_>>>()?;
 
-        Ok(readings.pop())
+        if let Some(reading) = readings.pop() {
+            return Ok(Some(reading));
+        }
+
+        // Try presence readings
+        let mut stmt = conn.prepare(
+            "SELECT device_id, occupied, illumination, timestamp
+             FROM presence_readings
+             WHERE device_id = ?1
+             ORDER BY timestamp DESC
+             LIMIT 1",
+        )?;
+
+        let mut presence_readings = stmt
+            .query_map(params![device_id], Self::map_presence_reading_row)?
+            .collect::<Result<Vec<_>>>()?;
+
+        Ok(presence_readings.pop())
     }
 
     /// Helper to map a database row to a SensorReading enum
@@ -206,6 +307,16 @@ impl Database {
             temperature: row.get(1)?,
             humidity: row.get(2)?,
             timestamp: timestamp_to_datetime(row.get(3)?, "temperature_reading.timestamp"),
+        })
+    }
+
+    /// Helper to map a database row to a Presence SensorReading
+    fn map_presence_reading_row(row: &rusqlite::Row) -> Result<SensorReading> {
+        Ok(SensorReading::Presence {
+            device_id: row.get(0)?,
+            occupied: row.get::<_, i32>(1)? != 0,
+            illumination: row.get(2)?,
+            timestamp: timestamp_to_datetime(row.get(3)?, "presence_reading.timestamp"),
         })
     }
 }

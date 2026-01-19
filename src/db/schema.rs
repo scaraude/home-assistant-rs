@@ -20,6 +20,9 @@ impl Database {
         // Create temperature_readings table
         self.create_temperature_readings_table(&conn)?;
 
+        // Create presence_readings table
+        self.create_presence_readings_table(&conn)?;
+
         // Create automation tables
         self.create_automation_tables(&conn)?;
 
@@ -95,6 +98,66 @@ impl Database {
                 error!(error = %e, "Failed to create index idx_sensor_time");
                 return Err(e);
             }
+        }
+
+        Ok(())
+    }
+
+    /// Create presence_readings table and indexes
+    fn create_presence_readings_table(&self, conn: &rusqlite::Connection) -> Result<()> {
+        debug!("Creating presence_readings table if not exists");
+        match conn.execute(
+            "CREATE TABLE IF NOT EXISTS presence_readings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                device_id TEXT NOT NULL,
+                occupied INTEGER NOT NULL,
+                illumination TEXT,
+                timestamp INTEGER NOT NULL,
+                FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE
+            )",
+            [],
+        ) {
+            Ok(_) => debug!("Presence readings table created/verified"),
+            Err(e) => {
+                error!(error = %e, "Failed to create presence_readings table");
+                return Err(e);
+            }
+        }
+
+        // Index for efficient queries by device and time
+        debug!("Creating index idx_presence_time if not exists");
+        match conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_presence_time
+             ON presence_readings(device_id, timestamp DESC)",
+            [],
+        ) {
+            Ok(_) => debug!("Index idx_presence_time created/verified"),
+            Err(e) => {
+                error!(error = %e, "Failed to create index idx_presence_time");
+                return Err(e);
+            }
+        }
+
+        // Migration: Add illumination column if it doesn't exist
+        debug!("Checking for illumination column in presence_readings table");
+        let column_exists = conn
+            .prepare("SELECT illumination FROM presence_readings LIMIT 1")
+            .is_ok();
+
+        if !column_exists {
+            debug!("Adding illumination column to presence_readings table");
+            match conn.execute(
+                "ALTER TABLE presence_readings ADD COLUMN illumination TEXT",
+                [],
+            ) {
+                Ok(_) => info!("Added illumination column to presence_readings table"),
+                Err(e) => {
+                    error!(error = %e, "Failed to add illumination column");
+                    return Err(e);
+                }
+            }
+        } else {
+            debug!("Illumination column already exists");
         }
 
         Ok(())

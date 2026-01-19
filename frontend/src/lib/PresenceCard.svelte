@@ -6,7 +6,7 @@
   import { dataCache } from "./stores/dataCache";
   import { formatDistanceToNow } from "date-fns";
   import type { SensorUIConfig } from "./stores/graphConfig";
-  import type { SensorReading } from "./api";
+  import type { PresenceSensorReading } from "./api";
 
   let {
     sensor,
@@ -14,7 +14,7 @@
     editMode = false,
   }: {
     sensor: SensorUIConfig;
-    latestReading: SensorReading | null;
+    latestReading: PresenceSensorReading | null;
     editMode?: boolean;
   } = $props();
 
@@ -54,7 +54,7 @@
 </script>
 
 <div
-  class="sensor-card"
+  class="presence-card"
   class:active={sensor.visible}
   onclick={handleCardClick}
   onkeydown={(e) => e.key === "Enter" && handleCardClick()}
@@ -103,15 +103,32 @@
     </div>
   </div>
 
-  <div class="sensor-readings">
-    {#if latestReading && latestReading.type === 'temp_humidity'}
-      <div class="reading">
-        <span class="reading-label">Temp</span>
-        <span class="reading-value">{latestReading.temperature.toFixed(1)}°C</span>
+  <div class="presence-indicator">
+    {#if latestReading}
+      <div class="light-bubble" class:occupied={latestReading.occupied}>
+        <div class="light-glow"></div>
+        <div class="light-core"></div>
       </div>
-      <div class="reading">
-        <span class="reading-label">Humidity</span>
-        <span class="reading-value">{latestReading.humidity.toFixed(0)}%</span>
+      <div class="presence-info">
+        <div class="presence-label">
+          {latestReading.occupied ? "Occupied" : "Clear"}
+        </div>
+        {#if latestReading.illumination}
+          <div class="illumination-badge" class:bright={latestReading.illumination === 'bright'}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="5"></circle>
+              <line x1="12" y1="1" x2="12" y2="3"></line>
+              <line x1="12" y1="21" x2="12" y2="23"></line>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+              <line x1="1" y1="12" x2="3" y2="12"></line>
+              <line x1="21" y1="12" x2="23" y2="12"></line>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+            {latestReading.illumination === 'bright' ? 'Bright' : 'Dim'}
+          </div>
+        {/if}
       </div>
     {:else}
       <div class="no-reading">No data</div>
@@ -128,7 +145,7 @@
 {/if}
 
 <style>
-  .sensor-card {
+  .presence-card {
     position: relative;
     background: white;
     border: 2px solid #e5e7eb;
@@ -139,12 +156,12 @@
     user-select: none;
   }
 
-  .sensor-card:hover {
+  .presence-card:hover {
     border-color: #d1d5db;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
   }
 
-  .sensor-card.active {
+  .presence-card.active {
     border-color: #3b82f6;
     background: #eff6ff;
     box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
@@ -218,37 +235,108 @@
     color: #9ca3af;
   }
 
-  .sensor-readings {
-    display: flex;
-    gap: 0.75rem;
-  }
-
-  .reading {
-    flex: 1;
-    background: #f9fafb;
-    padding: 0.5rem 0.625rem;
-    border-radius: 6px;
+  .presence-indicator {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 0;
   }
 
-  .reading-label {
-    font-size: 0.6875rem;
-    color: #6b7280;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.025em;
+  .light-bubble {
+    position: relative;
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
-  .reading-value {
-    font-size: 1rem;
+  .light-glow {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(156, 163, 175, 0.4) 0%, rgba(156, 163, 175, 0) 70%);
+    transition: all 0.3s ease;
+  }
+
+  .light-bubble.occupied .light-glow {
+    background: radial-gradient(circle, rgba(251, 191, 36, 0.6) 0%, rgba(251, 191, 36, 0.2) 50%, rgba(251, 191, 36, 0) 70%);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  .light-core {
+    position: relative;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #d1d5db;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+  }
+
+  .light-bubble.occupied .light-core {
+    background: linear-gradient(135deg, #fcd34d 0%, #f59e0b 100%);
+    box-shadow:
+      0 0 20px rgba(251, 191, 36, 0.6),
+      inset 0 2px 4px rgba(255, 255, 255, 0.5);
+  }
+
+  @keyframes pulse {
+    0%,
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+    50% {
+      transform: scale(1.1);
+      opacity: 0.8;
+    }
+  }
+
+  .presence-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.375rem;
+  }
+
+  .presence-label {
+    font-size: 0.875rem;
     font-weight: 600;
-    color: #111827;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .light-bubble.occupied ~ .presence-info .presence-label {
+    color: #f59e0b;
+  }
+
+  .illumination-badge {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    background: #f3f4f6;
+    border-radius: 4px;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    color: #6b7280;
+    text-transform: capitalize;
+  }
+
+  .illumination-badge.bright {
+    background: #fef3c7;
+    color: #f59e0b;
+  }
+
+  .illumination-badge svg {
+    flex-shrink: 0;
   }
 
   .no-reading {
-    flex: 1;
     text-align: center;
     color: #9ca3af;
     font-size: 0.875rem;

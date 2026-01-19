@@ -106,6 +106,14 @@ pub(super) fn spawn_event_loop(
                             continue;
                         }
 
+                        if topic.is_availability() {
+                            debug!(
+                                topic = %p.topic,
+                                "Skipping /availability topic"
+                            );
+                            continue;
+                        }
+
                         let Some(mqtt_topic) = topic.device_id() else {
                             debug!(topic = %p.topic, "Ignoring topic without device id");
                             continue;

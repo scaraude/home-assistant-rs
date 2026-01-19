@@ -1,5 +1,6 @@
 <script lang="ts">
   import CompactSensorCard from "./CompactSensorCard.svelte";
+  import PresenceCard from "./PresenceCard.svelte";
   import { graphConfig } from "./stores/graphConfig";
   import { dataCache } from "./stores/dataCache";
   import type { SensorReading } from "./api";
@@ -16,6 +17,12 @@
       .sort((a, b) => b.timestamp - a.timestamp);
 
     return sensorReadings[0] || null;
+  }
+
+  // Check if sensor is a presence sensor
+  function isPresenceSensor(deviceId: string): boolean {
+    const reading = getLatestReading(deviceId);
+    return reading?.type === 'presence';
   }
 
   // Check if any sensors are selected
@@ -87,11 +94,20 @@
   {:else}
     <div class="sensor-grid">
       {#each sensors as sensor (sensor.deviceId)}
-        <CompactSensorCard
-          {sensor}
-          {editMode}
-          latestReading={getLatestReading(sensor.deviceId)}
-        />
+        {@const reading = getLatestReading(sensor.deviceId)}
+        {#if isPresenceSensor(sensor.deviceId)}
+          <PresenceCard
+            {sensor}
+            {editMode}
+            latestReading={reading?.type === 'presence' ? reading : null}
+          />
+        {:else}
+          <CompactSensorCard
+            {sensor}
+            {editMode}
+            latestReading={reading}
+          />
+        {/if}
       {/each}
     </div>
   {/if}

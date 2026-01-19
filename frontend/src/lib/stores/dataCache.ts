@@ -117,7 +117,7 @@ function createDataCache() {
           (item) =>
             item.device_id === reading.device_id &&
             item.timestamp === reading.timestamp &&
-            item.temperature === reading.temperature,
+            item.type === reading.type,
         );
 
         const merged = exists

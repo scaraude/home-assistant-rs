@@ -74,8 +74,8 @@
       if (sensorReadings.length === 0) continue;
 
       const timestamps = sensorReadings.map(r => r.timestamp * 1000);
-      const temperatures = sensorReadings.map(r => r.temperature);
-      const humidities = sensorReadings.map(r => r.humidity);
+      const temperatures = sensorReadings.map(r => r.type === 'temp_humidity' ? r.temperature : 0);
+      const humidities = sensorReadings.map(r => r.type === 'temp_humidity' ? r.humidity : 0);
 
       const deviceName = deviceMap.get(sensor.deviceId)?.name || sensor.deviceId;
 

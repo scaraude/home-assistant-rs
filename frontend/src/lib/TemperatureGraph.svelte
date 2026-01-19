@@ -11,6 +11,8 @@
     Tooltip,
     Legend,
     Filler,
+    BarController,
+    BarElement,
   } from "chart.js";
   import "chartjs-adapter-date-fns";
   import type { SensorReading } from "./api";
@@ -25,7 +27,9 @@
     Title,
     Tooltip,
     Legend,
-    Filler
+    Filler,
+    BarController,
+    BarElement
   );
 
   let {
@@ -33,7 +37,7 @@
     selectedMetric = null
   }: {
     readings?: SensorReading[];
-    selectedMetric?: "temperature" | "humidity" | null;
+    selectedMetric?: "temperature" | "humidity" | "presence" | null;
   } = $props();
 
   let canvas = $state<HTMLCanvasElement>();
@@ -41,8 +45,35 @@
 
   function getDatasets() {
     const timestamps = readings.map((r) => r.timestamp * 1000);
-    const temperatures = readings.map((r) => r.temperature);
-    const humidities = readings.map((r) => r.humidity);
+
+    // Check if this is a presence sensor
+    const isPresenceSensor = readings.length > 0 && readings[0].type === 'presence';
+
+    if (isPresenceSensor) {
+      const presenceData = readings.map((r) => r.type === 'presence' ? (r.occupied ? 1 : 0) : 0);
+
+      const allDatasets = [
+        {
+          type: 'bar' as const,
+          label: 'Presence',
+          data: presenceData,
+          borderColor: "rgb(251, 191, 36)",
+          backgroundColor: "rgba(251, 191, 36, 0.7)",
+          yAxisID: "y",
+          barThickness: 'flex' as const,
+          maxBarThickness: 40,
+          categoryPercentage: 1.0,
+          barPercentage: 1.0,
+          hidden: selectedMetric !== null && selectedMetric !== "presence",
+        },
+      ];
+
+      return { timestamps, datasets: allDatasets };
+    }
+
+    // Temperature/humidity sensor
+    const temperatures = readings.map((r) => r.type === 'temp_humidity' ? r.temperature : 0);
+    const humidities = readings.map((r) => r.type === 'temp_humidity' ? r.humidity : 0);
 
     const POINT_RADUIS = 0.3;
     const POINT_RADIUS_HOVER = 1;
@@ -106,6 +137,7 @@
     if (!ctx) return;
 
     const { timestamps, datasets } = getDatasets();
+    const isPresenceSensor = readings.length > 0 && readings[0].type === 'presence';
 
     chart = new Chart(ctx, {
       type: "line",
@@ -142,6 +174,12 @@
                 }
                 return "";
               },
+              label: (context) => {
+                if (isPresenceSensor) {
+                  return context.parsed.y === 1 ? "Occupied" : "Clear";
+                }
+                return context.dataset.label + ": " + (context.parsed.y ?? 0).toFixed(1);
+              },
             },
           },
         },
@@ -171,7 +209,7 @@
             position: "left",
             title: {
               display: true,
-              text: selectedMetric === "humidity" ? "%" : "°C",
+              text: isPresenceSensor ? "Presence" : (selectedMetric === "humidity" ? "%" : "°C"),
               font: {
                 size: 10,
               },
@@ -183,12 +221,18 @@
               font: {
                 size: 10,
               },
+              callback: function(value) {
+                if (isPresenceSensor) {
+                  return value === 1 ? "Occupied" : (value === 0 ? "Clear" : "");
+                }
+                return value;
+              },
             },
-            ...computeGraphTemperatureMinMax(datasets),
+            ...(isPresenceSensor ? { min: 0, max: 1, ticks: { stepSize: 1 } } : computeGraphTemperatureMinMax(datasets)),
           },
           y1: {
             type: "linear",
-            display: selectedMetric === null,
+            display: !isPresenceSensor && selectedMetric === null,
             position: "right",
             title: {
               display: true,

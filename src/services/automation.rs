@@ -309,6 +309,18 @@ impl AutomationService {
                         None
                     }
                 }),
+            SensorField::Presence => self
+                .db
+                .get_latest_reading_for_sensor(&condition.device_id)
+                .ok()
+                .flatten()
+                .and_then(|reading| {
+                    if let SensorReading::Presence { occupied, .. } = reading {
+                        Some(if occupied { 1.0 } else { 0.0 })
+                    } else {
+                        None
+                    }
+                }),
             SensorField::Battery => self
                 .device_state
                 .get_battery(&condition.device_id)

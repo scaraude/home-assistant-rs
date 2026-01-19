@@ -27,6 +27,9 @@ pub struct DeviceMqttMessage {
     /// Presence/occupancy detection
     pub occupancy: Option<bool>,
 
+    /// Illumination level (only for presence sensors)
+    pub illumination: Option<String>,
+
     // ==================== Commander fields ====================
     /// Switch state parsed from MQTT payload
     pub state: Option<SwitchState>,
@@ -220,6 +223,7 @@ pub enum SensorReading {
     Presence {
         device_id: String,
         occupied: bool,
+        illumination: Option<String>,
         #[serde(with = "chrono::serde::ts_seconds")]
         timestamp: DateTime<Utc>,
     },
@@ -242,6 +246,7 @@ impl SensorReading {
             SensorType::Presence => msg.occupancy.map(|occ| SensorReading::Presence {
                 device_id,
                 occupied: occ,
+                illumination: msg.illumination.clone(),
                 timestamp: Utc::now(),
             }),
         }
@@ -291,41 +296,19 @@ mod tests {
         temperature: Option<f32>,
         humidity: Option<f32>,
         occupancy: Option<bool>,
+        illumination: Option<String>,
         state: Option<SwitchState>,
         turbo_mode: Option<bool>,
     ) -> DeviceMqttMessage {
         DeviceMqttMessage {
-            linkquality: if linkality.is_some() {
-                linkality
-            } else {
-                Some(100)
-            },
-            battery: if battery.is_some() { battery } else { Some(85) },
-            temperature: if temperature.is_some() {
-                temperature
-            } else {
-                Some(22.5)
-            },
-            humidity: if humidity.is_some() {
-                humidity
-            } else {
-                Some(55.0)
-            },
-            occupancy: if occupancy.is_some() {
-                occupancy
-            } else {
-                Some(true)
-            },
-            state: if state.is_some() {
-                state
-            } else {
-                Some(SwitchState::On)
-            },
-            turbo_mode: if turbo_mode.is_some() {
-                turbo_mode
-            } else {
-                Some(true)
-            },
+            linkquality: linkality,
+            battery,
+            temperature,
+            humidity,
+            occupancy,
+            illumination,
+            state,
+            turbo_mode,
             other: serde_json::Map::new(),
         }
     }
@@ -361,15 +344,28 @@ mod tests {
 
     #[test]
     fn test_device_mqtt_message_has_sensor_data() {
-        let msg = create_test_mqtt_message(None, None, None, None, None, None, None);
+        let temp_msg =
+            create_test_mqtt_message(None, None, Some(22.5), Some(55.0), None, None, None, None);
+        assert!(temp_msg.has_sensor_data(&SensorType::TempHumidity));
+        assert!(!temp_msg.has_sensor_data(&SensorType::Presence));
 
-        assert!(msg.has_sensor_data(&SensorType::TempHumidity));
-        assert!(!msg.has_sensor_data(&SensorType::Presence));
+        let presence_msg = create_test_mqtt_message(
+            None,
+            None,
+            None,
+            None,
+            Some(true),
+            Some("bright".to_string()),
+            None,
+            None,
+        );
+        assert!(!presence_msg.has_sensor_data(&SensorType::TempHumidity));
+        assert!(presence_msg.has_sensor_data(&SensorType::Presence));
     }
 
     #[test]
     fn test_extract_device_state_returns_struct_with_fields() {
-        let msg = create_test_mqtt_message(Some(10), Some(90), None, None, None, None, None);
+        let msg = create_test_mqtt_message(Some(10), Some(90), None, None, None, None, None, None);
 
         let state = msg.extract_device_state();
         assert_eq!(state.battery_level, Some(90));
@@ -378,15 +374,24 @@ mod tests {
 
     #[test]
     fn test_device_mqtt_message_has_commander_data() {
-        let msg =
-            create_test_mqtt_message(None, None, None, None, None, Some(SwitchState::On), None);
+        let msg = create_test_mqtt_message(
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(SwitchState::On),
+            None,
+        );
 
         assert!(msg.has_commander_data(&CommanderType::Switch));
     }
 
     #[test]
     fn test_sensor_reading_from_mqtt() {
-        let msg = create_test_mqtt_message(None, None, Some(22.5), Some(50.0), None, None, None);
+        let msg =
+            create_test_mqtt_message(None, None, Some(22.5), Some(50.0), None, None, None, None);
 
         let reading =
             SensorReading::from_mqtt("device1".to_string(), &SensorType::TempHumidity, &msg);

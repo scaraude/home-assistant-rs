@@ -1,12 +1,29 @@
 // API client for home-automation-rs backend
 
-export interface SensorReading {
+export interface TempHumiditySensorReading {
+  type: 'temp_humidity';
   device_id: string;
   temperature: number;
-  humidity: number;  // Now required
+  humidity: number;
   timestamp: number;
-  // Note: battery and link_quality are no longer in sensor readings
-  // They are now in device_state (see SwitchDevice interface)
+}
+
+export interface PresenceSensorReading {
+  type: 'presence';
+  device_id: string;
+  occupied: boolean;
+  illumination?: string;
+  timestamp: number;
+}
+
+export type SensorReading = TempHumiditySensorReading | PresenceSensorReading;
+
+// Legacy type for backward compatibility (temp/humidity only)
+export interface LegacySensorReading {
+  device_id: string;
+  temperature: number;
+  humidity: number;
+  timestamp: number;
 }
 
 export interface DeviceInfo {
@@ -414,7 +431,7 @@ export async function fetchDeviceStates(): Promise<DeviceState[]> {
 export interface AutomationCondition {
   id: string;
   device_id: string;
-  field: 'temperature' | 'humidity' | 'battery' | 'link_quality';
+  field: 'temperature' | 'humidity' | 'battery' | 'link_quality' | 'presence';
   operator: 'equal' | 'not_equal' | 'greater_than' | 'greater_than_or_equal' | 'less_than' | 'less_than_or_equal';
   value: number;
 }
