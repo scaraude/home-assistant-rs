@@ -11,7 +11,7 @@
 
 ### 🟠 High Priority
 - [ ] HIGH-1: Code Quality - Extract HTTP Error Handling Pattern
-- [ ] HIGH-2: Architecture - Split routes.rs by Domain
+- [x] HIGH-2: Architecture - Split routes.rs by Domain
 - [ ] HIGH-3: Testing - HTTP Route Test Coverage
 - [ ] HIGH-4: Frontend - Design System & Style Consolidation
 - [ ] HIGH-5: Frontend - Split api.ts by Domain
