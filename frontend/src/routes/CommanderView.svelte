@@ -108,10 +108,34 @@
   @media (max-width: 640px) {
     .switches-grid {
       grid-template-columns: 1fr;
+      gap: var(--card-gap, 1rem);
+    }
+
+    .commander-header {
+      margin-bottom: 1.5rem;
     }
 
     .commander-header h2 {
       font-size: 1.25rem;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .commander-header {
+      margin-bottom: 1rem;
+      padding-bottom: 0.75rem;
+    }
+
+    .commander-header h2 {
+      font-size: 1.125rem;
+    }
+
+    .header-description {
+      font-size: 0.8125rem;
+    }
+
+    .switches-grid {
+      gap: var(--card-gap, 0.75rem);
     }
   }
 </style>

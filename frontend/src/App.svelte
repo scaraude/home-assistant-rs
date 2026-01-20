@@ -513,12 +513,85 @@
     }
 
     .container {
+      padding: var(--container-padding, 1rem);
       padding-bottom: 5rem;
     }
 
     .init-error {
       flex-direction: column;
       align-items: flex-start;
+    }
+  }
+
+  /* Small phones - compact nav */
+  @media (max-width: 480px) {
+    header {
+      padding: 0.75rem 0;
+    }
+
+    .header-content {
+      padding: 0 var(--container-padding, 0.75rem);
+      gap: 0.5rem;
+    }
+
+    .logo {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+    }
+
+    .logo svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    h1 {
+      font-size: 1.125rem;
+    }
+
+    .nav-buttons {
+      padding: 0.5rem;
+      gap: 0.375rem;
+    }
+
+    .nav-button {
+      padding: 0.625rem 0.5rem;
+      font-size: 0.75rem;
+      min-width: 0;
+    }
+
+    .permit-join-button {
+      height: 2.5rem;
+      width: 2.5rem;
+    }
+
+    .permit-join-button.active {
+      width: 8rem;
+    }
+
+    .permit-join-label {
+      font-size: 0.75rem;
+    }
+
+    .container {
+      padding: var(--container-padding, 0.75rem);
+      padding-bottom: 4.5rem;
+    }
+
+    .sync-indicator {
+      font-size: 0.75rem;
+    }
+  }
+
+  /* Very small phones (320px) */
+  @media (max-width: 375px) {
+    .nav-button {
+      padding: 0.5rem 0.25rem;
+      font-size: 0.6875rem;
+    }
+
+    .permit-join-button.active {
+      width: 7rem;
     }
   }
 </style>

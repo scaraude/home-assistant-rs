@@ -54,6 +54,12 @@
   --transition-fast: 0.15s ease;
   --transition-base: 0.2s ease;
 
+  /* Responsive spacing - these change at breakpoints */
+  --container-padding: 2rem;
+  --section-gap: 2rem;
+  --card-gap: 1rem;
+  --graph-min-height: 400px;
+
   font-family: var(--font-sans);
   line-height: 1.6;
   font-weight: 400;
@@ -90,4 +96,33 @@ button {
 button:focus-visible {
   outline: 2px solid #3b82f6;
   outline-offset: 2px;
+}
+
+/* ===== RESPONSIVE BREAKPOINTS ===== */
+
+/* Tablets and small laptops */
+@media (max-width: 1024px) {
+  :root {
+    --container-padding: 1.5rem;
+  }
+}
+
+/* Large phones and small tablets */
+@media (max-width: 768px) {
+  :root {
+    --container-padding: 1rem;
+    --section-gap: 1.5rem;
+    --card-gap: 0.75rem;
+    --graph-min-height: 300px;
+  }
+}
+
+/* Small phones */
+@media (max-width: 480px) {
+  :root {
+    --container-padding: 0.75rem;
+    --section-gap: 1rem;
+    --card-gap: 0.5rem;
+    --graph-min-height: 250px;
+  }
 }

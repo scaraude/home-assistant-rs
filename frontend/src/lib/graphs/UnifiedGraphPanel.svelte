@@ -47,8 +47,19 @@
 
   @media (max-width: 768px) {
     .chart-wrapper {
-      min-height: 300px;
+      min-height: var(--graph-min-height, 300px);
       max-height: 50vh;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .graph-panel {
+      gap: 0.75rem;
+    }
+
+    .chart-wrapper {
+      min-height: var(--graph-min-height, 250px);
+      max-height: 45vh;
     }
   }
 </style>

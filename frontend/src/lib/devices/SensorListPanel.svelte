@@ -279,7 +279,7 @@
   @media (max-width: 767px) {
     .sensor-grid {
       grid-template-columns: repeat(2, 1fr);
-      gap: 0.75rem;
+      gap: var(--card-gap, 0.75rem);
     }
 
     .header {
@@ -302,6 +302,28 @@
     .icon-button svg {
       width: 16px;
       height: 16px;
+    }
+  }
+
+  /* Small phones - single column */
+  @media (max-width: 480px) {
+    .sensor-grid {
+      grid-template-columns: 1fr;
+      gap: var(--card-gap, 0.5rem);
+    }
+
+    .header {
+      gap: 0.5rem;
+    }
+
+    .header-actions {
+      width: 100%;
+      justify-content: flex-end;
+    }
+
+    .action-button {
+      flex: 1;
+      justify-content: center;
     }
   }
 </style>
