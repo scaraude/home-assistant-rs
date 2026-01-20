@@ -861,4 +861,117 @@
     width: 16px;
     height: 16px;
   }
+
+  /* Responsive styles */
+  @media (max-width: 768px) {
+    .automation-panel {
+      padding: 0.75rem;
+    }
+
+    .panel-header h3 {
+      font-size: 0.9375rem;
+    }
+
+    .create-btn {
+      padding: 0.4rem 0.75rem;
+      font-size: 0.8125rem;
+    }
+
+    .rule-card {
+      padding: 0.75rem;
+    }
+
+    .rule-header {
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .rule-controls {
+      width: 100%;
+    }
+
+    .toggle-enabled-btn {
+      width: 100%;
+      justify-content: center;
+    }
+
+    .empty-state {
+      padding: 2rem 1rem;
+    }
+
+    .empty-state svg {
+      width: 48px;
+      height: 48px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .automation-panel {
+      padding: 0.5rem;
+    }
+
+    .panel-header {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.75rem;
+    }
+
+    .create-btn {
+      width: 100%;
+      justify-content: center;
+    }
+
+    .rule-card {
+      padding: 0.625rem;
+    }
+
+    .rule-name {
+      font-size: 0.9375rem;
+    }
+
+    .rule-description {
+      font-size: 0.8125rem;
+    }
+
+    .condition-item {
+      flex-wrap: wrap;
+      padding: 0.5rem;
+      font-size: 0.75rem;
+    }
+
+    .rule-actions {
+      flex-direction: column;
+    }
+
+    .edit-btn,
+    .delete-btn {
+      width: 100%;
+    }
+
+    .rule-meta {
+      flex-wrap: wrap;
+      font-size: 0.6875rem;
+    }
+
+    .trigger-count {
+      margin-left: 0;
+      margin-top: 0.25rem;
+      width: 100%;
+      text-align: center;
+    }
+
+    .empty-state {
+      padding: 1.5rem 0.75rem;
+    }
+
+    .empty-hint {
+      font-size: 0.8125rem;
+    }
+
+    .empty-action-btn {
+      width: 100%;
+      justify-content: center;
+      padding: 0.625rem 1rem;
+    }
+  }
 </style>

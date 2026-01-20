@@ -132,11 +132,23 @@
   @media (max-width: 768px) {
     .graph-section {
       height: 50vh;
-      min-height: 300px;
+      min-height: var(--graph-min-height, 300px);
     }
 
     .unified-layout {
-      gap: 1.5rem;
+      gap: var(--section-gap, 1.5rem);
+    }
+  }
+
+  @media (max-width: 480px) {
+    .graph-section {
+      height: 45vh;
+      min-height: var(--graph-min-height, 250px);
+      max-height: 350px;
+    }
+
+    .unified-layout {
+      gap: var(--section-gap, 1rem);
     }
   }
 </style>
