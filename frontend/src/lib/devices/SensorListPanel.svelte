@@ -4,9 +4,27 @@
   import { graphConfig } from "../stores/graphConfig";
   import { dataCache } from "../stores/dataCache";
   import type { SensorReading } from "../api";
+  import type { DeviceInfo } from "../api/devices";
 
-  const sensors = $derived($graphConfig.sensors);
+  const allSensors = $derived($graphConfig.sensors);
+  const devices = $derived($dataCache.sensors.devices);
   const readings = $derived($dataCache.sensors.readings);
+
+  // Filter out energy meters - they belong in ConsommationsView
+  const isEnergyMeter = (device: DeviceInfo) =>
+    device.capabilities.some(
+      (cap) => cap.type === "sensor" && cap.sensor_type === "energy_meter"
+    );
+
+  const deviceMap = $derived(new Map(devices.map(d => [d.device_id, d])));
+
+  // Only show non-energy-meter sensors
+  const sensors = $derived(
+    allSensors.filter(s => {
+      const device = deviceMap.get(s.deviceId);
+      return device && !isEnergyMeter(device);
+    })
+  );
 
   let editMode = $state(false);
 

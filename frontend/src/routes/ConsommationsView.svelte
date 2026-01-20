@@ -10,15 +10,28 @@
 
   let loading = $state(true);
   let error = $state<string | null>(null);
+
+  // Filter: only energy meters for this view
   const isEnergyMeter = (device: DeviceInfo) =>
     device.capabilities.some(
       (cap) => cap.type === "sensor" && cap.sensor_type === "energy_meter"
     );
 
+  // Initialize graphConfig with only energy meters
+  function initializeGraphConfig(devices: DeviceInfo[]) {
+    const energyMeterIds = devices
+      .filter(isEnergyMeter)
+      .map((s) => s.device_id);
+    graphConfig.initializeSensors(energyMeterIds);
+  }
+
   async function loadData(hours: number, force = false) {
     const sensorState = $dataCache.sensors;
 
+    // If data is already loaded and we're not forcing refresh,
+    // just re-initialize graphConfig with cached devices
     if (!force && sensorState.loaded && sensorState.rangeHours === hours) {
+      initializeGraphConfig(sensorState.devices);
       loading = false;
       return;
     }
@@ -39,13 +52,8 @@
         hours
       );
 
-      // Initialize only energy meters in graph config
-      const energyMeterIds = sensors.filter(isEnergyMeter).map((s) => s.device_id);
-
-      if ($graphConfig.sensors.length === 0 ||
-          $graphConfig.sensors.length !== energyMeterIds.length) {
-        graphConfig.initializeSensors(energyMeterIds);
-      }
+      // Always initialize graphConfig for this view
+      initializeGraphConfig(sensors);
 
       try {
         const states = await fetchDeviceStates();
