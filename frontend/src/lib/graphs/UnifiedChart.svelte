@@ -28,37 +28,37 @@
     Tooltip,
     Legend,
     Filler,
-    zoomPlugin
+    zoomPlugin,
   );
 
   let {
     sensors = [],
-    metric = 'temperature',
-    timeRange = '24h',
-    metricType = 'temperature'
+    metric = "temperature",
+    timeRange = "24h",
+    metricType = "temperature",
   }: {
     sensors?: SensorUIConfig[];
-    metric?: 'temperature' | 'humidity' | 'both';
+    metric?: "temperature" | "humidity" | "both";
     timeRange?: string;
-    metricType?: 'temperature' | 'power';
+    metricType?: "temperature" | "power";
   } = $props();
 
   let canvas = $state<HTMLCanvasElement>();
   let chart = $state<Chart | null>(null);
 
   // Derived: visible sensors
-  let visibleSensors = $derived(sensors.filter(s => s.visible));
+  let visibleSensors = $derived(sensors.filter((s) => s.visible));
 
   // Derived: get device info map for names
   let deviceMap = $derived(
-    new Map($dataCache.sensors.devices.map(d => [d.device_id, d]))
+    new Map($dataCache.sensors.devices.map((d) => [d.device_id, d])),
   );
 
   // Derived: readings filtered by visible sensors
   let visibleReadings = $derived(
-    $dataCache.sensors.readings.filter(r =>
-      visibleSensors.some(s => s.deviceId === r.device_id)
-    )
+    $dataCache.sensors.readings.filter((r) =>
+      visibleSensors.some((s) => s.deviceId === r.device_id),
+    ),
   );
 
   // Build datasets for visible sensors
@@ -70,24 +70,27 @@
 
     for (const sensor of visibleSensors) {
       const sensorReadings = visibleReadings
-        .filter(r => r.device_id === sensor.deviceId)
+        .filter((r) => r.device_id === sensor.deviceId)
         .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 
       if (sensorReadings.length === 0) continue;
 
-      const deviceName = deviceMap.get(sensor.deviceId)?.name || sensor.deviceId;
+      const deviceName =
+        deviceMap.get(sensor.deviceId)?.name || sensor.deviceId;
 
       // Power metric (for energy meters)
-      if (metricType === 'power') {
-        const timestamps = sensorReadings.map(r => r.timestamp.getTime());
-        const powerValues = sensorReadings.map(r => r.type === 'energy_meter' ? r.power : 0);
+      if (metricType === "power") {
+        const timestamps = sensorReadings.map((r) => r.timestamp.getTime());
+        const powerValues = sensorReadings.map((r) =>
+          r.type === "energy_meter" ? r.power : 0,
+        );
 
         datasets.push({
           label: deviceName,
           data: timestamps.map((t, i) => ({ x: t, y: powerValues[i] })),
           borderColor: sensor.color,
           backgroundColor: `${sensor.color}20`,
-          yAxisID: 'y',
+          yAxisID: "y",
           tension: 0.4,
           pointRadius: POINT_RADIUS,
           pointHoverRadius: POINT_RADIUS_HOVER,
@@ -96,18 +99,22 @@
       }
       // Temperature/Humidity metrics
       else {
-        const timestamps = sensorReadings.map(r => r.timestamp.getTime());
-        const temperatures = sensorReadings.map(r => r.type === 'temp_humidity' ? r.temperature : 0);
-        const humidities = sensorReadings.map(r => r.type === 'temp_humidity' ? r.humidity : 0);
+        const timestamps = sensorReadings.map((r) => r.timestamp.getTime());
+        const temperatures = sensorReadings.map((r) =>
+          r.type === "temp_humidity" ? r.temperature : 0,
+        );
+        const humidities = sensorReadings.map((r) =>
+          r.type === "temp_humidity" ? r.humidity : 0,
+        );
 
         // Temperature dataset
-        if (metric === 'temperature' || metric === 'both') {
+        if (metric === "temperature" || metric === "both") {
           datasets.push({
             label: `${deviceName} (Temp)`,
             data: timestamps.map((t, i) => ({ x: t, y: temperatures[i] })),
             borderColor: sensor.color,
             backgroundColor: `${sensor.color}20`, // 20 = 12.5% opacity in hex
-            yAxisID: 'y',
+            yAxisID: "y",
             tension: 0.4,
             pointRadius: POINT_RADIUS,
             pointHoverRadius: POINT_RADIUS_HOVER,
@@ -116,18 +123,18 @@
         }
 
         // Humidity dataset
-        if (metric === 'humidity' || metric === 'both') {
+        if (metric === "humidity" || metric === "both") {
           datasets.push({
             label: `${deviceName} (Humidity)`,
             data: timestamps.map((t, i) => ({ x: t, y: humidities[i] })),
             borderColor: sensor.color,
             backgroundColor: `${sensor.color}20`,
-            yAxisID: metric === 'both' ? 'y1' : 'y',
+            yAxisID: metric === "both" ? "y1" : "y",
             tension: 0.4,
             pointRadius: POINT_RADIUS,
             pointHoverRadius: POINT_RADIUS_HOVER,
             fill: false,
-            borderDash: metric === 'both' ? [5, 5] : [], // Dashed line for humidity when both shown
+            borderDash: metric === "both" ? [5, 5] : [], // Dashed line for humidity when both shown
           });
         }
       }
@@ -138,16 +145,16 @@
 
   function getTimeDisplayFormats(range: string) {
     switch (range) {
-      case '24h':
-        return { hour: 'HH:mm', day: 'HH:mm' };
-      case '1w':
-        return { day: 'MMM dd', hour: 'MMM dd' };
-      case '1m':
-        return { day: 'MMM dd', week: 'MMM dd' };
-      case '1y':
-        return { month: 'MMM yyyy', week: 'MMM yyyy' };
+      case "24h":
+        return { hour: "HH:mm", day: "HH:mm" };
+      case "1w":
+        return { day: "MMM dd", hour: "MMM dd" };
+      case "1m":
+        return { day: "MMM dd", week: "MMM dd" };
+      case "1y":
+        return { month: "MMM yyyy", week: "MMM yyyy" };
       default:
-        return { hour: 'HH:mm', day: 'MMM dd' };
+        return { hour: "HH:mm", day: "MMM dd" };
     }
   }
 
@@ -166,20 +173,12 @@
         responsive: true,
         maintainAspectRatio: false,
         interaction: {
-          mode: "index",
+          mode: "nearest",
           intersect: false,
         },
         plugins: {
           legend: {
-            display: true,
-            position: "top",
-            labels: {
-              usePointStyle: true,
-              padding: 15,
-              font: { size: 12 },
-              boxWidth: 8,
-              boxHeight: 8,
-            },
+            display: false,
           },
           tooltip: {
             enabled: true,
@@ -196,7 +195,7 @@
           zoom: {
             pan: {
               enabled: true,
-              mode: 'x',
+              mode: "x",
             },
             zoom: {
               wheel: {
@@ -206,10 +205,10 @@
               pinch: {
                 enabled: true,
               },
-              mode: 'x',
+              mode: "x",
             },
             limits: {
-              x: { min: 'original', max: 'original' },
+              x: { min: "original", max: "original" },
             },
           },
         },
@@ -234,7 +233,12 @@
             position: "left",
             title: {
               display: true,
-              text: metricType === 'power' ? 'W' : (metric === 'humidity' ? '%' : '°C'),
+              text:
+                metricType === "power"
+                  ? "W"
+                  : metric === "humidity"
+                    ? "%"
+                    : "°C",
               font: { size: 12 },
             },
             grid: {
@@ -246,7 +250,7 @@
           },
           y1: {
             type: "linear",
-            display: metric === 'both',
+            display: metric === "both",
             position: "right",
             title: {
               display: true,
@@ -276,12 +280,13 @@
     // Update Y-axis configuration
     const yAxis = chart.options.scales?.y as any;
     if (yAxis?.title) {
-      yAxis.title.text = metricType === 'power' ? 'W' : (metric === 'humidity' ? '%' : '°C');
+      yAxis.title.text =
+        metricType === "power" ? "W" : metric === "humidity" ? "%" : "°C";
     }
 
     const y1Axis = chart.options.scales?.y1 as any;
     if (y1Axis) {
-      y1Axis.display = metric === 'both';
+      y1Axis.display = metric === "both";
     }
 
     // Update time display formats
@@ -290,7 +295,7 @@
       xAxis.time.displayFormats = getTimeDisplayFormats(timeRange);
     }
 
-    chart.update('none');
+    chart.update("none");
   }
 
   onDestroy(() => {
