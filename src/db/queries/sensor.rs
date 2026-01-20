@@ -173,7 +173,8 @@ impl Database {
                  sensors.device_id,
                  COALESCE(d.name, sensors.device_id) as name,
                  d.capabilities,
-                 d.available_fields
+                 d.available_fields,
+                 d.color
              FROM (
                  SELECT DISTINCT device_id FROM temperature_readings
                  UNION
@@ -199,6 +200,7 @@ impl Database {
                     name: row.get(1)?,
                     capabilities,
                     available_fields,
+                    color: row.get(4)?,
                 })
             })?
             .collect::<Result<Vec<_>>>()?;

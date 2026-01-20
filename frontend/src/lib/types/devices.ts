@@ -14,6 +14,7 @@ export interface DeviceInfo {
   name: string;
   capabilities: DeviceCapability[];
   available_fields: string[];
+  color: string | null;
 }
 
 export interface DeviceState {
@@ -35,4 +36,5 @@ export interface NetworkDevice {
   added_at: Date;
   is_bridge: boolean;
   parent_device_id: string | null;
+  color: string | null;
 }

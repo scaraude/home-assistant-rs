@@ -19,10 +19,10 @@
 
   // Initialize graphConfig with only energy meters
   function initializeGraphConfig(devices: DeviceInfo[]) {
-    const energyMeterIds = devices
+    const energyMeters = devices
       .filter(isEnergyMeter)
-      .map((s) => s.device_id);
-    graphConfig.initializeSensors(energyMeterIds);
+      .map((s) => ({ deviceId: s.device_id, color: s.color }));
+    graphConfig.initializeSensors(energyMeters);
   }
 
   async function loadData(hours: number, force = false) {

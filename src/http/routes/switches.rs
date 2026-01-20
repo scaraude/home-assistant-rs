@@ -59,6 +59,7 @@ pub fn serve_switches_list(
                 "id": device.id,
                 "mqtt_topic": device.mqtt_topic,
                 "name": device.name,
+                "color": device.color,
                 "state": current_state.to_bool(),
                 "link_quality": link_quality,
                 "battery_level": battery_level,
@@ -319,7 +320,8 @@ pub async fn permit_join(
 
 #[derive(serde::Deserialize)]
 struct DeviceUpdate {
-    name: String,
+    name: Option<String>,
+    color: Option<String>,
 }
 
 pub async fn update_device(
@@ -349,7 +351,12 @@ pub async fn update_device(
     // Parse the update payload
     let update: DeviceUpdate = match serde_json::from_slice::<DeviceUpdate>(&body_bytes) {
         Ok(upd) => {
-            debug!(device_id = %device_id, name = %upd.name, "Parsed device update");
+            debug!(
+                device_id = %device_id,
+                name = ?upd.name,
+                color = ?upd.color,
+                "Parsed device update"
+            );
             upd
         }
         Err(e) => {
@@ -358,37 +365,58 @@ pub async fn update_device(
         }
     };
 
-    // Validate name is not empty
-    if update.name.trim().is_empty() {
-        warn!(device_id = %device_id, "Device name cannot be empty");
-        return bad_request_response("Device name cannot be empty");
+    if update.name.is_none() && update.color.is_none() {
+        warn!(device_id = %device_id, "No update fields provided");
+        return bad_request_response("No update fields provided");
     }
 
-    info!(
-        device_id = %device_id,
-        new_name = %update.name,
-        "Updating device name"
-    );
-
-    // Update the device name in the database
-    match db.update_device_name(device_id, &update.name) {
-        Ok(_) => {
-            info!(
-                device_id = %device_id,
-                new_name = %update.name,
-                "Device name updated successfully"
-            );
-            json_response(r#"{"status":"ok"}"#.into())
+    if let Some(name) = update.name.as_ref() {
+        let trimmed = name.trim();
+        if trimmed.is_empty() {
+            warn!(device_id = %device_id, "Device name cannot be empty");
+            return bad_request_response("Device name cannot be empty");
         }
-        Err(e) => {
+
+        info!(
+            device_id = %device_id,
+            new_name = %trimmed,
+            "Updating device name"
+        );
+
+        if let Err(e) = db.update_device_name(device_id, trimmed) {
             error!(
                 error = %e,
                 device_id = %device_id,
                 "Failed to update device name in database"
             );
-            internal_error_response(e.to_string().as_str())
+            return internal_error_response(e.to_string().as_str());
         }
     }
+
+    if let Some(color) = update.color.as_ref() {
+        let trimmed = color.trim();
+        if trimmed.is_empty() {
+            warn!(device_id = %device_id, "Device color cannot be empty");
+            return bad_request_response("Device color cannot be empty");
+        }
+
+        info!(
+            device_id = %device_id,
+            color = %trimmed,
+            "Updating device color"
+        );
+
+        if let Err(e) = db.update_device_color(device_id, trimmed) {
+            error!(
+                error = %e,
+                device_id = %device_id,
+                "Failed to update device color in database"
+            );
+            return internal_error_response(e.to_string().as_str());
+        }
+    }
+
+    json_response(r#"{"status":"ok"}"#.into())
 }
 
 #[derive(serde::Deserialize)]

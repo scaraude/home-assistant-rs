@@ -88,6 +88,9 @@ pub struct Device {
 
     /// Parent device in the mesh network (None for coordinator)
     pub parent_device_id: Option<String>,
+
+    /// UI color for graphs and charts (hex format, e.g., "#3b82f6")
+    pub color: Option<String>,
 }
 
 impl Device {
@@ -110,6 +113,7 @@ impl Device {
             added_at: Utc::now(),
             is_bridge: false,
             parent_device_id: None,
+            color: None,
         }
     }
 
@@ -188,6 +192,9 @@ pub struct DeviceInfo {
 
     /// Available fields reported by the device
     pub available_fields: Vec<String>,
+
+    /// UI color for graphs and charts (hex format, e.g., "#3b82f6")
+    pub color: Option<String>,
 }
 
 /// Dynamic device state (ephemeral, not persisted to DB)

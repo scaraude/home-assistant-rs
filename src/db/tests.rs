@@ -32,6 +32,7 @@ mod tests {
             added_at: Utc::now(),
             is_bridge: false,
             parent_device_id: None,
+            color: None,
         };
         db.insert_device(&device).unwrap();
     }
@@ -179,6 +180,7 @@ mod tests {
             added_at: Utc::now(),
             is_bridge: false,
             parent_device_id: None,
+            color: None,
         };
         let device2 = Device {
             id: "sensor2".to_string(),
@@ -193,6 +195,7 @@ mod tests {
             added_at: Utc::now(),
             is_bridge: false,
             parent_device_id: None,
+            color: None,
         };
         db.insert_device(&device1).unwrap();
         db.insert_device(&device2).unwrap();
@@ -265,6 +268,7 @@ mod tests {
             added_at: Utc::now(),
             is_bridge: false,
             parent_device_id: None,
+            color: None,
         };
         db.insert_device(&device).unwrap();
 
@@ -326,6 +330,7 @@ mod tests {
             added_at: Utc::now(),
             is_bridge: false,
             parent_device_id: None,
+            color: None,
         };
         db.insert_device(&device1).unwrap();
 
@@ -342,6 +347,7 @@ mod tests {
             added_at: Utc::now(),
             is_bridge: false,
             parent_device_id: None,
+            color: None,
         };
         db.insert_device(&device2).unwrap();
 
@@ -408,6 +414,7 @@ mod tests {
             added_at: Utc::now(),
             is_bridge: false,
             parent_device_id: None,
+            color: None,
         };
         db.insert_device(&device).unwrap();
 
@@ -469,6 +476,7 @@ mod tests {
             added_at: Utc::now(),
             is_bridge: false,
             parent_device_id: None,
+            color: None,
         };
 
         db.insert_device(&device).unwrap();
@@ -520,6 +528,7 @@ mod tests {
             added_at: Utc::now(),
             is_bridge: false,
             parent_device_id: None,
+            color: None,
         };
 
         db.insert_device(&device).unwrap();
@@ -550,6 +559,7 @@ mod tests {
             added_at: Utc::now(),
             is_bridge: false,
             parent_device_id: None,
+            color: None,
         };
 
         db.insert_device(&device).unwrap();
@@ -577,6 +587,7 @@ mod tests {
             added_at: Utc::now(),
             is_bridge: false,
             parent_device_id: None,
+            color: None,
         };
 
         let device2 = Device {
@@ -592,6 +603,7 @@ mod tests {
             added_at: Utc::now(),
             is_bridge: false,
             parent_device_id: None,
+            color: None,
         };
 
         db.insert_device(&device1).unwrap();
@@ -618,6 +630,7 @@ mod tests {
             added_at: Utc::now(),
             is_bridge: false,
             parent_device_id: None,
+            color: None,
         };
 
         db.insert_device(&device).unwrap();
@@ -644,6 +657,7 @@ mod tests {
             added_at: Utc::now(),
             is_bridge: false,
             parent_device_id: None,
+            color: None,
         };
 
         db.insert_device(&device).unwrap();
@@ -679,6 +693,7 @@ mod tests {
             added_at: Utc::now(),
             is_bridge: false,
             parent_device_id: None,
+            color: None,
         };
         db.insert_device(&device1).unwrap();
 
@@ -696,6 +711,7 @@ mod tests {
             added_at: Utc::now(),
             is_bridge: false,
             parent_device_id: None,
+            color: None,
         };
         db.insert_device(&device2).unwrap();
 
@@ -1063,6 +1079,7 @@ mod tests {
             added_at: Utc::now(),
             is_bridge: false,
             parent_device_id: None,
+            color: None,
         };
 
         db.insert_device(&device).unwrap();
@@ -1081,6 +1098,7 @@ mod tests {
             added_at: Utc::now(),
             is_bridge: false,
             parent_device_id: None,
+            color: None,
         };
 
         let result = db.insert_device(&duplicate);
@@ -1104,6 +1122,7 @@ mod tests {
             added_at: Utc::now(),
             is_bridge: false,
             parent_device_id: None,
+            color: None,
         };
 
         db.insert_device(&device).unwrap();
@@ -1122,6 +1141,7 @@ mod tests {
             added_at: Utc::now(),
             is_bridge: false,
             parent_device_id: None,
+            color: None,
         };
 
         let result = db.insert_device(&duplicate);

@@ -6,22 +6,41 @@
     deviceId,
     name,
     class: className = "",
+    isEdit,
     onSaved,
   }: {
     deviceId: string;
     name: string;
     class?: string;
+    /** If provided, controls editing state externally. If undefined, component manages its own state. */
+    isEdit?: boolean;
     onSaved?: () => void;
   } = $props();
 
-  let isEditing = $state(false);
+  // Internal editing state (used when isEdit is undefined)
+  let internalIsEditing = $state(false);
   let editedName = $state("");
   let error = $state<string | null>(null);
   let isSaving = $state(false);
 
+  // Determine if we're in controlled mode
+  let isControlled = $derived(isEdit !== undefined);
+  // The actual editing state: use prop if controlled, internal state otherwise
+  let isEditing = $derived(isControlled ? isEdit : internalIsEditing);
+
+  // In controlled mode, initialize editedName when isEdit becomes true
+  $effect(() => {
+    if (isControlled && isEdit) {
+      editedName = name;
+      error = null;
+    }
+  });
+
   function startEditing() {
     editedName = name;
-    isEditing = true;
+    if (!isControlled) {
+      internalIsEditing = true;
+    }
     error = null;
   }
 
@@ -34,7 +53,10 @@
     }
 
     if (trimmed === name) {
-      isEditing = false;
+      if (!isControlled) {
+        internalIsEditing = false;
+      }
+      onSaved?.();
       return;
     }
 
@@ -44,7 +66,9 @@
     try {
       await updateDeviceName(deviceId, trimmed);
       dataCache.updateDeviceName(deviceId, trimmed);
-      isEditing = false;
+      if (!isControlled) {
+        internalIsEditing = false;
+      }
       onSaved?.();
     } catch (err) {
       error = err instanceof Error ? err.message : "Failed to save";
@@ -55,8 +79,11 @@
   }
 
   function cancel() {
-    isEditing = false;
+    if (!isControlled) {
+      internalIsEditing = false;
+    }
     error = null;
+    onSaved?.();
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -87,7 +114,11 @@
   {#if error}
     <span class="error-text">{error}</span>
   {/if}
+{:else if isControlled}
+  <!-- Controlled mode: just display text (parent controls when to edit) -->
+  <span class="name-text {className}" title={deviceId}>{name}</span>
 {:else}
+  <!-- Uncontrolled mode: clickable button to enter edit -->
   <button
     class="name-button {className}"
     title={deviceId}
@@ -99,7 +130,8 @@
 {/if}
 
 <style>
-  .name-button {
+  .name-button,
+  .name-text {
     margin: 0;
     font-size: 1rem;
     font-weight: 600;
@@ -107,6 +139,9 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .name-button {
     background: none;
     border: none;
     padding: 0;

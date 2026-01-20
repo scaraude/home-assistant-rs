@@ -14,14 +14,18 @@ export interface GraphState {
 
 // Perceptually distinct, colorblind-safe palette
 export const RECOMMENDED_COLORS = [
-  '#3b82f6', // Blue
-  '#ef4444', // Red
-  '#10b981', // Green
-  '#f59e0b', // Amber
-  '#8b5cf6', // Purple
-  '#ec4899', // Pink
-  '#14b8a6', // Teal
-  '#f97316', // Orange
+  '#1f77b4', // Blue
+  '#ff7f0e', // Orange
+  '#2ca02c', // Green
+  '#d62728', // Red
+  '#9467bd', // Purple
+  '#8c564b', // Brown
+  '#e377c2', // Pink
+  '#7f7f7f', // Gray
+  '#bcbd22', // Olive
+  '#17becf', // Cyan
+  '#003f5c', // Navy
+  '#ffa600', // Amber
 ];
 
 // Map time range to hours for API calls
@@ -101,17 +105,21 @@ function createGraphConfig() {
     },
 
     // Initialize sensors from device list
-    initializeSensors: (deviceIds: string[]) => {
+    initializeSensors: (devices: Array<{ deviceId: string; color?: string | null }>) => {
       update(state => {
         const colorPrefs = new Map(
           state.sensors.map(s => [s.deviceId, s.color])
         );
 
-        const sensors: SensorUIConfig[] = deviceIds.map((id, idx) => ({
-          deviceId: id,
-          color: colorPrefs.get(id) || RECOMMENDED_COLORS[idx % RECOMMENDED_COLORS.length],
-          visible: true, // All visible by default
-        }));
+        const sensors: SensorUIConfig[] = devices.map((device, idx) => {
+          const persisted = colorPrefs.get(device.deviceId);
+          const deviceColor = device.color?.trim() ? device.color : undefined;
+          return {
+            deviceId: device.deviceId,
+            color: deviceColor || persisted || RECOMMENDED_COLORS[idx % RECOMMENDED_COLORS.length],
+            visible: true, // All visible by default
+          };
+        });
 
         const newState = { ...state, sensors };
         persist(newState);

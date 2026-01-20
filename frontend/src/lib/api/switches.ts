@@ -3,6 +3,7 @@ import { unixSecondsToDate } from "../utils/time";
 export interface SwitchDevice {
   id: string;
   name: string;
+  color: string | null;
   state: boolean;
   // Device state fields (from device_state table)
   link_quality: number | null;

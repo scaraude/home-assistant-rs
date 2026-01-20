@@ -97,6 +97,35 @@ function createDataCache() {
       });
     },
 
+    updateDeviceColor(deviceId: string, color: string) {
+      update((state) => {
+        const existingSwitch = state.switches.byId[deviceId];
+        const updatedSwitch = existingSwitch ? { ...existingSwitch, color } : null;
+
+        return {
+          ...state,
+          sensors: {
+            ...state.sensors,
+            devices: state.sensors.devices.map((device) =>
+              device.device_id === deviceId ? { ...device, color } : device,
+            ),
+          },
+          switches: updatedSwitch
+            ? {
+              ...state.switches,
+              byId: {
+                ...state.switches.byId,
+                [deviceId]: updatedSwitch,
+              },
+              devices: state.switches.devices.map((device) =>
+                device.id === deviceId ? updatedSwitch : device,
+              ),
+            }
+            : state.switches,
+        };
+      });
+    },
+
     setSensorReadings(readings: SensorReading[], latestTimestamp: Date | null, rangeHours: number) {
       const sorted = sortReadings(readings);
       update((state) => ({

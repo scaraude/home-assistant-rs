@@ -35,8 +35,8 @@ impl Database {
 
         let start = std::time::Instant::now();
         let result = self.conn.lock_or_recover().execute(
-            "INSERT INTO devices (id, mqtt_topic, ieee_addr, name, capabilities, available_fields, power_source, added_at, is_bridge, parent_device_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            "INSERT INTO devices (id, mqtt_topic, ieee_addr, name, capabilities, available_fields, power_source, added_at, is_bridge, parent_device_id, color)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             params![
                 device.id,
                 device.mqtt_topic,
@@ -47,7 +47,8 @@ impl Database {
                 device.power_source.to_db_string(),
                 device.added_at.timestamp(),
                 device.is_bridge as i32,
-                device.parent_device_id
+                device.parent_device_id,
+                device.color
             ],
         );
 
@@ -80,7 +81,7 @@ impl Database {
 
         let conn = self.conn.lock_or_recover();
         let mut stmt = conn.prepare(
-            "SELECT id, mqtt_topic, ieee_addr, name, capabilities, available_fields, power_source, added_at, is_bridge, parent_device_id
+            "SELECT id, mqtt_topic, ieee_addr, name, capabilities, available_fields, power_source, added_at, is_bridge, parent_device_id, color
              FROM devices
              WHERE id = ?1",
         )?;
@@ -115,7 +116,7 @@ impl Database {
 
         let conn = self.conn.lock_or_recover();
         let mut stmt = conn.prepare(
-            "SELECT id, mqtt_topic, ieee_addr, name, capabilities, available_fields, power_source, added_at, is_bridge, parent_device_id
+            "SELECT id, mqtt_topic, ieee_addr, name, capabilities, available_fields, power_source, added_at, is_bridge, parent_device_id, color
              FROM devices
              WHERE id = ?1",
         )?;
@@ -150,7 +151,7 @@ impl Database {
 
         let conn = self.conn.lock_or_recover();
         let mut stmt = conn.prepare(
-            "SELECT id, mqtt_topic, ieee_addr, name, capabilities, available_fields, power_source, added_at, is_bridge, parent_device_id
+            "SELECT id, mqtt_topic, ieee_addr, name, capabilities, available_fields, power_source, added_at, is_bridge, parent_device_id, color
              FROM devices
              WHERE mqtt_topic = ?1",
         )?;
@@ -186,7 +187,7 @@ impl Database {
 
         let conn = self.conn.lock_or_recover();
         let mut stmt = conn.prepare(
-            "SELECT id, mqtt_topic, ieee_addr, name, capabilities, available_fields, power_source, added_at, is_bridge, parent_device_id
+            "SELECT id, mqtt_topic, ieee_addr, name, capabilities, available_fields, power_source, added_at, is_bridge, parent_device_id, color
              FROM devices
              WHERE ieee_addr = ?1",
         )?;
@@ -222,7 +223,7 @@ impl Database {
 
         let conn = self.conn.lock_or_recover();
         let mut stmt = conn.prepare(
-            "SELECT id, mqtt_topic, ieee_addr, name, capabilities, available_fields, power_source, added_at, is_bridge, parent_device_id
+            "SELECT id, mqtt_topic, ieee_addr, name, capabilities, available_fields, power_source, added_at, is_bridge, parent_device_id, color
              FROM devices
              ORDER BY name",
         )?;
@@ -271,6 +272,42 @@ impl Database {
                     error = %e,
                     device_id = %device_id,
                     "Failed to update device name"
+                );
+                Err(e)
+            }
+        }
+    }
+
+    /// Update device UI color
+    pub fn update_device_color(&self, device_id: &str, color: &str) -> Result<()> {
+        debug!(
+            device_id = %device_id,
+            color = %color,
+            "Updating device color"
+        );
+
+        let start = std::time::Instant::now();
+        let result = self.conn.lock_or_recover().execute(
+            "UPDATE devices SET color = ?1 WHERE id = ?2",
+            params![color, device_id],
+        );
+
+        match result {
+            Ok(rows) => {
+                let elapsed = start.elapsed();
+                info!(
+                    device_id = %device_id,
+                    rows_affected = rows,
+                    duration_us = elapsed.as_micros(),
+                    "Successfully updated device color"
+                );
+                Ok(())
+            }
+            Err(e) => {
+                error!(
+                    error = %e,
+                    device_id = %device_id,
+                    "Failed to update device color"
                 );
                 Err(e)
             }
@@ -427,6 +464,7 @@ impl Database {
             added_at: timestamp_to_datetime(row.get(7)?, "device.added_at"),
             is_bridge: is_bridge_int != 0,
             parent_device_id: row.get(9)?,
+            color: row.get(10)?,
         })
     }
 

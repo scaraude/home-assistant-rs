@@ -345,7 +345,8 @@ impl Database {
                 capabilities TEXT NOT NULL DEFAULT '[]',
                 available_fields TEXT NOT NULL DEFAULT '[]',
                 power_source TEXT NOT NULL,
-                added_at INTEGER NOT NULL
+                added_at INTEGER NOT NULL,
+                color TEXT
             )",
             [],
         ) {
@@ -364,6 +365,9 @@ impl Database {
 
         // Add capability columns if missing
         self.ensure_device_capability_columns(conn)?;
+
+        // Add UI columns if missing
+        self.ensure_device_ui_columns(conn)?;
 
         // Drop legacy columns after migration
         self.drop_legacy_device_columns(conn)?;
@@ -425,6 +429,12 @@ impl Database {
             "TEXT NOT NULL DEFAULT '[]'",
         )?;
         self.migrate_legacy_device_capabilities(conn)?;
+        Ok(())
+    }
+
+    /// Ensure UI-related columns exist in devices table
+    fn ensure_device_ui_columns(&self, conn: &rusqlite::Connection) -> Result<()> {
+        self.add_column_if_missing(conn, "devices", "color", "TEXT")?;
         Ok(())
     }
 
@@ -517,10 +527,11 @@ impl Database {
                  power_source TEXT NOT NULL,
                  added_at INTEGER NOT NULL,
                  is_bridge INTEGER DEFAULT 0,
-                 parent_device_id TEXT
+                 parent_device_id TEXT,
+                 color TEXT
              );
-             INSERT INTO devices_new (id, mqtt_topic, ieee_addr, name, capabilities, available_fields, power_source, added_at, is_bridge, parent_device_id)
-             SELECT id, mqtt_topic, ieee_addr, name, capabilities, available_fields, power_source, added_at, is_bridge, parent_device_id
+             INSERT INTO devices_new (id, mqtt_topic, ieee_addr, name, capabilities, available_fields, power_source, added_at, is_bridge, parent_device_id, color)
+             SELECT id, mqtt_topic, ieee_addr, name, capabilities, available_fields, power_source, added_at, is_bridge, parent_device_id, color
              FROM devices;
              DROP TABLE devices;
              ALTER TABLE devices_new RENAME TO devices;

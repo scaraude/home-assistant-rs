@@ -3,6 +3,7 @@
   import Card from "../design-system/Card.svelte";
   import EditableDeviceName from "./EditableDeviceName.svelte";
   import StatusBadge from "../shared/StatusBadge.svelte";
+  import { updateDeviceColor } from "../api";
   import { graphConfig } from "../stores/graphConfig";
   import { dataCache } from "../stores/dataCache";
   import { formatDistanceToNow } from "date-fns";
@@ -20,11 +21,6 @@
   } = $props();
 
   let showColorPicker = $state(false);
-  let isEditing = $state(false);
-
-  $effect(() => {
-    isEditing = editMode;
-  });
 
   let deviceInfo = $derived(
     $dataCache.sensors.devices.find((d) => d.device_id === sensor.deviceId)
@@ -50,8 +46,18 @@
     showColorPicker = true;
   }
 
-  function handleColorSelect(color: string) {
+  async function handleColorSelect(color: string) {
+    const previousColor = sensor.color;
     graphConfig.setSensorColor(sensor.deviceId, color);
+    dataCache.updateDeviceColor(sensor.deviceId, color);
+
+    try {
+      await updateDeviceColor(sensor.deviceId, color);
+    } catch (err) {
+      console.error("Failed to persist device color:", err);
+      graphConfig.setSensorColor(sensor.deviceId, previousColor);
+      dataCache.updateDeviceColor(sensor.deviceId, previousColor);
+    }
   }
 
   function handleCardClick() {
@@ -87,20 +93,17 @@
         title="Click to change color"
       ></button>
 
-      {#if isEditing}
+      <div class="name-time">
         <EditableDeviceName
           deviceId={sensor.deviceId}
           name={deviceName}
-          onSaved={() => (isEditing = false)}
+          isEdit={editMode}
+          class="energy-name"
         />
-      {:else}
-        <div class="name-time">
-          <span class="energy-name">{deviceName}</span>
-          {#if displayTimeAgo}
-            <span class="time-ago">{displayTimeAgo}</span>
-          {/if}
-        </div>
-      {/if}
+        {#if !editMode && displayTimeAgo}
+          <span class="time-ago">{displayTimeAgo}</span>
+        {/if}
+      </div>
     </div>
   </div>
 
