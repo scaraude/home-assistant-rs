@@ -1,6 +1,7 @@
 use crate::db::Database;
 use crate::events::bus::EventBus;
 use crate::models::DeviceMqttMessage;
+use crate::mqtt::dedup_filter::MqttDedupFilter;
 use crate::mqtt::handlers::{handle_bridge_event, handle_bridge_response, handle_device_message};
 use crate::mqtt::topic::ZigbeeTopic;
 use rumqttc::{AsyncClient, Event, EventLoop, Packet, QoS};
@@ -24,6 +25,7 @@ pub(super) fn spawn_event_loop(
         let mut parse_errors = 0u64;
         let mut no_temperature = 0u64;
         let mut publish_failures = 0u64;
+        let mut dedup_filter = MqttDedupFilter::new();
 
         loop {
             match eventloop.poll().await {
@@ -56,6 +58,12 @@ pub(super) fn spawn_event_loop(
                 }
                 Ok(Event::Incoming(Packet::Publish(p))) => {
                     message_count += 1;
+
+                    // Filter duplicate messages at the interface layer
+                    if !dedup_filter.should_process(&p.topic, &p.payload) {
+                        continue;
+                    }
+
                     debug!(
                         topic = %p.topic,
                         payload_size = p.payload.len(),
@@ -176,6 +184,7 @@ pub(super) fn spawn_event_loop(
                     parse_errors = parse_errors,
                     no_temperature = no_temperature,
                     publish_failures = publish_failures,
+                    duplicates_filtered = dedup_filter.filtered_count(),
                     "MQTT event loop statistics"
                 );
             }
