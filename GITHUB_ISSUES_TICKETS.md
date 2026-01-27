@@ -40,7 +40,7 @@ Synced from GitHub Issues on 2026-01-27
 | 15 | Simplify legend display | P2 | 3 | UX | ✅ Closed |
 | 12 | Display power values on consumption curve | P2 | 3 | Feature | Open |
 | 13 | Modify binary metrics display | P2 | 3 | UX | Open |
-| 21 | Simplify metric display - remove duplicate values | P2 | 2 | UX | Open |
+| 21 | Simplify metric display - remove duplicate values | P2 | 2 | UX | 🔄 PR #25 |
 | 22 | Reduce space used by on/off choices | P2 | 3 | UX | Open |
 | 23 | Preserve sensor selection when changing time range | P2 | 3 | UX | Open |
 | 11 | Identify zoomable zones | P3 | 2 | UX | ✅ Closed |
@@ -49,7 +49,7 @@ Synced from GitHub Issues on 2026-01-27
 | 3 | User notes | P3 | 5 | Feature | Open |
 | 24 | Add building floor plan with sensor locations | P3 | 13 | Feature | Open |
 
-**Open Issues:** 15 | **Closed Issues:** 5 | **Total Estimated Effort (Open):** ~62 story points
+**Open Issues:** 14 | **In Review:** 1 | **Closed Issues:** 5 | **Total Estimated Effort (Open):** ~60 story points
 
 ---
 
@@ -401,31 +401,37 @@ Binary (on/off) metrics use too much space and aren't visually distinct from con
 
 ---
 
-### TICKET-021: Simplify metric display - remove duplicate values (NEW)
+### TICKET-021: Simplify metric display - remove duplicate values 🔄 PR #25
 
 **GitHub Issue:** [#21](https://github.com/scaraude/home-automation-rs/issues/21)
+**Pull Request:** [#25](https://github.com/scaraude/home-automation-rs/pull/25)
 
 | Attribute | Value |
 |-----------|-------|
 | **Priority** | P2 - Medium |
 | **Cost** | 2 points (1-4 hours) |
 | **Category** | UX Enhancement |
-| **Component** | Frontend - Charts |
+| **Component** | Backend - MQTT |
+| **Status** | 🔄 In Review (PR #25) |
 
 #### Description
 The metric display on the chart shows values redundantly. When hovering over or viewing a curve, the same metric value appears twice in the interface, creating unnecessary visual clutter and confusion.
 
-#### Implementation Steps
-1. [ ] Audit where metric values are displayed (tooltip, legend, data labels, cursor display)
-2. [ ] Keep only one instance of each value, preferably in the most logical location
-3. [ ] If values appear in both tooltip and on-chart labels, choose one primary display method
-4. [ ] Ensure the remaining display is clear, readable, and provides all necessary context
-5. [ ] Test that removing redundancy doesn't reduce usability
+#### Implementation (Completed)
+Added a deduplication filter in the MQTT layer to prevent duplicate sensor readings from being stored:
+- New `src/mqtt/dedup_filter.rs` module with configurable time window
+- Filters identical readings (same device, temperature, humidity) within the window
+- Reduces visual clutter in charts by eliminating redundant data points
+
+#### Files Changed
+- `src/mqtt/dedup_filter.rs` (new) - Deduplication filter implementation
+- `src/mqtt/event_loop.rs` - Integration with MQTT message handling
+- `src/mqtt/mod.rs` - Module export
 
 #### Acceptance Criteria
-- [ ] Each metric value appears only once per view
-- [ ] Single value display is prominent and easy to read
-- [ ] Users can still easily access metric values when needed
+- [x] Duplicate readings filtered out when received within the time window
+- [x] Unique readings still stored normally
+- [x] Chart displays show clean data without redundant points
 
 ---
 
