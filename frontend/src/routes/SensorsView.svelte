@@ -119,9 +119,6 @@
 
   .graph-section {
     flex: 0 0 auto;
-    height: 60vh;
-    min-height: 400px;
-    max-height: 800px;
   }
 
   .sensors-section {
@@ -130,23 +127,12 @@
   }
 
   @media (max-width: 768px) {
-    .graph-section {
-      height: 50vh;
-      min-height: var(--graph-min-height, 300px);
-    }
-
     .unified-layout {
       gap: var(--section-gap, 1.5rem);
     }
   }
 
   @media (max-width: 480px) {
-    .graph-section {
-      height: 45vh;
-      min-height: var(--graph-min-height, 250px);
-      max-height: 350px;
-    }
-
     .unified-layout {
       gap: var(--section-gap, 1rem);
     }

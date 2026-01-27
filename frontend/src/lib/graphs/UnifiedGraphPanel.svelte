@@ -30,7 +30,6 @@
     display: flex;
     flex-direction: column;
     gap: 1rem;
-    height: 100%;
   }
 
   .panel-header {
@@ -40,15 +39,13 @@
   }
 
   .chart-wrapper {
-    flex: 1;
-    min-height: 400px;
-    max-height: 800px;
+    flex: 0 0 auto;
+    height: clamp(var(--graph-min-height, 300px), 60vh, 800px);
   }
 
   @media (max-width: 768px) {
     .chart-wrapper {
-      min-height: var(--graph-min-height, 300px);
-      max-height: 50vh;
+      height: clamp(var(--graph-min-height, 300px), 50vh, 560px);
     }
   }
 
@@ -58,8 +55,7 @@
     }
 
     .chart-wrapper {
-      min-height: var(--graph-min-height, 250px);
-      max-height: 45vh;
+      height: clamp(var(--graph-min-height, 250px), 45vh, 360px);
     }
   }
 </style>
