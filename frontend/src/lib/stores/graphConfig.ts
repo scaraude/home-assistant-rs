@@ -105,19 +105,22 @@ function createGraphConfig() {
     },
 
     // Initialize sensors from device list
+    // Preserves existing visibility state for sensors that are already in the list
     initializeSensors: (devices: Array<{ deviceId: string; color?: string | null }>) => {
       update(state => {
-        const colorPrefs = new Map(
-          state.sensors.map(s => [s.deviceId, s.color])
+        // Build a map of existing sensors to preserve their visibility state
+        const existingSensors = new Map(
+          state.sensors.map(s => [s.deviceId, s])
         );
 
         const sensors: SensorUIConfig[] = devices.map((device, idx) => {
-          const persisted = colorPrefs.get(device.deviceId);
+          const existing = existingSensors.get(device.deviceId);
           const deviceColor = device.color?.trim() ? device.color : undefined;
           return {
             deviceId: device.deviceId,
-            color: deviceColor || persisted || RECOMMENDED_COLORS[idx % RECOMMENDED_COLORS.length],
-            visible: true, // All visible by default
+            color: deviceColor || existing?.color || RECOMMENDED_COLORS[idx % RECOMMENDED_COLORS.length],
+            // Preserve visibility if sensor exists, otherwise default to visible
+            visible: existing?.visible ?? true,
           };
         });
 
