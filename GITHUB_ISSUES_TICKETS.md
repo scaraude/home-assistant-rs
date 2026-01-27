@@ -29,7 +29,7 @@ Synced from GitHub Issues on 2026-01-27
 | #   | Title                                              | Priority | Cost | Category | Status    |
 | --- | -------------------------------------------------- | -------- | ---- | -------- | --------- |
 | 6   | Chart not reinitialized                            | P0       | 3    | Bug      | ✅ Closed |
-| 14  | "Unselect All" button hidden at 100% zoom          | P1       | 2    | Bug      | Open      |
+| 14  | "Unselect All" button hidden on lower resolutions  | P1       | 2    | Bug      | ✅ Closed |
 | 5   | Responsive application                             | P1       | 8    | Feature  | ✅ Closed |
 | 4   | Synchronization of consumption and metrics         | P1       | 5    | Feature  | Open      |
 | 10  | Improve curve visibility                           | P2       | 5    | UX       | ✅ Closed |
@@ -40,9 +40,9 @@ Synced from GitHub Issues on 2026-01-27
 | 15  | Simplify legend display                            | P2       | 3    | UX       | ✅ Closed |
 | 12  | Display power values on consumption curve          | P2       | 3    | Feature  | Open      |
 | 13  | Modify binary metrics display                      | P2       | 3    | UX       | Open      |
-| 21  | Simplify metric display - remove duplicate values  | P2       | 2    | UX       | 🔄 PR #25 |
+| 21  | Simplify metric display - remove duplicate values  | P2       | 2    | UX       | ✅ Closed |
 | 22  | Reduce space used by on/off choices                | P2       | 3    | UX       | Open      |
-| 23  | Preserve sensor selection when changing time range | P2       | 3    | UX       | Open      |
+| 23  | Preserve sensor selection when changing time range | P2       | 3    | UX       | ✅ Closed |
 | 11  | Identify zoomable zones                            | P3       | 2    | UX       | ✅ Closed |
 | 17  | Show All/Unselect All buttons positioning          | P3       | 1    | UX       | Open      |
 | 2   | Make the 0°C line more visible                     | P3       | 1    | UX       | Open      |
@@ -75,7 +75,7 @@ When switching between different chart types (e.g., "sensors" and "consumption")
 
 ---
 
-### TICKET-014: "Unselect All" button hidden at 100% zoom or higher
+### TICKET-014: "Unselect All" button hidden on lower resolution screens
 
 **GitHub Issue:** [#14](https://github.com/scaraude/home-automation-rs/issues/14)
 
@@ -85,25 +85,31 @@ When switching between different chart types (e.g., "sensors" and "consumption")
 | **Cost**      | 2 points (1-4 hours) |
 | **Category**  | Bug                  |
 | **Component** | Frontend - UI/CSS    |
+| **Status**    | ✅ Closed            |
 
 #### Description
 
-The "Unselect All" button is only visible when the browser zoom level is set to 90% or less. At 100% zoom and above, the button becomes hidden or obscured by other UI elements, making the functionality inaccessible.
+The "Unselect All" button disappears on screens with lower resolutions (e.g., 1440x900 on Mac). The button becomes hidden or obscured by other UI elements when the available viewport is smaller. This is a screen resolution issue, not a browser zoom issue.
 
 #### Implementation Steps
 
-1. [ ] Identify the CSS rules affecting the button container
-2. [ ] Check for fixed-width containers or overflow:hidden properties
-3. [ ] Convert to flexbox/grid layout if using absolute positioning
-4. [ ] Test at zoom levels: 100%, 110%, 125%, 150%, 200%
-5. [ ] Ensure proper z-index stacking
-6. [ ] Verify button remains accessible with keyboard navigation
+1. [x] Identify the CSS rules affecting the button container
+2. [x] Check for fixed-width containers or overflow:hidden properties
+3. [x] Convert to flexbox/grid layout if using absolute positioning
+4. [x] Test at various screen resolutions: 1280x720, 1440x900, 1920x1080
+5. [x] Ensure proper z-index stacking and element wrapping
+6. [x] Verify button remains accessible with keyboard navigation
 
 #### Acceptance Criteria
 
-- [ ] Button visible and clickable at all zoom levels (100%-200%)
-- [ ] Layout doesn't break on different screen sizes
-- [ ] Button accessible via keyboard (Tab navigation)
+- [x] Button visible and clickable at all screen resolutions (1280x720 and up)
+- [x] Layout properly wraps or scrolls on smaller screens
+- [x] Button accessible via keyboard (Tab navigation)
+
+#### Resolution Notes
+
+- Removed fixed graph section heights so the chart and toolbar can wrap without overlapping the sensor header.
+- Clamped the chart height to responsive bounds to preserve visual balance while freeing vertical space for actions.
 
 ---
 
@@ -678,7 +684,7 @@ Add a visual floor plan or building map that displays the physical location of e
 
 ### Phase 1: Bug Fixes (Current Priority)
 
-1. **TICKET-014** - Unselect All button visibility (P1) - 2 pts
+1. **TICKET-014** - Unselect All button visibility (P1) - 2 pts ✅ Closed
 
 ### Phase 2: Core Features
 
