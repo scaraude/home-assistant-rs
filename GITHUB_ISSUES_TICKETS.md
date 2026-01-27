@@ -1,6 +1,6 @@
-# Technical Tickets - Home Automation RS
+# GitHub Issues - Home Automation RS
 
-Generated from GitHub Issues on 2026-01-20
+Synced from GitHub Issues on 2026-01-27
 
 ## Priority Legend
 
@@ -26,26 +26,30 @@ Generated from GitHub Issues on 2026-01-20
 
 ## Summary Table
 
-| # | Title | Priority | Cost | Category |
-|---|-------|----------|------|----------|
-| 6 | Chart not reinitialized | P0 | 3 | Bug |
-| 14 | "Unselect All" button hidden at 100% zoom | P1 | 2 | Bug |
-| 5 | Responsive application | P1 | 8 | Feature |
-| 4 | Synchronization of consumption and metrics | P1 | 5 | Feature |
-| 10 | Improve curve visibility | P2 | 5 | UX |
-| 8 | Correlation between rules and metrics | P2 | 8 | Feature |
-| 9 | Disk space monitoring | P2 | 3 | Feature |
-| 7 | Variables in rules | P2 | 8 | Feature |
-| 16 | Standardize time display format | P2 | 3 | UX |
-| 15 | Simplify legend display | P2 | 3 | UX |
-| 12 | Display power values on consumption curve | P2 | 3 | Feature |
-| 13 | Modify binary metrics display | P2 | 3 | UX |
-| 11 | Identify zoomable zones | P3 | 2 | UX |
-| 17 | Show All/Unselect All buttons positioning | P3 | 1 | UX |
-| 2 | Make the 0°C line more visible | P3 | 1 | UX |
-| 3 | User notes | P3 | 5 | Feature |
+| # | Title | Priority | Cost | Category | Status |
+|---|-------|----------|------|----------|--------|
+| 6 | Chart not reinitialized | P0 | 3 | Bug | ✅ Closed |
+| 14 | "Unselect All" button hidden at 100% zoom | P1 | 2 | Bug | Open |
+| 5 | Responsive application | P1 | 8 | Feature | ✅ Closed |
+| 4 | Synchronization of consumption and metrics | P1 | 5 | Feature | Open |
+| 10 | Improve curve visibility | P2 | 5 | UX | ✅ Closed |
+| 8 | Correlation between rules and metrics | P2 | 8 | Feature | Open |
+| 9 | Disk space monitoring | P2 | 3 | Feature | Open |
+| 7 | Variables in rules | P2 | 8 | Feature | Open |
+| 16 | Standardize time display format | P2 | 3 | UX | Open |
+| 15 | Simplify legend display | P2 | 3 | UX | ✅ Closed |
+| 12 | Display power values on consumption curve | P2 | 3 | Feature | Open |
+| 13 | Modify binary metrics display | P2 | 3 | UX | Open |
+| 21 | Simplify metric display - remove duplicate values | P2 | 2 | UX | Open |
+| 22 | Reduce space used by on/off choices | P2 | 3 | UX | Open |
+| 23 | Preserve sensor selection when changing time range | P2 | 3 | UX | Open |
+| 11 | Identify zoomable zones | P3 | 2 | UX | ✅ Closed |
+| 17 | Show All/Unselect All buttons positioning | P3 | 1 | UX | Open |
+| 2 | Make the 0°C line more visible | P3 | 1 | UX | Open |
+| 3 | User notes | P3 | 5 | Feature | Open |
+| 24 | Add building floor plan with sensor locations | P3 | 13 | Feature | Open |
 
-**Total Estimated Effort:** 63 story points
+**Open Issues:** 15 | **Closed Issues:** 5 | **Total Estimated Effort (Open):** ~62 story points
 
 ---
 
@@ -53,9 +57,9 @@ Generated from GitHub Issues on 2026-01-20
 
 ---
 
-### TICKET-006: Chart not reinitialized when switching views
+### TICKET-006: Chart not reinitialized when switching views ✅ CLOSED
 
-**GitHub Issue:** [#6](https://github.com/scaraude/home-assistant-rs/issues/6)
+**GitHub Issue:** [#6](https://github.com/scaraude/home-automation-rs/issues/6)
 
 | Attribute | Value |
 |-----------|-------|
@@ -63,35 +67,16 @@ Generated from GitHub Issues on 2026-01-20
 | **Cost** | 3 points (4-8 hours) |
 | **Category** | Bug |
 | **Component** | Frontend - Charts |
+| **Status** | ✅ Closed |
 
 #### Description
 When switching between different chart types (e.g., "sensors" and "consumption"), curves do not display correctly. Users must refresh the entire page to get the correct display. The chart component is not properly reinitialized or cleared when changing views.
-
-#### Technical Analysis
-- **Root Cause:** Likely the chart library instance (Chart.js or similar) is not being destroyed/recreated when the view changes
-- **Affected Files:** `frontend/src/lib/GraphModal.svelte`, chart-related components
-- **Impact:** Major usability issue - users cannot switch views without page refresh
-
-#### Implementation Steps
-1. [ ] Identify the chart library being used and its lifecycle management
-2. [ ] Review current component mounting/unmounting logic in Svelte
-3. [ ] Implement proper chart destruction on component unmount (`onDestroy`)
-4. [ ] Clear chart data and canvas before reinitializing with new data
-5. [ ] Add reactive statement to watch for data type changes
-6. [ ] Test switching between all chart views (sensors, consumption, etc.)
-7. [ ] Verify no memory leaks from orphaned chart instances
-
-#### Acceptance Criteria
-- [ ] Charts display correctly when switching between views without page refresh
-- [ ] No console errors during view transitions
-- [ ] Chart animations work properly on reinitialization
-- [ ] Memory usage remains stable after multiple view switches
 
 ---
 
 ### TICKET-014: "Unselect All" button hidden at 100% zoom or higher
 
-**GitHub Issue:** [#14](https://github.com/scaraude/home-assistant-rs/issues/14)
+**GitHub Issue:** [#14](https://github.com/scaraude/home-automation-rs/issues/14)
 
 | Attribute | Value |
 |-----------|-------|
@@ -102,11 +87,6 @@ When switching between different chart types (e.g., "sensors" and "consumption")
 
 #### Description
 The "Unselect All" button is only visible when the browser zoom level is set to 90% or less. At 100% zoom and above, the button becomes hidden or obscured by other UI elements, making the functionality inaccessible.
-
-#### Technical Analysis
-- **Root Cause:** Fixed positioning, overflow:hidden, or absolute positioning issues
-- **Affected Files:** `frontend/src/lib/GraphModal.svelte` or related chart component CSS
-- **Impact:** Accessibility issue - users at standard zoom cannot access functionality
 
 #### Implementation Steps
 1. [ ] Identify the CSS rules affecting the button container
@@ -123,9 +103,9 @@ The "Unselect All" button is only visible when the browser zoom level is set to 
 
 ---
 
-### TICKET-005: Responsive application for mobile devices
+### TICKET-005: Responsive application for mobile devices ✅ CLOSED
 
-**GitHub Issue:** [#5](https://github.com/scaraude/home-assistant-rs/issues/5)
+**GitHub Issue:** [#5](https://github.com/scaraude/home-automation-rs/issues/5)
 
 | Attribute | Value |
 |-----------|-------|
@@ -133,41 +113,16 @@ The "Unselect All" button is only visible when the browser zoom level is set to 
 | **Cost** | 8 points (1 week) |
 | **Category** | Feature |
 | **Component** | Frontend - All |
+| **Status** | ✅ Closed |
 
 #### Description
 Make the application fully usable on smartphones. Currently, the application is not optimized for mobile devices, leading to poor user experience on smaller screens.
-
-#### Technical Analysis
-- **Scope:** Full frontend redesign for responsive breakpoints
-- **Affected Files:** All Svelte components, CSS files
-- **Dependencies:** May need mobile-specific chart configurations
-
-#### Implementation Steps
-1. [ ] Audit current layout at mobile breakpoints (320px, 375px, 414px)
-2. [ ] Define responsive breakpoints (mobile: <768px, tablet: 768-1024px, desktop: >1024px)
-3. [ ] Implement mobile-first CSS with media queries
-4. [ ] Redesign navigation for mobile (hamburger menu or bottom nav)
-5. [ ] Optimize chart components for touch interaction
-   - [ ] Increase touch targets
-   - [ ] Add pinch-to-zoom support
-   - [ ] Simplify legends on mobile
-6. [ ] Adjust card layouts (single column on mobile)
-7. [ ] Optimize modal/popup sizing for small screens
-8. [ ] Test on actual devices (iOS Safari, Android Chrome)
-9. [ ] Implement viewport meta tag if missing
-
-#### Acceptance Criteria
-- [ ] All features accessible on mobile devices
-- [ ] Charts readable and interactive on 375px width
-- [ ] Touch interactions work smoothly
-- [ ] No horizontal scrolling required
-- [ ] Text readable without zooming
 
 ---
 
 ### TICKET-004: Synchronization of consumption and metrics
 
-**GitHub Issue:** [#4](https://github.com/scaraude/home-assistant-rs/issues/4)
+**GitHub Issue:** [#4](https://github.com/scaraude/home-automation-rs/issues/4)
 
 | Attribute | Value |
 |-----------|-------|
@@ -178,11 +133,6 @@ Make the application fully usable on smartphones. Currently, the application is 
 
 #### Description
 Add the ability to visualize electrical consumption data synchronized with temperature and humidity curves. This enables users to identify cause-and-effect relationships between energy consumption and environmental conditions.
-
-#### Technical Analysis
-- **Chart Options:** Multiple Y-axes on single chart OR stacked charts with synced X-axis
-- **Data Requirements:** Consumption data must be timestamped and aligned with sensor data
-- **Affected Files:** Chart components, API data fetching logic
 
 #### Implementation Steps
 1. [ ] Design synchronized chart layout (recommend stacked charts with shared X-axis)
@@ -202,9 +152,9 @@ Add the ability to visualize electrical consumption data synchronized with tempe
 
 ---
 
-### TICKET-010: Improve curve visibility and identification
+### TICKET-010: Improve curve visibility and identification ✅ CLOSED
 
-**GitHub Issue:** [#10](https://github.com/scaraude/home-assistant-rs/issues/10)
+**GitHub Issue:** [#10](https://github.com/scaraude/home-automation-rs/issues/10)
 
 | Attribute | Value |
 |-----------|-------|
@@ -212,37 +162,16 @@ Add the ability to visualize electrical consumption data synchronized with tempe
 | **Cost** | 5 points (2-3 days) |
 | **Category** | UX Enhancement |
 | **Component** | Frontend - Charts |
+| **Status** | ✅ Closed |
 
 #### Description
 Improve the ability to identify curves on charts. Users should be able to click on a curve and immediately identify which sensor/metric it represents. Currently difficult to distinguish between multiple overlapping curves.
-
-#### Technical Analysis
-- **Features Needed:** Click-to-highlight, interactive legend, distinct visual styles
-- **Affected Files:** Chart components, legend components
-- **Accessibility:** Must support colorblind-friendly palettes
-
-#### Implementation Steps
-1. [ ] Implement click-to-highlight functionality on curves
-2. [ ] Show popup/tooltip with sensor details on curve click
-3. [ ] Dim non-selected curves when one is highlighted
-4. [ ] Make legend items interactive (click to toggle, hover to highlight)
-5. [ ] Use distinct line styles (solid, dashed, dotted) in addition to colors
-6. [ ] Implement colorblind-friendly color palette
-7. [ ] Add crosshair that shows values for all curves at a time point
-8. [ ] Display current value next to legend items
-9. [ ] Add keyboard navigation support for accessibility
-
-#### Acceptance Criteria
-- [ ] Clicking a curve highlights it and shows details
-- [ ] Legend items are interactive (click/hover)
-- [ ] Curves distinguishable without relying solely on color
-- [ ] Crosshair shows all values at hovered time point
 
 ---
 
 ### TICKET-008: Correlation between rules and metrics visualization
 
-**GitHub Issue:** [#8](https://github.com/scaraude/home-assistant-rs/issues/8)
+**GitHub Issue:** [#8](https://github.com/scaraude/home-automation-rs/issues/8)
 
 | Attribute | Value |
 |-----------|-------|
@@ -253,11 +182,6 @@ Improve the ability to identify curves on charts. Users should be able to click 
 
 #### Description
 Add the ability to visualize graphically when automation rules are triggered in relation to environmental metrics. This helps users understand the impact of rule execution and cause-and-effect relationships.
-
-#### Technical Analysis
-- **Backend Changes:** API endpoint for rule execution history with timestamps
-- **Frontend Changes:** Overlay markers on metric charts
-- **Data Source:** `automation_execution_log` table already exists
 
 #### Implementation Steps
 
@@ -285,7 +209,7 @@ Add the ability to visualize graphically when automation rules are triggered in 
 
 ### TICKET-009: Disk space monitoring
 
-**GitHub Issue:** [#9](https://github.com/scaraude/home-assistant-rs/issues/9)
+**GitHub Issue:** [#9](https://github.com/scaraude/home-automation-rs/issues/9)
 
 | Attribute | Value |
 |-----------|-------|
@@ -296,11 +220,6 @@ Add the ability to visualize graphically when automation rules are triggered in 
 
 #### Description
 As data accumulates over time, monitor available disk space to prevent storage issues. Display remaining disk space on the "system logs" page.
-
-#### Technical Analysis
-- **Backend:** Use system calls to get disk usage (already have `monitor.sh`)
-- **Frontend:** New widget on system logs page
-- **Alert Levels:** Green (>20%), Yellow (10-20%), Red (<10%)
 
 #### Implementation Steps
 
@@ -327,7 +246,7 @@ As data accumulates over time, monitor available disk space to prevent storage i
 
 ### TICKET-007: Variables in automation rules
 
-**GitHub Issue:** [#7](https://github.com/scaraude/home-assistant-rs/issues/7)
+**GitHub Issue:** [#7](https://github.com/scaraude/home-automation-rs/issues/7)
 
 | Attribute | Value |
 |-----------|-------|
@@ -338,11 +257,6 @@ As data accumulates over time, monitor available disk space to prevent storage i
 
 #### Description
 Allow automation rule conditions to reference other sensor values instead of only fixed values. For example: "temperature > bedroom temperature" instead of "temperature > 20°C".
-
-#### Technical Analysis
-- **Database Changes:** Condition schema needs to support sensor references
-- **Backend Changes:** Rule evaluation must resolve sensor values at runtime
-- **Frontend Changes:** UI for selecting sensors as condition values
 
 #### Implementation Steps
 
@@ -377,7 +291,7 @@ Allow automation rule conditions to reference other sensor values instead of onl
 
 ### TICKET-016: Standardize time display format
 
-**GitHub Issue:** [#16](https://github.com/scaraude/home-assistant-rs/issues/16)
+**GitHub Issue:** [#16](https://github.com/scaraude/home-automation-rs/issues/16)
 
 | Attribute | Value |
 |-----------|-------|
@@ -388,11 +302,6 @@ Allow automation rule conditions to reference other sensor values instead of onl
 
 #### Description
 Time is displayed inconsistently across charts - some show 24-hour format (18:00), others show 12-hour format (6:00 p.m.). Format should be uniform and respect user preferences.
-
-#### Technical Analysis
-- **Solution:** Centralized time formatting utility
-- **Affected Files:** All components displaying timestamps
-- **Storage:** User preference in localStorage
 
 #### Implementation Steps
 1. [ ] Create centralized time formatting utility in `frontend/src/lib/utils/time.ts`
@@ -412,9 +321,9 @@ Time is displayed inconsistently across charts - some show 24-hour format (18:00
 
 ---
 
-### TICKET-015: Simplify legend display
+### TICKET-015: Simplify legend display ✅ CLOSED
 
-**GitHub Issue:** [#15](https://github.com/scaraude/home-assistant-rs/issues/15)
+**GitHub Issue:** [#15](https://github.com/scaraude/home-automation-rs/issues/15)
 
 | Attribute | Value |
 |-----------|-------|
@@ -422,36 +331,16 @@ Time is displayed inconsistently across charts - some show 24-hour format (18:00
 | **Cost** | 3 points (4-8 hours) |
 | **Category** | UX Enhancement |
 | **Component** | Frontend - Charts |
+| **Status** | ✅ Closed |
 
 #### Description
 Chart legends are cluttered with repetitive information. Sensor names are duplicated for each metric type (e.g., "WC (Temp)" and "WC (Humidity)"). Labels are verbose and take up unnecessary space.
-
-#### Technical Analysis
-- **Solution:** Group metrics by sensor, use visual indicators instead of text
-- **Affected Files:** Chart legend components
-- **Design:** Use icons/line styles instead of "(Temp)" / "(Humidity)" text
-
-#### Implementation Steps
-1. [ ] Design new legend format (grouped by sensor)
-2. [ ] Use line styles to distinguish metrics (solid = temp, dashed = humidity)
-3. [ ] Add icons: 🌡️ for temperature, 💧 for humidity
-4. [ ] Show sensor name once with sub-indicators
-5. [ ] Reduce legend font size slightly
-6. [ ] Make legend collapsible/hideable
-7. [ ] Implement in all chart components
-8. [ ] Update chart documentation
-
-#### Acceptance Criteria
-- [ ] Sensor names appear only once in legend
-- [ ] Metrics distinguished by visual style, not just text
-- [ ] Legend takes less vertical space
-- [ ] Legend can be collapsed
 
 ---
 
 ### TICKET-012: Display power values on consumption curve
 
-**GitHub Issue:** [#12](https://github.com/scaraude/home-assistant-rs/issues/12)
+**GitHub Issue:** [#12](https://github.com/scaraude/home-automation-rs/issues/12)
 
 | Attribute | Value |
 |-----------|-------|
@@ -462,11 +351,6 @@ Chart legends are cluttered with repetitive information. Sensor names are duplic
 
 #### Description
 The consumption chart shows power usage over time but doesn't display actual wattage values on the curve. Users must estimate from Y-axis. Show power values directly on plateau segments.
-
-#### Technical Analysis
-- **Solution:** Add data labels on horizontal segments (plateaus)
-- **Challenge:** Avoid label overlap on short segments
-- **Affected Files:** Consumption chart component
 
 #### Implementation Steps
 1. [ ] Detect plateau segments in consumption data (horizontal periods)
@@ -487,7 +371,7 @@ The consumption chart shows power usage over time but doesn't display actual wat
 
 ### TICKET-013: Modify binary metrics display
 
-**GitHub Issue:** [#13](https://github.com/scaraude/home-assistant-rs/issues/13)
+**GitHub Issue:** [#13](https://github.com/scaraude/home-automation-rs/issues/13)
 
 | Attribute | Value |
 |-----------|-------|
@@ -498,11 +382,6 @@ The consumption chart shows power usage over time but doesn't display actual wat
 
 #### Description
 Binary (on/off) metrics use too much space and aren't visually distinct from continuous metrics. They should have a compact, distinctive visual representation.
-
-#### Technical Analysis
-- **Solution:** Redesign binary sensor cards with toggle/badge style
-- **Affected Files:** `SensorCard.svelte` or create `BinaryCard.svelte`
-- **Layout:** Horizontal single-line vs current card layout
 
 #### Implementation Steps
 1. [ ] Create compact `BinaryMetricCard.svelte` component
@@ -522,9 +401,93 @@ Binary (on/off) metrics use too much space and aren't visually distinct from con
 
 ---
 
-### TICKET-011: Identify zoomable zones
+### TICKET-021: Simplify metric display - remove duplicate values (NEW)
 
-**GitHub Issue:** [#11](https://github.com/scaraude/home-assistant-rs/issues/11)
+**GitHub Issue:** [#21](https://github.com/scaraude/home-automation-rs/issues/21)
+
+| Attribute | Value |
+|-----------|-------|
+| **Priority** | P2 - Medium |
+| **Cost** | 2 points (1-4 hours) |
+| **Category** | UX Enhancement |
+| **Component** | Frontend - Charts |
+
+#### Description
+The metric display on the chart shows values redundantly. When hovering over or viewing a curve, the same metric value appears twice in the interface, creating unnecessary visual clutter and confusion.
+
+#### Implementation Steps
+1. [ ] Audit where metric values are displayed (tooltip, legend, data labels, cursor display)
+2. [ ] Keep only one instance of each value, preferably in the most logical location
+3. [ ] If values appear in both tooltip and on-chart labels, choose one primary display method
+4. [ ] Ensure the remaining display is clear, readable, and provides all necessary context
+5. [ ] Test that removing redundancy doesn't reduce usability
+
+#### Acceptance Criteria
+- [ ] Each metric value appears only once per view
+- [ ] Single value display is prominent and easy to read
+- [ ] Users can still easily access metric values when needed
+
+---
+
+### TICKET-022: Reduce space used by on/off choices (NEW)
+
+**GitHub Issue:** [#22](https://github.com/scaraude/home-automation-rs/issues/22)
+
+| Attribute | Value |
+|-----------|-------|
+| **Priority** | P2 - Medium |
+| **Cost** | 3 points (4-8 hours) |
+| **Category** | UX Enhancement |
+| **Component** | Frontend - UI |
+
+#### Description
+Some on/off toggle controls take up too much screen space, reducing the available area for displaying actual data and creating visual clutter.
+
+#### Implementation Steps
+1. [ ] Replace large switches with smaller, more compact toggle controls
+2. [ ] Use minimal padding and margins around toggle elements
+3. [ ] Implement icon-based toggles (✓/✗, ●/○) instead of full switch controls
+4. [ ] Place labels inline with toggles instead of above/below
+5. [ ] Provide different layouts for desktop (compact) vs mobile (touch-friendly)
+
+#### Acceptance Criteria
+- [ ] Toggle controls use significantly less space
+- [ ] Toggles remain touch-friendly on mobile (minimum 44x44px)
+- [ ] Functionality preserved with improved visual efficiency
+
+---
+
+### TICKET-023: Preserve sensor selection when changing time range (NEW)
+
+**GitHub Issue:** [#23](https://github.com/scaraude/home-automation-rs/issues/23)
+
+| Attribute | Value |
+|-----------|-------|
+| **Priority** | P2 - Medium |
+| **Cost** | 3 points (4-8 hours) |
+| **Category** | UX Enhancement |
+| **Component** | Frontend - Charts |
+
+#### Description
+When changing the time range or duration (e.g., from 24 hours to 1 week), all sensors/metrics are automatically selected, overriding the user's previous selection. This forces users to manually deselect unwanted sensors again.
+
+#### Implementation Steps
+1. [ ] Store the current sensor/metric selection state in memory or local storage
+2. [ ] Maintain the same selection when user changes time range
+3. [ ] Track selected sensors independently from time range settings
+4. [ ] Handle scenarios where sensors were added/removed between time range changes
+5. [ ] Provide clear visual feedback that selection has been preserved
+
+#### Acceptance Criteria
+- [ ] Selection persists when changing time range
+- [ ] Works across all time range options (24h, 1 week, 1 month, etc.)
+- [ ] Graceful handling when selected sensor has no data in new time range
+
+---
+
+### TICKET-011: Identify zoomable zones ✅ CLOSED
+
+**GitHub Issue:** [#11](https://github.com/scaraude/home-automation-rs/issues/11)
 
 | Attribute | Value |
 |-----------|-------|
@@ -532,32 +495,16 @@ Binary (on/off) metrics use too much space and aren't visually distinct from con
 | **Cost** | 2 points (1-4 hours) |
 | **Category** | UX Enhancement |
 | **Component** | Frontend - Charts |
+| **Status** | ✅ Closed |
 
 #### Description
 Some areas are zoomable via mouse wheel, others are not. Users don't know which zones support zoom. Add visual indicators to distinguish zoomable areas.
-
-#### Technical Analysis
-- **Solution:** Cursor change, tooltips, visual cues on hover
-- **Affected Files:** Chart wrapper components
-- **Scope:** Relatively small CSS/hover changes
-
-#### Implementation Steps
-1. [ ] Change cursor to zoom-in icon on zoomable areas
-2. [ ] Add subtle border highlight on hover for zoomable zones
-3. [ ] Show "Scroll to zoom" tooltip on first hover
-4. [ ] Display current zoom level while actively zooming
-5. [ ] Optional: Add zoom +/- buttons as alternative to scroll
-
-#### Acceptance Criteria
-- [ ] Cursor changes over zoomable areas
-- [ ] Hover reveals tooltip explaining zoom
-- [ ] Consistent behavior across all charts
 
 ---
 
 ### TICKET-017: Show All/Unselect All buttons positioning
 
-**GitHub Issue:** [#17](https://github.com/scaraude/home-assistant-rs/issues/17)
+**GitHub Issue:** [#17](https://github.com/scaraude/home-automation-rs/issues/17)
 
 | Attribute | Value |
 |-----------|-------|
@@ -568,11 +515,6 @@ Some areas are zoomable via mouse wheel, others are not. Users don't know which 
 
 #### Description
 The "Show All Sensors" and "Unselect All" buttons are positioned far apart. These complementary functions should be grouped together.
-
-#### Technical Analysis
-- **Solution:** Move buttons to same toolbar/location
-- **Affected Files:** Chart/legend component CSS
-- **Scope:** Simple CSS repositioning
 
 #### Implementation Steps
 1. [ ] Move both buttons to same toolbar area
@@ -590,7 +532,7 @@ The "Show All Sensors" and "Unselect All" buttons are positioned far apart. Thes
 
 ### TICKET-002: Make the 0°C line more visible
 
-**GitHub Issue:** [#2](https://github.com/scaraude/home-assistant-rs/issues/2)
+**GitHub Issue:** [#2](https://github.com/scaraude/home-automation-rs/issues/2)
 
 | Attribute | Value |
 |-----------|-------|
@@ -601,11 +543,6 @@ The "Show All Sensors" and "Unselect All" buttons are positioned far apart. Thes
 
 #### Description
 The 0°C line on temperature charts should be more prominent to better visualize when temperatures reach freezing point.
-
-#### Technical Analysis
-- **Solution:** Style the zero line with distinct color/thickness
-- **Affected Files:** Temperature chart configuration
-- **Scope:** Single CSS/chart config change
 
 #### Implementation Steps
 1. [ ] Identify chart configuration for grid lines
@@ -623,7 +560,7 @@ The 0°C line on temperature charts should be more prominent to better visualize
 
 ### TICKET-003: User notes annotation system
 
-**GitHub Issue:** [#3](https://github.com/scaraude/home-assistant-rs/issues/3)
+**GitHub Issue:** [#3](https://github.com/scaraude/home-automation-rs/issues/3)
 
 | Attribute | Value |
 |-----------|-------|
@@ -634,11 +571,6 @@ The 0°C line on temperature charts should be more prominent to better visualize
 
 #### Description
 Add a feature allowing users to annotate data with notes about events that may impact metrics (heating changes, insulation work, sensor relocation, etc.).
-
-#### Technical Analysis
-- **Database Changes:** New `user_notes` table
-- **Backend Changes:** CRUD API for notes
-- **Frontend Changes:** Note creation UI, markers on charts
 
 #### Implementation Steps
 
@@ -674,35 +606,73 @@ Add a feature allowing users to annotate data with notes about events that may i
 
 ---
 
+### TICKET-024: Add building floor plan with sensor locations (NEW)
+
+**GitHub Issue:** [#24](https://github.com/scaraude/home-automation-rs/issues/24)
+
+| Attribute | Value |
+|-----------|-------|
+| **Priority** | P3 - Low |
+| **Cost** | 13 points (2+ weeks) |
+| **Category** | Feature |
+| **Component** | Frontend + Backend |
+
+#### Description
+Add a visual floor plan or building map that displays the physical location of each sensor/detector. This would provide users with spatial context for their sensor data.
+
+#### Implementation Steps
+
+**Backend:**
+1. [ ] Create database table for floor plans and sensor positions
+2. [ ] Create API endpoints for floor plan upload and management
+3. [ ] Store sensor positions relative to floor plan dimensions
+
+**Frontend:**
+4. [ ] Allow users to upload a building floor plan image (PNG, JPG, SVG)
+5. [ ] Provide tools to mark and position sensors on the floor plan
+6. [ ] Display sensors as icons/markers with color coding for current status
+7. [ ] Show current values in tooltips when hovering over sensor markers
+8. [ ] Link floor plan view with chart views (click sensor on map → show its chart)
+9. [ ] Support multiple floors/levels if needed
+10. [ ] Add zoom and pan capabilities for large floor plans
+
+#### Acceptance Criteria
+- [ ] Can upload and display a floor plan image
+- [ ] Can position sensors on the floor plan
+- [ ] Sensors show current status/values
+- [ ] Click on sensor marker opens detailed view/chart
+- [ ] Works for buildings with multiple floors
+
+---
+
 ## Recommended Implementation Order
 
-### Phase 1: Bug Fixes & Stability (Week 1)
-1. **TICKET-006** - Chart not reinitialized (P0) - 3 pts
-2. **TICKET-014** - Unselect All button visibility (P1) - 2 pts
+### Phase 1: Bug Fixes (Current Priority)
+1. **TICKET-014** - Unselect All button visibility (P1) - 2 pts
 
-### Phase 2: Core Features (Weeks 2-3)
-3. **TICKET-005** - Responsive design (P1) - 8 pts
-4. **TICKET-004** - Sync consumption & metrics (P1) - 5 pts
+### Phase 2: Core Features
+2. **TICKET-004** - Sync consumption & metrics (P1) - 5 pts
 
-### Phase 3: UX Improvements (Week 4)
-5. **TICKET-016** - Time format standardization (P2) - 3 pts
-6. **TICKET-015** - Legend simplification (P2) - 3 pts
-7. **TICKET-010** - Curve visibility (P2) - 5 pts
+### Phase 3: UX Improvements
+3. **TICKET-016** - Time format standardization (P2) - 3 pts
+4. **TICKET-021** - Remove duplicate values (P2) - 2 pts
+5. **TICKET-023** - Preserve sensor selection (P2) - 3 pts
+6. **TICKET-022** - Compact on/off toggles (P2) - 3 pts
 
-### Phase 4: Advanced Features (Weeks 5-6)
-8. **TICKET-008** - Rules & metrics correlation (P2) - 8 pts
-9. **TICKET-007** - Variables in rules (P2) - 8 pts
+### Phase 4: Advanced Features
+7. **TICKET-008** - Rules & metrics correlation (P2) - 8 pts
+8. **TICKET-007** - Variables in rules (P2) - 8 pts
 
-### Phase 5: Polish & Enhancements (Weeks 7-8)
-10. **TICKET-009** - Disk monitoring (P2) - 3 pts
-11. **TICKET-012** - Power values display (P2) - 3 pts
-12. **TICKET-013** - Binary metrics display (P2) - 3 pts
+### Phase 5: Polish & Enhancements
+9. **TICKET-009** - Disk monitoring (P2) - 3 pts
+10. **TICKET-012** - Power values display (P2) - 3 pts
+11. **TICKET-013** - Binary metrics display (P2) - 3 pts
 
 ### Phase 6: Low Priority (As time permits)
-13. **TICKET-017** - Button positioning (P3) - 1 pt
-14. **TICKET-002** - 0°C line visibility (P3) - 1 pt
-15. **TICKET-011** - Zoomable zone indicators (P3) - 2 pts
-16. **TICKET-003** - User notes (P3) - 5 pts
+12. **TICKET-017** - Button positioning (P3) - 1 pt
+13. **TICKET-002** - 0°C line visibility (P3) - 1 pt
+14. **TICKET-003** - User notes (P3) - 5 pts
+15. **TICKET-024** - Floor plan visualization (P3) - 13 pts
 
 ---
 
@@ -712,3 +682,4 @@ Add a feature allowing users to annotate data with notes about events that may i
 - Some tickets may have dependencies not explicitly listed
 - Frontend tickets require testing on Pi dashboard (slow network)
 - Backend changes require `make quick-deploy` for testing on Pi
+- Closed tickets (#5, #6, #10, #11, #15) have been completed
