@@ -1,5 +1,6 @@
 // Core MQTT modules
 mod client;
+mod dedup_filter;
 mod device_discovery;
 mod event_loop;
 mod handlers;
