@@ -6,6 +6,7 @@ mod models;
 mod mqtt;
 mod services;
 mod state;
+mod system;
 
 use db::Database;
 use events::bus::EventBus;

@@ -3,13 +3,34 @@ use crate::http::responses::*;
 use crate::models::{NetworkEdge, NetworkTopology};
 use crate::mqtt::MqttClient;
 use crate::state::DeviceStateStore;
+use crate::system::storage;
 use http_body_util::Full;
 use hyper::Response;
 use hyper::body::Bytes;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::OnceLock;
+use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 use tracing::{debug, error, info};
+
+const STORAGE_CACHE_TTL: Duration = Duration::from_secs(60);
+
+struct StorageCache {
+    last_updated: Option<Instant>,
+    payload: Option<storage::StorageBreakdown>,
+}
+
+impl StorageCache {
+    fn new() -> Self {
+        Self {
+            last_updated: None,
+            payload: None,
+        }
+    }
+}
+
+static STORAGE_CACHE: OnceLock<Mutex<StorageCache>> = OnceLock::new();
 
 pub fn serve_network_topology(
     db: &Database,
@@ -84,4 +105,47 @@ pub async fn refresh_network_map(mqtt: &Arc<Mutex<MqttClient>>) -> Response<Full
             internal_error_response("Failed to request network map")
         }
     }
+}
+
+pub async fn serve_storage_breakdown() -> Response<Full<Bytes>> {
+    let cache = STORAGE_CACHE.get_or_init(|| Mutex::new(StorageCache::new()));
+
+    {
+        let guard = cache.lock().await;
+        if let (Some(last_updated), Some(payload)) = (&guard.last_updated, &guard.payload) {
+            if last_updated.elapsed() < STORAGE_CACHE_TTL {
+                let json = match serialize_to_json(payload, "storage breakdown") {
+                    Ok(json) => json,
+                    Err(response) => return *response,
+                };
+                return json_response(json);
+            }
+        }
+    }
+
+    let result = tokio::task::spawn_blocking(storage::compute_storage_breakdown).await;
+    let breakdown = match result {
+        Ok(Ok(value)) => value,
+        Ok(Err(err)) => {
+            error!(error = %err, "Failed to compute storage breakdown");
+            return internal_error_response("Failed to compute storage breakdown");
+        }
+        Err(err) => {
+            error!(error = ?err, "Storage breakdown task failed");
+            return internal_error_response("Failed to compute storage breakdown");
+        }
+    };
+
+    {
+        let mut guard = cache.lock().await;
+        guard.last_updated = Some(Instant::now());
+        guard.payload = Some(breakdown.clone());
+    }
+
+    let json = match serialize_to_json(&breakdown, "storage breakdown") {
+        Ok(json) => json,
+        Err(response) => return *response,
+    };
+
+    json_response(json)
 }

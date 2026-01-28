@@ -2,15 +2,18 @@
   import { onMount, onDestroy } from "svelte";
   import {
     fetchLogsSince,
+    fetchStorageBreakdown,
     type SystemMonitorEntry,
     type ProcessMonitorEntry,
     type TopConsumerEntry,
+    type StorageBreakdown,
     type TimeRange,
   } from "../api";
   import SystemMetricsView from "./SystemMetricsView.svelte";
   import ProcessTableView from "./ProcessTableView.svelte";
   import TopConsumersView from "./TopConsumersView.svelte";
   import { cache } from "../stores/cache";
+  import { dataCache } from "../stores/dataCache";
   import { eventStream, type LogEntriesEvent } from "../websocket";
 
   type Tab = "system" | "processes" | "top-cpu" | "top-ram";
@@ -31,6 +34,7 @@
   let topRamEntries = $state<TopConsumerEntry[]>([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
+  let storageBreakdown = $state<StorageBreakdown | null>(null);
 
   // Track which tabs have been loaded for the current time range
   let loadedTabs = $state<Set<Tab>>(new Set());
@@ -118,6 +122,16 @@
     }
   }
 
+  async function loadStorageBreakdown(): Promise<void> {
+    try {
+      const breakdown = await fetchStorageBreakdown();
+      dataCache.setStorageBreakdown(breakdown);
+      storageBreakdown = breakdown;
+    } catch (e) {
+      console.error("Failed to load storage breakdown:", e);
+    }
+  }
+
   function setActiveTab(tab: Tab): void {
     if (tab === activeTab) return;
     activeTab = tab;
@@ -169,6 +183,7 @@
   onMount(() => {
     // Initial load of active tab
     loadActiveTab(true);
+    loadStorageBreakdown();
 
     // Connect to WebSocket for real-time updates
     eventStream.connect();
@@ -253,7 +268,7 @@
         <button onclick={() => loadActiveTab(true)}>Retry</button>
       </div>
     {:else if activeTab === "system"}
-      <SystemMetricsView entries={systemEntries} />
+      <SystemMetricsView entries={systemEntries} storageBreakdown={storageBreakdown} />
     {:else if activeTab === "processes"}
       <ProcessTableView
         entries={processEntries}

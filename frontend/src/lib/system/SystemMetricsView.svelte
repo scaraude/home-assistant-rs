@@ -13,7 +13,8 @@
   } from 'chart.js';
   import zoomPlugin from 'chartjs-plugin-zoom';
   import 'chartjs-adapter-date-fns';
-  import type { SystemMonitorEntry } from "../api";
+  import type { StorageBreakdown, SystemMonitorEntry } from "../api";
+  import StorageBreakdownChart from "./StorageBreakdownChart.svelte";
 
   Chart.register(
     LineController,
@@ -28,9 +29,11 @@
   );
 
   let {
-    entries = []
+    entries = [],
+    storageBreakdown = null
   }: {
     entries?: SystemMonitorEntry[];
+    storageBreakdown?: StorageBreakdown | null;
   } = $props();
 
   let combinedCanvas = $state<HTMLCanvasElement>();
@@ -272,6 +275,10 @@
       <canvas bind:this={combinedCanvas} ondblclick={handleCanvasDoubleClick}></canvas>
     </div>
   </div>
+
+  <div class="storage-grid">
+    <StorageBreakdownChart breakdown={storageBreakdown} />
+  </div>
 </div>
 
 <style>
@@ -317,6 +324,10 @@
     border: 1px solid #e5e7eb;
     border-radius: 8px;
     padding: 1rem;
+  }
+
+  .storage-grid {
+    margin-top: 1.5rem;
   }
 
   .chart-card h3 {
