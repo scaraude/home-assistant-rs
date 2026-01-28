@@ -34,7 +34,7 @@ Synced from GitHub Issues on 2026-01-27
 | 4   | Synchronization of consumption and metrics         | P1       | 5    | Feature  | Open      |
 | 10  | Improve curve visibility                           | P2       | 5    | UX       | ✅ Closed |
 | 8   | Correlation between rules and metrics              | P2       | 8    | Feature  | Open      |
-| 9   | Disk space monitoring                              | P2       | 3    | Feature  | Open      |
+| 9   | Disk space monitoring                              | P2       | 3    | Feature  | ✅ Closed |
 | 7   | Variables in rules                                 | P2       | 8    | Feature  | Open      |
 | 16  | Standardize time display format                    | P2       | 3    | UX       | Open      |
 | 15  | Simplify legend display                            | P2       | 3    | UX       | ✅ Closed |
