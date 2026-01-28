@@ -208,9 +208,9 @@ fn statvfs_bytes(path: &Path) -> Result<FsStats, String> {
         return Err(format!("statvfs failed for {}", path_str));
     }
 
-    let block_size = vfs.f_frsize as u64;
-    let total = vfs.f_blocks as u64 * block_size;
-    let free = vfs.f_bavail as u64 * block_size;
+    let block_size = u64::from(vfs.f_frsize);
+    let total = u64::from(vfs.f_blocks) * block_size;
+    let free = u64::from(vfs.f_bavail) * block_size;
 
     Ok(FsStats {
         total_bytes: total,
