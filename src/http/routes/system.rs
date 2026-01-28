@@ -112,14 +112,14 @@ pub async fn serve_storage_breakdown() -> Response<Full<Bytes>> {
 
     {
         let guard = cache.lock().await;
-        if let (Some(last_updated), Some(payload)) = (&guard.last_updated, &guard.payload) {
-            if last_updated.elapsed() < STORAGE_CACHE_TTL {
-                let json = match serialize_to_json(payload, "storage breakdown") {
-                    Ok(json) => json,
-                    Err(response) => return *response,
-                };
-                return json_response(json);
-            }
+        if let (Some(last_updated), Some(payload)) = (&guard.last_updated, &guard.payload)
+            && last_updated.elapsed() < STORAGE_CACHE_TTL
+        {
+            let json = match serialize_to_json(payload, "storage breakdown") {
+                Ok(json) => json,
+                Err(response) => return *response,
+            };
+            return json_response(json);
         }
     }
 

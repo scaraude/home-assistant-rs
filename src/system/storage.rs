@@ -310,12 +310,11 @@ fn tmpfs_breakdown() -> Option<RamStorageBreakdown> {
         let _device = parts.next();
         let mountpoint = parts.next();
         let fstype = parts.next();
-        if let (Some(mountpoint), Some(fstype)) = (mountpoint, fstype) {
-            if fstype == "tmpfs"
-                && (mountpoint == "/run" || mountpoint == "/tmp" || mountpoint == "/dev/shm")
-            {
-                mountpoints.insert(mountpoint.to_string());
-            }
+        if let (Some(mountpoint), Some(fstype)) = (mountpoint, fstype)
+            && fstype == "tmpfs"
+            && (mountpoint == "/run" || mountpoint == "/tmp" || mountpoint == "/dev/shm")
+        {
+            mountpoints.insert(mountpoint.to_string());
         }
     }
 
