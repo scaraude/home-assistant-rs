@@ -12,12 +12,11 @@
   let sensors = $derived($graphConfig.sensors);
   let metric = $derived($graphConfig.metric);
   let timeRange = $derived($graphConfig.timeRange);
-  let someHidden = $derived(sensors.some((s) => !s.visible));
 </script>
 
 <div class="graph-panel">
   <div class="panel-header">
-    <GraphToolbar {someHidden} {metricType} />
+    <GraphToolbar {metricType} />
   </div>
 
   <div class="chart-wrapper">

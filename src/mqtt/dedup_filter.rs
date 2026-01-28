@@ -2,27 +2,32 @@
 //!
 //! Zigbee devices sometimes send duplicate messages within the same second
 //! (e.g., same temperature with slightly different humidity).
+//! This filter treats small numeric deltas within the window as duplicates.
 //! This filter catches these duplicates at the interface layer before processing.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::hash::{Hash, Hasher};
 use std::time::Instant;
 
 /// Time window in seconds to consider messages as duplicates
-const DEDUP_WINDOW_SECS: u64 = 2;
+const DEDUP_WINDOW_SECS: u64 = 1;
+const MAX_RECENT_PER_TOPIC: usize = 5;
+const ABS_EPSILON: f64 = 0.5;
+const REL_EPSILON: f64 = 0.01;
 
 /// A message signature for deduplication
 #[derive(Debug, Clone)]
 struct MessageSignature {
     payload_hash: u64,
     received_at: Instant,
+    numeric_fields: HashMap<String, f64>,
 }
 
 /// Filter that tracks recent MQTT messages and identifies duplicates
 #[derive(Debug, Default)]
 pub struct MqttDedupFilter {
-    /// Last message signature per topic
-    last_messages: HashMap<String, MessageSignature>,
+    /// Recent message signatures per topic
+    recent_messages: HashMap<String, VecDeque<MessageSignature>>,
     /// Count of filtered duplicates
     filtered_count: u64,
 }
@@ -37,33 +42,52 @@ impl MqttDedupFilter {
     /// Returns `true` if the message should be processed (not a duplicate),
     /// `false` if it should be filtered out.
     ///
-    /// A message is a duplicate if same topic + same payload within DEDUP_WINDOW_SECS.
+    /// A message is a duplicate if the topic recently saw the same payload
+    /// or a near-identical set of numeric fields within DEDUP_WINDOW_SECS.
     pub fn should_process(&mut self, topic: &str, payload: &[u8]) -> bool {
         let now = Instant::now();
         let payload_hash = Self::hash_payload(payload);
+        let numeric_fields = Self::extract_numeric_fields(payload);
 
-        if let Some(last) = self.last_messages.get(topic) {
-            let elapsed = now.duration_since(last.received_at);
+        let recent = self.recent_messages.entry(topic.to_string()).or_default();
 
-            if last.payload_hash == payload_hash && elapsed.as_secs() < DEDUP_WINDOW_SECS {
-                self.filtered_count += 1;
-                tracing::debug!(
-                    topic = %topic,
-                    elapsed_ms = elapsed.as_millis(),
-                    filtered_total = self.filtered_count,
-                    "Filtered duplicate MQTT message"
-                );
-                return false;
+        // Drop entries outside the window.
+        while let Some(front) = recent.front() {
+            if now.duration_since(front.received_at).as_secs() < DEDUP_WINDOW_SECS {
+                break;
             }
+            recent.pop_front();
         }
 
-        self.last_messages.insert(
-            topic.to_string(),
-            MessageSignature {
-                payload_hash,
-                received_at: now,
-            },
-        );
+        let is_duplicate = recent.iter().any(|prior| {
+            prior.payload_hash == payload_hash
+                || Self::is_similar_numeric_fields(prior, &numeric_fields)
+        });
+
+        if is_duplicate {
+            let elapsed_ms = recent
+                .back()
+                .map(|last| now.duration_since(last.received_at).as_millis())
+                .unwrap_or(0);
+            self.filtered_count += 1;
+            tracing::debug!(
+                topic = %topic,
+                elapsed_ms,
+                filtered_total = self.filtered_count,
+                "Filtered duplicate MQTT message"
+            );
+            return false;
+        }
+
+        if recent.len() == MAX_RECENT_PER_TOPIC {
+            recent.pop_front();
+        }
+
+        recent.push_back(MessageSignature {
+            payload_hash,
+            received_at: now,
+            numeric_fields,
+        });
 
         true
     }
@@ -72,6 +96,71 @@ impl MqttDedupFilter {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         payload.hash(&mut hasher);
         hasher.finish()
+    }
+
+    fn extract_numeric_fields(payload: &[u8]) -> HashMap<String, f64> {
+        let payload_str = match std::str::from_utf8(payload) {
+            Ok(s) => s,
+            Err(_) => return HashMap::new(),
+        };
+
+        let value: serde_json::Value = match serde_json::from_str(payload_str) {
+            Ok(v) => v,
+            Err(_) => return HashMap::new(),
+        };
+
+        let obj = match value.as_object() {
+            Some(map) => map,
+            None => return HashMap::new(),
+        };
+
+        let mut fields = HashMap::new();
+        for (key, value) in obj {
+            if Self::is_ignored_key(key) {
+                continue;
+            }
+            if let Some(num) = value.as_f64() {
+                fields.insert(key.clone(), num);
+            }
+        }
+
+        fields
+    }
+
+    fn is_similar_numeric_fields(
+        last: &MessageSignature,
+        numeric_fields: &HashMap<String, f64>,
+    ) -> bool {
+        let mut compared = false;
+
+        for (key, current) in numeric_fields {
+            let Some(prev) = last.numeric_fields.get(key) else {
+                continue;
+            };
+            let max_mag = prev.abs().max(current.abs());
+            let tolerance = ABS_EPSILON.max(max_mag * REL_EPSILON);
+            if (prev - current).abs() > tolerance {
+                return false;
+            }
+            compared = true;
+        }
+
+        compared
+    }
+
+    fn is_ignored_key(key: &str) -> bool {
+        matches!(
+            key,
+            "linkquality"
+                | "battery"
+                | "voltage"
+                | "last_seen"
+                | "update"
+                | "rssi"
+                | "lqi"
+                | "state"
+                | "action"
+        )
     }
 
     pub fn filtered_count(&self) -> u64 {
@@ -135,6 +224,8 @@ mod tests {
 
         let payload1 = br#"{"temperature":15.66,"humidity":59.19,"linkquality":120}"#;
         let payload2 = br#"{"temperature":15.66,"humidity":58.94,"linkquality":120}"#;
+        let payload3 = br#"{"temperature":15.66,"humidity":57.4,"linkquality":120}"#;
+        let payload4 = br#"{"temperature":15.66,"humidity":59.19,"linkquality":80}"#;
 
         // First message passes
         assert!(filter.should_process("zigbee2mqtt/sensor_living_room", payload1));
@@ -142,9 +233,29 @@ mod tests {
         // Exact duplicate filtered
         assert!(!filter.should_process("zigbee2mqtt/sensor_living_room", payload1));
 
-        // Different payload (humidity changed) passes
-        assert!(filter.should_process("zigbee2mqtt/sensor_living_room", payload2));
+        // Slight humidity change filtered
+        assert!(!filter.should_process("zigbee2mqtt/sensor_living_room", payload2));
 
+        // Linkquality-only change filtered
+        assert!(!filter.should_process("zigbee2mqtt/sensor_living_room", payload4));
+
+        // Larger humidity change passes
+        assert!(filter.should_process("zigbee2mqtt/sensor_living_room", payload3));
+
+        assert_eq!(filter.filtered_count(), 3);
+    }
+
+    #[test]
+    fn test_energy_meter_similarity() {
+        let mut filter = MqttDedupFilter::new();
+
+        let payload1 = br#"{"power":3848,"energy":334.89,"linkquality":120}"#;
+        let payload2 = br#"{"power":3848,"energy":334.89,"linkquality":80}"#;
+        let payload3 = br#"{"power":3797,"energy":334.89,"linkquality":120}"#;
+
+        assert!(filter.should_process("zigbee2mqtt/plug_kitchen", payload1));
+        assert!(!filter.should_process("zigbee2mqtt/plug_kitchen", payload2));
+        assert!(filter.should_process("zigbee2mqtt/plug_kitchen", payload3));
         assert_eq!(filter.filtered_count(), 1);
     }
 
@@ -201,10 +312,10 @@ mod tests {
         // New value passes and resets tracking
         assert!(filter.should_process("device/sensor1", b"temp:21.0"));
 
-        // Old value now passes (tracking was reset to new value)
-        assert!(filter.should_process("device/sensor1", b"temp:20.0"));
+        // Old value is filtered within the window because it was recently seen
+        assert!(!filter.should_process("device/sensor1", b"temp:20.0"));
 
-        assert_eq!(filter.filtered_count(), 1);
+        assert_eq!(filter.filtered_count(), 2);
     }
 
     #[test]

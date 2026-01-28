@@ -46,14 +46,19 @@
   // Check if any sensors are selected
   const hasSelectedSensors = $derived(sensors.some(s => s.visible));
 
-  // Handle unselect all
-  const handleUnselectAll = () => {
-    // Hide all sensors
-    sensors.forEach(sensor => {
-      if (sensor.visible) {
-        graphConfig.toggleSensor(sensor.deviceId);
-      }
-    });
+  // Handle select/unselect all toggle
+  const handleToggleAll = () => {
+    if (hasSelectedSensors) {
+      // Unselect all: hide all visible sensors
+      sensors.forEach(sensor => {
+        if (sensor.visible) {
+          graphConfig.toggleSensor(sensor.deviceId);
+        }
+      });
+    } else {
+      // Select all: show all sensors
+      graphConfig.showAll();
+    }
   };
 
   // Toggle edit mode
@@ -66,20 +71,25 @@
   <div class="header">
     <h3>Sensors</h3>
     <div class="header-actions">
-      {#if hasSelectedSensors}
-        <button
-          class="action-button ghost"
-          onclick={handleUnselectAll}
-          title="Unselect all sensors"
-          aria-label="Unselect all sensors"
-        >
+      <button
+        class="action-button ghost"
+        onclick={handleToggleAll}
+        title={hasSelectedSensors ? "Unselect all sensors" : "Select all sensors"}
+        aria-label={hasSelectedSensors ? "Unselect all sensors" : "Select all sensors"}
+      >
+        {#if hasSelectedSensors}
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="18" y1="6" x2="6" y2="18"></line>
             <line x1="6" y1="6" x2="18" y2="18"></line>
           </svg>
           Unselect All
-        </button>
-      {/if}
+        {:else}
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          Select All
+        {/if}
+      </button>
 
       <button
         class="icon-button"
