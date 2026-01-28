@@ -1,5 +1,11 @@
 import { writable } from 'svelte/store';
-import type { DeviceInfo, DeviceState, SensorReading, SwitchDevice } from '../api';
+import type {
+  DeviceInfo,
+  DeviceState,
+  SensorReading,
+  StorageBreakdown,
+  SwitchDevice,
+} from '../api';
 
 interface SensorStoreState {
   devices: DeviceInfo[];
@@ -19,6 +25,10 @@ interface DataCacheState {
   sensors: SensorStoreState;
   switches: SwitchStoreState;
   deviceStates: Record<string, DeviceState>;
+  storage: {
+    breakdown: StorageBreakdown | null;
+    loaded: boolean;
+  };
 }
 
 const createInitialState = (): DataCacheState => ({
@@ -35,6 +45,10 @@ const createInitialState = (): DataCacheState => ({
     loaded: false,
   },
   deviceStates: {},
+  storage: {
+    breakdown: null,
+    loaded: false,
+  },
 });
 
 function sortReadings(readings: SensorReading[]): SensorReading[] {
@@ -259,6 +273,16 @@ function createDataCache() {
 
         return newState;
       });
+    },
+
+    setStorageBreakdown(breakdown: StorageBreakdown) {
+      update((state) => ({
+        ...state,
+        storage: {
+          breakdown,
+          loaded: true,
+        },
+      }));
     },
   };
 }

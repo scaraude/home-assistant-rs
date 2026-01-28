@@ -19,7 +19,7 @@ pub use switches::{
     execute_command, permit_join, serve_device_state, serve_device_states, serve_switches_list,
     set_device_option, update_device,
 };
-pub use system::{refresh_network_map, serve_network_topology};
+pub use system::{refresh_network_map, serve_network_topology, serve_storage_breakdown};
 
 pub fn health_check() -> Response<Full<Bytes>> {
     success_response()

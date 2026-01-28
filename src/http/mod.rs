@@ -248,6 +248,10 @@ async fn handle_request(
             debug!("Refreshing network map");
             routes::refresh_network_map(&mqtt).await
         }),
+        ("GET", "/api/system/storage") => Ok({
+            debug!("Serving storage breakdown");
+            routes::serve_storage_breakdown().await
+        }),
         ("GET", "/ws") => websocket::handle_websocket_upgrade(req, ws_broadcaster).await,
         (_, path_str) if path_str.starts_with("/assets/") || path_str.ends_with(".svg") => Ok({
             debug!(path = %path_str, "Serving static asset");
