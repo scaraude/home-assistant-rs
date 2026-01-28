@@ -49,10 +49,7 @@ impl MqttDedupFilter {
         let payload_hash = Self::hash_payload(payload);
         let numeric_fields = Self::extract_numeric_fields(payload);
 
-        let recent = self
-            .recent_messages
-            .entry(topic.to_string())
-            .or_insert_with(VecDeque::new);
+        let recent = self.recent_messages.entry(topic.to_string()).or_default();
 
         // Drop entries outside the window.
         while let Some(front) = recent.front() {
