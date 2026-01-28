@@ -3,10 +3,8 @@
   import type { GraphState } from "../stores/graphConfig";
 
   let {
-    someHidden = false,
     metricType = "temperature"
   }: {
-    someHidden?: boolean;
     metricType?: "temperature" | "power";
   } = $props();
 
@@ -19,10 +17,6 @@
 
   function setTimeRange(timeRange: GraphState['timeRange']) {
     graphConfig.setTimeRange(timeRange);
-  }
-
-  function handleShowAll() {
-    graphConfig.showAll();
   }
 </script>
 
@@ -92,12 +86,6 @@
     </div>
   </div>
 
-  {#if someHidden}
-    <div class="toolbar-divider"></div>
-    <button class="show-all-btn" onclick={handleShowAll}>
-      Show All Sensors
-    </button>
-  {/if}
 </div>
 
 <style>
@@ -162,23 +150,6 @@
     background: #d1d5db;
   }
 
-  .show-all-btn {
-    padding: 0.5rem 1rem;
-    background: #10b981;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    font-size: 0.8125rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.15s;
-    white-space: nowrap;
-  }
-
-  .show-all-btn:hover {
-    background: #059669;
-  }
-
   @media (max-width: 640px) {
     .toolbar {
       flex-direction: column;
@@ -203,8 +174,5 @@
       text-align: center;
     }
 
-    .show-all-btn {
-      width: 100%;
-    }
   }
 </style>

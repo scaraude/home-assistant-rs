@@ -537,7 +537,7 @@ Some areas are zoomable via mouse wheel, others are not. Users don't know which 
 
 ---
 
-### TICKET-017: Show All/Unselect All buttons positioning
+### TICKET-017: Show All/Unselect All buttons positioning ✅ COMPLETED
 
 **GitHub Issue:** [#17](https://github.com/scaraude/home-automation-rs/issues/17)
 
@@ -547,24 +547,30 @@ Some areas are zoomable via mouse wheel, others are not. Users don't know which 
 | **Cost**      | 1 point (< 1 hour) |
 | **Category**  | UX Enhancement     |
 | **Component** | Frontend - UI      |
+| **Status**    | ✅ Completed       |
 
 #### Description
 
 The "Show All Sensors" and "Unselect All" buttons are positioned far apart. These complementary functions should be grouped together.
 
-#### Implementation Steps
+#### Solution Implemented
 
-1. [ ] Move both buttons to same toolbar area
-2. [ ] Position buttons side-by-side
-3. [ ] Use consistent button styling
-4. [ ] Consider combining into single toggle button
-5. [ ] Optional: Add icons (✓ for select all, ✗ for unselect)
+Combined into a single toggle button in the SensorListPanel header:
+- Shows "Select All" with checkmark icon when no sensors are selected
+- Shows "Unselect All" with X icon when sensors are selected
+- Removed redundant "Show All Sensors" button from GraphToolbar
+
+#### Files Changed
+
+- `frontend/src/lib/devices/SensorListPanel.svelte` - Toggle button logic
+- `frontend/src/lib/graphs/GraphToolbar.svelte` - Removed Show All button
+- `frontend/src/lib/graphs/UnifiedGraphPanel.svelte` - Removed someHidden prop
 
 #### Acceptance Criteria
 
-- [ ] Both buttons in same visual group
-- [ ] Consistent styling
-- [ ] Reduced mouse travel between actions
+- [x] Single button handles both select/unselect all
+- [x] Consistent styling with other header actions
+- [x] No mouse travel needed between related actions
 
 ---
 
@@ -710,7 +716,7 @@ Add a visual floor plan or building map that displays the physical location of e
 
 ### Phase 6: Low Priority (As time permits)
 
-12. **TICKET-017** - Button positioning (P3) - 1 pt
+12. ~~**TICKET-017** - Button positioning (P3) - 1 pt~~ ✅
 13. **TICKET-002** - 0°C line visibility (P3) - 1 pt
 14. **TICKET-003** - User notes (P3) - 5 pts
 15. **TICKET-024** - Floor plan visualization (P3) - 13 pts
