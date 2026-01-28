@@ -208,9 +208,20 @@ fn statvfs_bytes(path: &Path) -> Result<FsStats, String> {
         return Err(format!("statvfs failed for {}", path_str));
     }
 
-    let block_size = u64::from(vfs.f_frsize);
-    let total = u64::from(vfs.f_blocks) * block_size;
-    let free = u64::from(vfs.f_bavail) * block_size;
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    let block_size = vfs.f_frsize;
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+    let block_size = vfs.f_frsize as u64;
+
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    let total = vfs.f_blocks * block_size;
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+    let total = vfs.f_blocks as u64 * block_size;
+
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    let free = vfs.f_bavail * block_size;
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+    let free = vfs.f_bavail as u64 * block_size;
 
     Ok(FsStats {
         total_bytes: total,
