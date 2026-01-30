@@ -1,5 +1,6 @@
 mod automation;
 mod logs;
+mod positions;
 mod sensors;
 mod switches;
 mod system;
@@ -14,6 +15,7 @@ pub use automation::{
     serve_execution_logs, update_automation_rule,
 };
 pub use logs::{serve_log_since, serve_log_view, serve_logs_list, serve_process_history};
+pub use positions::{serve_device_positions, update_device_position};
 pub use sensors::{serve_readings, serve_sensors};
 pub use switches::{
     execute_command, permit_join, serve_device_state, serve_device_states, serve_switches_list,

@@ -176,6 +176,14 @@ async fn handle_request(
             debug!("Serving all device states");
             routes::serve_device_states(&db)
         }),
+        ("GET", "/api/devices/positions") => Ok({
+            debug!("Serving device positions");
+            routes::serve_device_positions(&db)
+        }),
+        ("PUT", path) if path.starts_with("/api/devices/") && path.ends_with("/position") => {
+            debug!(path = %path, "Updating device position");
+            Ok(routes::update_device_position(req, &db, &event_bus, path).await)
+        }
         ("GET", path) if DeviceStatePath::parse(path).is_some() => Ok({
             let device_path = DeviceStatePath::parse(path).expect("path validated");
             debug!(path = %path, "Serving device state");

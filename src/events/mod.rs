@@ -70,6 +70,14 @@ pub enum SystemEvent {
         ieee_addr: String,
         friendly_name: String,
     },
+    /// Device position updated on floor map
+    DevicePositionUpdated {
+        device_id: String,
+        x: f64,
+        y: f64,
+        #[serde(with = "chrono::serde::ts_seconds")]
+        timestamp: DateTime<Utc>,
+    },
 }
 
 impl SystemEvent {
@@ -86,6 +94,7 @@ impl SystemEvent {
             SystemEvent::LogEntries { .. } => "log_entries",
             SystemEvent::NetworkTopologyUpdated => "network_topology_updated",
             SystemEvent::DevicePairing { .. } => "device_pairing",
+            SystemEvent::DevicePositionUpdated { .. } => "device_position_updated",
         }
     }
 }

@@ -118,14 +118,18 @@ PUT  /api/devices/{id}/position      # Update position unique
 
 **Critères d'acceptation**:
 
-- [ ] Endpoints fonctionnels avec validation
-- [ ] Réponse JSON cohérente avec l'API existante
-- [ ] Event WebSocket `DevicePositionUpdated` émis
+- [x] Endpoints fonctionnels avec validation
+- [x] Réponse JSON cohérente avec l'API existante
+- [x] Event WebSocket `DevicePositionUpdated` émis
 
-**Fichiers à modifier**:
+**Fichiers modifiés**:
 
-- `src/http/routes/devices.rs` - Nouveaux handlers
-- `src/events/mod.rs` - Nouveau variant `SystemEvent`
+- `src/http/routes/positions.rs` - Nouveau fichier avec handlers
+- `src/http/routes/mod.rs` - Export des nouveaux handlers
+- `src/http/mod.rs` - Routes ajoutées au router
+- `src/events/mod.rs` - Nouveau variant `SystemEvent::DevicePositionUpdated`
+
+**Status**: ✅ COMPLETED
 
 ---
 
