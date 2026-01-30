@@ -16,6 +16,31 @@
   --color-card-border-hover: #d1d5db;
   --color-card-active: #3b82f6;
   --color-card-active-bg: #eff6ff;
+  --color-card-focus: #3b82f6;
+
+  --color-floor-card-border-coordinator: #f59e0b;
+  --color-floor-card-border-router: #3b82f6;
+  --color-floor-card-border-standard: #e5e7eb;
+  --color-floor-card-coordinator-start: #fffbeb;
+  --color-floor-card-coordinator-end: #fef3c7;
+  --color-floor-card-router-start: #eff6ff;
+  --color-floor-card-router-end: #dbeafe;
+  --color-floor-card-switch-start: #fef3c7;
+  --color-floor-card-switch-end: #fde68a;
+  --color-floor-card-icon-on-start: #fbbf24;
+  --color-floor-card-icon-on-end: #f59e0b;
+  --color-floor-card-presence-on: #f59e0b;
+  --color-floor-card-switch-on-text: #16a34a;
+  --color-floor-card-icon-text: #6b7280;
+  --color-floor-card-icon-bg: #f3f4f6;
+  --color-floor-card-text: #374151;
+  --color-floor-card-text-strong: #111827;
+  --color-floor-card-text-muted: #6b7280;
+  --color-floor-card-text-subtle: #9ca3af;
+  --shadow-floor-card: 0 2px 4px rgba(0, 0, 0, 0.08);
+  --shadow-floor-card-hover: 0 4px 12px rgba(0, 0, 0, 0.15);
+  --shadow-floor-card-icon-on: 0 2px 8px rgba(251, 191, 36, 0.4);
+  --shadow-floor-card-presence-on: 0 0 12px rgba(251, 191, 36, 0.6);
 
   --color-badge-neutral-bg: rgba(107, 114, 128, 0.1);
   --color-badge-neutral-border: rgba(107, 114, 128, 0.2);
@@ -94,7 +119,7 @@ button {
 }
 
 button:focus-visible {
-  outline: 2px solid #3b82f6;
+  outline: 2px solid var(--color-card-focus);
   outline-offset: 2px;
 }
 

@@ -195,15 +195,16 @@ Créer un composant card compact et unifié pour tous les types de devices sur l
 
 **Critères d'acceptation**:
 
-- [ ] Support des 5 types de devices
-- [ ] Responsive et compact (~120-150px largeur)
-- [ ] Animations hover subtiles
-- [ ] Props typées TypeScript
+- [x] Support des 5 types de devices
+- [x] Responsive et compact (~120-150px largeur)
+- [x] Animations hover subtiles
+- [x] Props typées TypeScript
 
-**Fichiers à créer**:
+**Fichiers créés**:
 
 - `frontend/src/lib/floor-map/FloorMapCard.svelte`
-- `frontend/src/lib/floor-map/icons/` - Icônes SVG inline
+
+**Status**: ✅ COMPLETED
 
 ---
 
