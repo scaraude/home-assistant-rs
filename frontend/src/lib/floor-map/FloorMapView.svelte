@@ -51,7 +51,7 @@
   let showConnections = $state(true);
   let dragActive = $state(false);
   let fileInput: HTMLInputElement | null = null;
-  let mapWrapperEl: HTMLDivElement | null = null;
+  let mapWrapperEl: HTMLDivElement | null = $state(null);
 
   const nodeTypes = {
     "background-svg": SVGBackgroundNode,
@@ -59,7 +59,11 @@
   };
 
   onMount(() => {
-    void Promise.all([loadTopology(), loadFloorPlan(), floorMapStore.initialize()]);
+    void Promise.all([
+      loadTopology(),
+      loadFloorPlan(),
+      floorMapStore.initialize(),
+    ]);
   });
 
   async function loadTopology() {
@@ -102,7 +106,10 @@
     }
   }
 
-  function getSvgDimensions(svgContent: string | null): { width: number; height: number } {
+  function getSvgDimensions(svgContent: string | null): {
+    width: number;
+    height: number;
+  } {
     if (!svgContent) return { width: 800, height: 600 };
 
     const viewBoxMatch = svgContent.match(/viewBox=["']([^"']+)["']/);
@@ -181,28 +188,31 @@
 
     const positions = $floorMapStore.positions;
 
-    const deviceNodes = topology.devices.map((device, index): Node<FloorMapNodeData> => {
-      const savedPosition = positions[device.id];
-      const position = savedPosition ??
-        calculateInitialPosition(device, index, topology.devices.length);
-      const switchState = $dataCache.switches.byId[device.id]?.state ?? false;
+    const deviceNodes = topology.devices.map(
+      (device, index): Node<FloorMapNodeData> => {
+        const savedPosition = positions[device.id];
+        const position =
+          savedPosition ??
+          calculateInitialPosition(device, index, topology.devices.length);
+        const switchState = $dataCache.switches.byId[device.id]?.state ?? false;
 
-      return {
-        id: device.id,
-        type: "floor-device",
-        position,
-        data: {
-          kind: "device",
-          device,
-          deviceState: $dataCache.deviceStates[device.id] ?? null,
-          latestReading: latestReadingByDevice.get(device.id) ?? null,
-          switchState,
-          onDeviceClick: handleDeviceClick,
-        },
-        draggable: true,
-        zIndex: 2,
-      };
-    });
+        return {
+          id: device.id,
+          type: "floor-device",
+          position,
+          data: {
+            kind: "device",
+            device,
+            deviceState: $dataCache.deviceStates[device.id] ?? null,
+            latestReading: latestReadingByDevice.get(device.id) ?? null,
+            switchState,
+            onDeviceClick: handleDeviceClick,
+          },
+          draggable: true,
+          zIndex: 2,
+        };
+      },
+    );
 
     return [...baseNodes, ...deviceNodes];
   });
@@ -287,7 +297,10 @@
 
   async function handleUpload(file: File) {
     uploadError = null;
-    if (!file.type.includes("svg") && !file.name.toLowerCase().endsWith(".svg")) {
+    if (
+      !file.type.includes("svg") &&
+      !file.name.toLowerCase().endsWith(".svg")
+    ) {
       uploadError = "Please upload a valid SVG file.";
       return;
     }
@@ -331,7 +344,11 @@
         <span>Network connections</span>
       </label>
 
-      <button class="btn btn-secondary" onclick={openFilePicker} disabled={uploading}>
+      <button
+        class="btn btn-secondary"
+        onclick={openFilePicker}
+        disabled={uploading}
+      >
         {#if uploading}
           Uploading...
         {:else}
@@ -368,7 +385,11 @@
       <button class="btn btn-primary" onclick={loadTopology}>Retry</button>
     </div>
   {:else}
-    <div class="map-wrapper" class:drag-active={dragActive} bind:this={mapWrapperEl}>
+    <div
+      class="map-wrapper"
+      class:drag-active={dragActive}
+      bind:this={mapWrapperEl}
+    >
       <SvelteFlow
         {nodes}
         {edges}
@@ -408,7 +429,10 @@
       </div>
       <div class="status-item">
         <span class="status-label">Sync</span>
-        <span class="status-value" class:syncing={$floorMapStore.syncStatus === "syncing"}>
+        <span
+          class="status-value"
+          class:syncing={$floorMapStore.syncStatus === "syncing"}
+        >
           {$floorMapStore.syncStatus === "syncing" ? "Saving..." : "Up to date"}
         </span>
       </div>
