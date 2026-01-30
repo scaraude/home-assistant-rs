@@ -1,4 +1,5 @@
 mod automation;
+mod floor_plan;
 mod logs;
 mod positions;
 mod sensors;
@@ -14,6 +15,7 @@ pub use automation::{
     create_automation_rule, delete_automation_rule, serve_automation_rule, serve_automation_rules,
     serve_execution_logs, update_automation_rule,
 };
+pub use floor_plan::{delete_floor_plan, serve_floor_plan, upload_floor_plan};
 pub use logs::{serve_log_since, serve_log_view, serve_logs_list, serve_process_history};
 pub use positions::{serve_device_positions, update_device_position};
 pub use sensors::{serve_readings, serve_sensors};

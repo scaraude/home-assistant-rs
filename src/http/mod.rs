@@ -260,6 +260,18 @@ async fn handle_request(
             debug!("Serving storage breakdown");
             routes::serve_storage_breakdown().await
         }),
+        ("GET", "/api/floor-plan") => Ok({
+            debug!("Serving floor plan");
+            routes::serve_floor_plan(&db)
+        }),
+        ("POST", "/api/floor-plan") => Ok({
+            debug!("Uploading floor plan");
+            routes::upload_floor_plan(req, &db).await
+        }),
+        ("DELETE", "/api/floor-plan") => Ok({
+            debug!("Deleting floor plan");
+            routes::delete_floor_plan(&db)
+        }),
         ("GET", "/ws") => websocket::handle_websocket_upgrade(req, ws_broadcaster).await,
         (_, path_str) if path_str.starts_with("/assets/") || path_str.ends_with(".svg") => Ok({
             debug!(path = %path_str, "Serving static asset");

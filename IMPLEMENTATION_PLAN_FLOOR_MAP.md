@@ -150,14 +150,17 @@ DELETE /api/floor-plan               # Supprimer le plan
 
 **Critères d'acceptation**:
 
-- [ ] Upload multipart/form-data ou base64
-- [ ] Validation SVG basique (taille max, format)
-- [ ] Content-Type approprié en réponse
+- [x] Upload JSON avec svg_content (base64 ou raw SVG)
+- [x] Validation SVG basique (taille max 5MB, format)
+- [x] Content-Type approprié en réponse (JSON)
 
-**Fichiers à modifier**:
+**Fichiers modifiés**:
 
-- `src/http/routes/floor_plan.rs` - Nouveau fichier
-- `src/http/mod.rs` - Router update
+- `src/http/routes/floor_plan.rs` - Nouveau fichier avec handlers GET/POST/DELETE
+- `src/http/routes/mod.rs` - Export des nouveaux handlers
+- `src/http/mod.rs` - Routes ajoutées au router
+
+**Status**: ✅ COMPLETED
 
 ---
 
