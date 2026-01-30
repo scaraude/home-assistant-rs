@@ -1,11 +1,20 @@
 <script lang="ts">
-  import Badge from "../design-system/Badge.svelte";
-  import Icon from "../design-system/Icon.svelte";
   import type { NetworkDevice, DeviceState } from "../types/devices";
-  import type { SensorReading, TempHumiditySensorReading, PresenceSensorReading, EnergySensorReading } from "../api";
-  import { getLqiBadgeVariant } from "../utils/badge";
+  import type {
+    SensorReading,
+    TempHumiditySensorReading,
+    PresenceSensorReading,
+    EnergySensorReading,
+  } from "../api";
+  import StatusBadge from "../shared/StatusBadge.svelte";
 
-  export type FloorMapDeviceType = "temp_humidity" | "presence" | "switch" | "energy_meter" | "coordinator" | "router";
+  export type FloorMapDeviceType =
+    | "temp_humidity"
+    | "presence"
+    | "switch"
+    | "energy_meter"
+    | "coordinator"
+    | "router";
 
   interface Props {
     device: NetworkDevice;
@@ -15,12 +24,27 @@
     onclick?: () => void;
   }
 
-  let { device, deviceState = null, latestReading = null, switchState = false, onclick }: Props = $props();
+  let {
+    device,
+    deviceState = null,
+    latestReading = null,
+    switchState = false,
+    onclick,
+  }: Props = $props();
 
   // Determine device type from capabilities
   const deviceType = $derived.by((): FloorMapDeviceType => {
     if (device.capabilities.some((cap) => cap.type === "coordinator")) {
       return "coordinator";
+    }
+    const commanderCap = device.capabilities.find(
+      (cap) => cap.type === "commander",
+    );
+    if (
+      commanderCap?.type === "commander" &&
+      commanderCap.commander_type === "switch"
+    ) {
+      return "switch";
     }
     if (device.is_bridge) {
       return "router";
@@ -31,120 +55,163 @@
       if (sensorCap.sensor_type === "presence") return "presence";
       if (sensorCap.sensor_type === "energy_meter") return "energy_meter";
     }
-    const commanderCap = device.capabilities.find((cap) => cap.type === "commander");
-    if (commanderCap?.type === "commander" && commanderCap.commander_type === "switch") {
-      return "switch";
-    }
     return "router";
   });
 
-  // Border color based on role
-  const borderColor = $derived.by((): string => {
-    if (deviceType === "coordinator") return "var(--color-floor-card-border-coordinator)";
-    if (deviceType === "router") return "var(--color-floor-card-border-router)";
-    return "var(--color-floor-card-border-standard)";
+  const hasRouterCapability = $derived.by((): boolean => {
+    return (
+      device.is_bridge ||
+      device.capabilities.some((cap) => cap.type === "router")
+    );
   });
 
-  // Border width based on role
-  const borderWidth = $derived(
-    deviceType === "coordinator" || deviceType === "router" ? "3px" : "2px"
-  );
+  const isTempHumidityCard = $derived(deviceType === "temp_humidity");
+  const isEnergyCard = $derived(deviceType === "energy_meter");
+  const isPresenceCard = $derived(deviceType === "presence");
+  const isSwitchCard = $derived(deviceType === "switch");
+  const isCoordinatorCard = $derived(deviceType === "coordinator");
+  const isRouterCard = $derived(deviceType === "router");
+  const showTurbo = $derived(isSwitchCard && hasRouterCapability);
 
   // Type guards for readings
-  function isTempHumidity(reading: SensorReading): reading is TempHumiditySensorReading {
+  function isTempHumidity(
+    reading: SensorReading,
+  ): reading is TempHumiditySensorReading {
     return reading.type === "temp_humidity";
   }
-  function isPresence(reading: SensorReading): reading is PresenceSensorReading {
+  function isPresence(
+    reading: SensorReading,
+  ): reading is PresenceSensorReading {
     return reading.type === "presence";
   }
   function isEnergy(reading: SensorReading): reading is EnergySensorReading {
     return reading.type === "energy_meter";
   }
+
+  const tempValue = $derived.by(() => {
+    if (latestReading && isTempHumidity(latestReading)) {
+      return latestReading.temperature.toFixed(1);
+    }
+    return "--";
+  });
+
+  const humidityValue = $derived.by(() => {
+    if (latestReading && isTempHumidity(latestReading)) {
+      return latestReading.humidity.toFixed(0);
+    }
+    return "--";
+  });
+
+  const energyValue = $derived.by(() => {
+    if (latestReading && isEnergy(latestReading)) {
+      return latestReading.power.toFixed(0);
+    }
+    return "--";
+  });
+
+  const presenceActive = $derived.by(() => {
+    return Boolean(
+      latestReading && isPresence(latestReading) && latestReading.occupied,
+    );
+  });
+
+  const switchActive = $derived(isSwitchCard && switchState);
+  const turboActive = $derived(Boolean(deviceState?.turbo_mode));
 </script>
 
 <button
   class="floor-map-card"
-  class:coordinator={deviceType === "coordinator"}
-  class:router={deviceType === "router"}
-  class:switch-on={deviceType === "switch" && switchState}
-  style="--border-color: {borderColor}; --border-width: {borderWidth};"
-  onclick={onclick}
+  class:pill={isTempHumidityCard ||
+    isEnergyCard ||
+    isSwitchCard ||
+    isRouterCard}
+  class:square={isPresenceCard || isCoordinatorCard}
+  class:coordinator={isCoordinatorCard}
+  class:router-outline={hasRouterCapability}
+  class:turbo-on={turboActive}
+  {onclick}
   type="button"
 >
-  <!-- LQI Badge -->
   {#if deviceState?.link_quality != null}
-    <div class="lqi-badge">
-      <Badge variant={getLqiBadgeVariant(deviceState.link_quality)} size="mini">
-        {deviceState.link_quality}
-      </Badge>
+    <div class="container-badge">
+      <StatusBadge type="signal" value={deviceState.link_quality} mini />
     </div>
   {/if}
 
-  <!-- Icon -->
-  <div class="icon-container" class:on={deviceType === "switch" && switchState}>
-    {#if deviceType === "temp_humidity"}
-      <Icon name="thermometer" size={20} />
-    {:else if deviceType === "presence"}
-      <div class="presence-indicator" class:occupied={latestReading && isPresence(latestReading) && latestReading.occupied}></div>
-    {:else if deviceType === "switch"}
-      <Icon name="lightbulb" size={20} />
-    {:else if deviceType === "energy_meter"}
-      <Icon name="bolt" size={20} />
-    {:else if deviceType === "coordinator"}
-      <Icon name="coordinator" size={20} />
-    {:else}
-      <Icon name="signal" size={20} />
-    {/if}
-  </div>
-
-  <!-- Device Name -->
-  <div class="device-name" title={device.name}>
-    {device.name}
-  </div>
-
-  <!-- Data Display -->
-  <div class="data-display">
-    {#if deviceType === "temp_humidity" && latestReading && isTempHumidity(latestReading)}
-      <span class="primary-value">{latestReading.temperature.toFixed(1)}°C</span>
-      <span class="secondary-value">{latestReading.humidity.toFixed(0)}%</span>
-    {:else if deviceType === "presence" && latestReading && isPresence(latestReading)}
-      <span class="presence-text" class:occupied={latestReading.occupied}>
-        {latestReading.occupied ? "Occupied" : "Clear"}
-      </span>
-    {:else if deviceType === "switch"}
-      <span class="switch-state" class:on={switchState}>
-        {switchState ? "ON" : "OFF"}
-      </span>
-    {:else if deviceType === "energy_meter" && latestReading && isEnergy(latestReading)}
-      <span class="primary-value">{latestReading.power.toFixed(0)} W</span>
-    {:else if deviceType === "coordinator"}
-      <span class="role-label">Coordinator</span>
-    {:else if deviceType === "router"}
-      <span class="role-label">Router</span>
-    {/if}
-  </div>
+  {#if isTempHumidityCard}
+    <div class="pill-content">
+      <div class="icon-chip" aria-hidden="true">🌡️</div>
+      <div class="pill-values temp-values">
+        <span class="value-strong">{tempValue}°C</span>
+        <span class="divider">|</span>
+        <span class="value-muted">{humidityValue}%</span>
+      </div>
+    </div>
+  {:else if isEnergyCard}
+    <div class="pill-content">
+      <div class="icon-chip energy" aria-hidden="true">⚡️</div>
+      <div class="pill-values">
+        <span class="value-strong">{energyValue} W</span>
+      </div>
+    </div>
+  {:else if isPresenceCard}
+    <div class="square-content">
+      <div class="presence-emoji" aria-hidden="true">
+        {presenceActive ? "🟡" : "⚪️"}
+      </div>
+      <div class="square-label">{device.name}</div>
+    </div>
+  {:else if isCoordinatorCard}
+    <div class="square-content">
+      <div class="icon-chip coordinator" aria-hidden="true">📡</div>
+      <div class="square-label">{device.name}</div>
+    </div>
+  {:else}
+    <div class="pill-content switch-layout" class:has-turbo={showTurbo}>
+      <div
+        class="icon-square"
+        class:on={switchActive}
+        class:router={hasRouterCapability}
+        aria-hidden="true"
+      >
+        ⚙️
+      </div>
+      <div class="switch-name" title={device.name}>
+        {device.name}
+      </div>
+      {#if showTurbo}
+        <div class="turbo">
+          <span>Turbo</span>
+          <div class="toggle" class:on={turboActive}>
+            <span class="toggle-knob"></span>
+          </div>
+        </div>
+      {/if}
+    </div>
+  {/if}
 </button>
 
 <style>
   .floor-map-card {
     position: relative;
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: 0.25rem;
-    width: 120px;
-    padding: 0.5rem;
-    background: var(--color-card-bg);
-    border: var(--border-width) solid var(--border-color);
-    border-radius: 8px;
-    box-shadow: var(--shadow-floor-card);
+    justify-content: center;
+    padding: 0.5rem 0.75rem;
+    background: #d7d7d7;
+    border: 2px solid #141414;
+    border-radius: 14px;
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.2);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition:
+      transform var(--transition-fast),
+      box-shadow var(--transition-fast),
+      border-color var(--transition-fast);
     font-family: inherit;
   }
 
   .floor-map-card:hover {
-    box-shadow: var(--shadow-floor-card-hover);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     transform: translateY(-2px);
   }
 
@@ -152,151 +219,202 @@
     transform: translateY(0);
   }
 
+  .floor-map-card.pill {
+    width: 240px;
+    height: 60px;
+  }
+
+  .floor-map-card.square {
+    width: 90px;
+    height: 90px;
+    padding: 0.5rem;
+  }
+
+  .floor-map-card.turbo-on .toggle {
+    background: #6bcf5b;
+  }
+
   .floor-map-card.coordinator {
-    background: linear-gradient(
-      135deg,
-      var(--color-floor-card-coordinator-start) 0%,
-      var(--color-floor-card-coordinator-end) 100%
-    );
+    border-color: #c26a00;
   }
 
-  .floor-map-card.router {
-    background: linear-gradient(
-      135deg,
-      var(--color-floor-card-router-start) 0%,
-      var(--color-floor-card-router-end) 100%
-    );
+  .floor-map-card.router-outline {
+    border-color: #1d4ed8;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.5);
   }
 
-  .floor-map-card.switch-on {
-    background: linear-gradient(
-      135deg,
-      var(--color-floor-card-switch-start) 0%,
-      var(--color-floor-card-switch-end) 100%
-    );
-  }
-
-  /* LQI Badge */
-  .lqi-badge {
+  .container-badge {
     position: absolute;
-    top: 0.25rem;
-    right: 0.25rem;
+    top: 4px;
+    right: 8px;
   }
 
-  /* Icon Container */
-  .icon-container {
+  .pill-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+  }
+
+  .pill-values {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    font-size: 28px;
+    font-weight: 600;
+    color: #111111;
+    letter-spacing: -0.02em;
+  }
+
+  .pill-values.temp-values {
+    gap: 8px;
+  }
+
+  .value-strong {
+    font-size: 30px;
+    font-weight: 700;
+  }
+
+  .value-muted {
+    font-size: 30px;
+    font-weight: 500;
+  }
+
+  .divider {
+    font-size: 26px;
+    font-weight: 500;
+    color: #1f1f1f;
+    opacity: 0.8;
+  }
+
+  .icon-chip {
+    width: 60px;
+    height: 60px;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
-    background: var(--color-floor-card-icon-bg);
-    border-radius: 8px;
-    color: var(--color-floor-card-icon-text);
-    transition: all 0.2s ease;
+    color: #111111;
+    font-size: 28px;
   }
 
-  .icon-container.on {
-    background: linear-gradient(
-      135deg,
-      var(--color-floor-card-icon-on-start) 0%,
-      var(--color-floor-card-icon-on-end) 100%
-    );
-    color: white;
-    box-shadow: var(--shadow-floor-card-icon-on);
+  .icon-chip.energy {
+    color: #fbbf24;
   }
 
-  /* Presence Indicator */
-  .presence-indicator {
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: var(--color-card-border-hover);
-    transition: all 0.3s ease;
+  .icon-chip.coordinator {
+    color: #4b4b4b;
+    border-radius: 10px;
   }
 
-  .presence-indicator.occupied {
-    background: linear-gradient(
-      135deg,
-      var(--color-floor-card-icon-on-start) 0%,
-      var(--color-floor-card-icon-on-end) 100%
-    );
-    box-shadow: var(--shadow-floor-card-presence-on);
-    animation: pulse 2s ease-in-out infinite;
+  .square-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
   }
 
-  @keyframes pulse {
-    0%, 100% {
-      transform: scale(1);
-      opacity: 1;
-    }
-    50% {
-      transform: scale(1.1);
-      opacity: 0.8;
-    }
-  }
-
-  /* Device Name */
-  .device-name {
-    font-size: 0.6875rem;
+  .square-label {
+    font-size: 12px;
     font-weight: 600;
-    color: var(--color-floor-card-text);
+    color: #2b2b2b;
     text-align: center;
-    max-width: 100%;
+    line-height: 1.1;
+  }
+
+  .presence-emoji {
+    font-size: 30px;
+    line-height: 1;
+  }
+
+  .switch-layout {
+    justify-content: space-between;
+  }
+
+  .icon-square {
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    background: #4b4b4b;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #d1d5db;
+    box-shadow: inset 0 0 0 1px #2b2b2b;
+    font-size: 28px;
+  }
+
+  .icon-square.on {
+    background: #fbec5d;
+    color: #2b2b2b;
+  }
+
+  .switch-name {
+    flex: 1;
+    font-size: 18px;
+    font-weight: 600;
+    color: #111111;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    line-height: 1.2;
   }
 
-  /* Data Display */
-  .data-display {
+  .turbo {
+    position: absolute;
+    right: 10px;
+    bottom: 6px;
     display: flex;
-    align-items: baseline;
-    gap: 0.375rem;
-    min-height: 1.125rem;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #2b2b2b;
   }
 
-  .primary-value {
-    font-size: 0.875rem;
-    font-weight: 700;
-    color: var(--color-floor-card-text-strong);
+  .switch-layout.has-turbo {
+    padding-right: 68px;
   }
 
-  .secondary-value {
-    font-size: 0.625rem;
-    font-weight: 500;
-    color: var(--color-floor-card-text-muted);
+  .toggle {
+    width: 46px;
+    height: 22px;
+    border-radius: 999px;
+    background: #d1d5db;
+    position: relative;
+    transition: background var(--transition-fast);
   }
 
-  .presence-text {
-    font-size: 0.6875rem;
-    font-weight: 600;
-    color: var(--color-floor-card-text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.025em;
+  .toggle.on {
+    background: #6bcf5b;
   }
 
-  .presence-text.occupied {
-    color: var(--color-floor-card-presence-on);
+  .toggle-knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #ffffff;
+    transition: transform var(--transition-fast);
   }
 
-  .switch-state {
-    font-size: 0.6875rem;
-    font-weight: 700;
-    color: var(--color-floor-card-text-muted);
-    text-transform: uppercase;
+  .toggle.on .toggle-knob {
+    transform: translateX(24px);
   }
 
-  .switch-state.on {
-    color: var(--color-floor-card-switch-on-text);
-  }
+  @media (max-width: 720px) {
+    .floor-map-card.pill {
+      width: 210px;
+      height: 56px;
+    }
 
-  .role-label {
-    font-size: 0.5625rem;
-    font-weight: 600;
-    color: var(--color-floor-card-text-subtle);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    .pill-values,
+    .value-strong,
+    .value-muted {
+      font-size: 24px;
+    }
+
+    .switch-name {
+      font-size: 22px;
+    }
   }
 </style>
