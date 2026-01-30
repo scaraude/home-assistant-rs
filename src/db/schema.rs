@@ -29,6 +29,9 @@ impl Database {
         // Create automation tables
         self.create_automation_tables(&conn)?;
 
+        // Create device_positions table for floor map
+        self.create_device_positions_table(&conn)?;
+
         // Repair foreign keys if a previous migration renamed devices
         self.repair_device_foreign_keys(&conn)?;
 
@@ -785,6 +788,44 @@ impl Database {
         self.add_column_if_missing(conn, "automation_rules", "time_window_start", "TEXT")?;
         self.add_column_if_missing(conn, "automation_rules", "time_window_end", "TEXT")?;
         self.add_column_if_missing(conn, "automation_rules", "active_days", "TEXT")?;
+        Ok(())
+    }
+
+    /// Create device_positions table for floor map view
+    fn create_device_positions_table(&self, conn: &rusqlite::Connection) -> Result<()> {
+        debug!("Creating device_positions table if not exists");
+        match conn.execute(
+            "CREATE TABLE IF NOT EXISTS device_positions (
+                device_id TEXT PRIMARY KEY,
+                x REAL NOT NULL,
+                y REAL NOT NULL,
+                updated_at INTEGER NOT NULL,
+                FOREIGN KEY (device_id) REFERENCES devices(id) ON DELETE CASCADE
+            )",
+            [],
+        ) {
+            Ok(_) => debug!("Device positions table created/verified"),
+            Err(e) => {
+                error!(error = %e, "Failed to create device_positions table");
+                return Err(e);
+            }
+        }
+
+        // Index on device_id for fast lookups (primary key already provides this,
+        // but we add an index on updated_at for potential ordering queries)
+        debug!("Creating index idx_device_positions_updated if not exists");
+        match conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_device_positions_updated
+             ON device_positions(updated_at DESC)",
+            [],
+        ) {
+            Ok(_) => debug!("Index idx_device_positions_updated created/verified"),
+            Err(e) => {
+                error!(error = %e, "Failed to create idx_device_positions_updated index");
+                return Err(e);
+            }
+        }
+
         Ok(())
     }
 

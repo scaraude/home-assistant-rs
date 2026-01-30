@@ -9,8 +9,8 @@ pub use automation::{
     TimeWindow, TimeWindowRequest, UpdateAutomationRuleRequest,
 };
 pub use device::{
-    CommanderType, Device, DeviceCapability, DeviceInfo, DeviceState, NetworkEdge, NetworkTopology,
-    PowerSource, SensorType,
+    CommanderType, Device, DeviceCapability, DeviceInfo, DevicePosition, DeviceState, NetworkEdge,
+    NetworkTopology, PowerSource, SensorType,
 };
 pub use mqtt::{
     DeviceMqttMessage, SensorReading, SwitchCommand, SwitchCommandMessage, SwitchState,

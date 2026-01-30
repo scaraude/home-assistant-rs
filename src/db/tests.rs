@@ -1693,4 +1693,210 @@ mod tests {
         // Note: We don't assert on performance as it can vary based on system load,
         // but this test documents the expected performance benefit
     }
+
+    // ==================== Device Position Tests (FM-001) ====================
+
+    #[test]
+    fn test_upsert_and_get_device_position() {
+        use crate::models::DevicePosition;
+
+        let (db, _temp_dir) = create_test_db();
+
+        // First insert a device (required for foreign key)
+        insert_test_device(&db, "sensor1", SensorType::TempHumidity);
+
+        // Create and upsert position
+        let position = DevicePosition::new("sensor1".to_string(), 100.0, 200.0);
+        db.upsert_device_position(&position).unwrap();
+
+        // Retrieve position
+        let retrieved = db.get_device_position("sensor1").unwrap();
+        assert!(retrieved.is_some());
+
+        let retrieved = retrieved.unwrap();
+        assert_eq!(retrieved.device_id, "sensor1");
+        assert_eq!(retrieved.x, 100.0);
+        assert_eq!(retrieved.y, 200.0);
+    }
+
+    #[test]
+    fn test_upsert_device_position_update() {
+        use crate::models::DevicePosition;
+
+        let (db, _temp_dir) = create_test_db();
+
+        // First insert a device
+        insert_test_device(&db, "sensor1", SensorType::TempHumidity);
+
+        // Insert initial position
+        let position1 = DevicePosition::new("sensor1".to_string(), 100.0, 200.0);
+        db.upsert_device_position(&position1).unwrap();
+
+        // Update position
+        let position2 = DevicePosition::new("sensor1".to_string(), 300.0, 400.0);
+        db.upsert_device_position(&position2).unwrap();
+
+        // Retrieve and verify updated position
+        let retrieved = db.get_device_position("sensor1").unwrap().unwrap();
+        assert_eq!(retrieved.x, 300.0);
+        assert_eq!(retrieved.y, 400.0);
+    }
+
+    #[test]
+    fn test_get_all_device_positions() {
+        use crate::models::DevicePosition;
+
+        let (db, _temp_dir) = create_test_db();
+
+        // Insert devices
+        insert_test_device(&db, "sensor1", SensorType::TempHumidity);
+        insert_test_device(&db, "sensor2", SensorType::TempHumidity);
+        insert_test_device(&db, "sensor3", SensorType::Presence);
+
+        // Insert positions
+        db.upsert_device_position(&DevicePosition::new("sensor1".to_string(), 100.0, 100.0))
+            .unwrap();
+        db.upsert_device_position(&DevicePosition::new("sensor2".to_string(), 200.0, 200.0))
+            .unwrap();
+        db.upsert_device_position(&DevicePosition::new("sensor3".to_string(), 300.0, 300.0))
+            .unwrap();
+
+        // Retrieve all positions
+        let positions = db.get_all_device_positions().unwrap();
+        assert_eq!(positions.len(), 3);
+
+        // Verify positions exist for all devices
+        let ids: Vec<&str> = positions.iter().map(|p| p.device_id.as_str()).collect();
+        assert!(ids.contains(&"sensor1"));
+        assert!(ids.contains(&"sensor2"));
+        assert!(ids.contains(&"sensor3"));
+    }
+
+    #[test]
+    fn test_delete_device_position() {
+        use crate::models::DevicePosition;
+
+        let (db, _temp_dir) = create_test_db();
+
+        // Insert device and position
+        insert_test_device(&db, "sensor1", SensorType::TempHumidity);
+        db.upsert_device_position(&DevicePosition::new("sensor1".to_string(), 100.0, 200.0))
+            .unwrap();
+
+        // Delete position
+        let deleted = db.delete_device_position("sensor1").unwrap();
+        assert!(deleted);
+
+        // Verify position is gone
+        let retrieved = db.get_device_position("sensor1").unwrap();
+        assert!(retrieved.is_none());
+    }
+
+    #[test]
+    fn test_delete_nonexistent_device_position() {
+        let (db, _temp_dir) = create_test_db();
+
+        // Try to delete position that doesn't exist
+        let deleted = db.delete_device_position("nonexistent").unwrap();
+        assert!(!deleted);
+    }
+
+    #[test]
+    fn test_device_position_cascade_delete() {
+        use crate::models::DevicePosition;
+
+        let (db, _temp_dir) = create_test_db();
+
+        // Insert device and position
+        insert_test_device(&db, "sensor1", SensorType::TempHumidity);
+        db.upsert_device_position(&DevicePosition::new("sensor1".to_string(), 100.0, 200.0))
+            .unwrap();
+
+        // Verify position exists
+        let position = db.get_device_position("sensor1").unwrap();
+        assert!(position.is_some());
+
+        // Delete the device
+        db._delete_device("sensor1").unwrap();
+
+        // Position should be cascade deleted
+        let position = db.get_device_position("sensor1").unwrap();
+        assert!(position.is_none());
+    }
+
+    #[test]
+    fn test_batch_upsert_device_positions() {
+        use crate::models::DevicePosition;
+
+        let (db, _temp_dir) = create_test_db();
+
+        // Insert devices
+        insert_test_device(&db, "sensor1", SensorType::TempHumidity);
+        insert_test_device(&db, "sensor2", SensorType::TempHumidity);
+        insert_test_device(&db, "sensor3", SensorType::Presence);
+
+        // Batch upsert positions
+        let positions = vec![
+            DevicePosition::new("sensor1".to_string(), 100.0, 100.0),
+            DevicePosition::new("sensor2".to_string(), 200.0, 200.0),
+            DevicePosition::new("sensor3".to_string(), 300.0, 300.0),
+        ];
+
+        db.upsert_device_positions(&positions).unwrap();
+
+        // Verify all positions were inserted
+        let all_positions = db.get_all_device_positions().unwrap();
+        assert_eq!(all_positions.len(), 3);
+    }
+
+    #[test]
+    fn test_batch_upsert_empty_positions() {
+        let (db, _temp_dir) = create_test_db();
+
+        // Batch upsert with empty list should succeed
+        let positions: Vec<crate::models::DevicePosition> = vec![];
+        db.upsert_device_positions(&positions).unwrap();
+
+        // Should still be empty
+        let all_positions = db.get_all_device_positions().unwrap();
+        assert_eq!(all_positions.len(), 0);
+    }
+
+    #[test]
+    fn test_get_device_position_nonexistent() {
+        let (db, _temp_dir) = create_test_db();
+
+        let position = db.get_device_position("nonexistent").unwrap();
+        assert!(position.is_none());
+    }
+
+    #[test]
+    fn test_device_positions_table_exists() {
+        let (db, _temp_dir) = create_test_db();
+        let conn = db.conn.lock_or_recover();
+
+        // Verify device_positions table exists
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM device_positions", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(count, 0); // Table exists but is empty
+    }
+
+    #[test]
+    fn test_device_positions_index_exists() {
+        let (db, _temp_dir) = create_test_db();
+        let conn = db.conn.lock_or_recover();
+
+        // Check idx_device_positions_updated index exists
+        let index_exists: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_device_positions_updated'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(index_exists, 1);
+    }
 }

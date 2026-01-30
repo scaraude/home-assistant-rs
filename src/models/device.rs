@@ -232,6 +232,35 @@ impl DeviceState {
     }
 }
 
+/// Device position on floor map (x/y coordinates)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DevicePosition {
+    /// Reference to the device ID
+    pub device_id: String,
+
+    /// X coordinate on the floor map
+    pub x: f64,
+
+    /// Y coordinate on the floor map
+    pub y: f64,
+
+    /// When the position was last updated
+    #[serde(with = "chrono::serde::ts_seconds")]
+    pub updated_at: DateTime<Utc>,
+}
+
+impl DevicePosition {
+    /// Create a new device position
+    pub fn new(device_id: String, x: f64, y: f64) -> Self {
+        Self {
+            device_id,
+            x,
+            y,
+            updated_at: Utc::now(),
+        }
+    }
+}
+
 /// Network topology response containing devices and their connections
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NetworkTopology {
