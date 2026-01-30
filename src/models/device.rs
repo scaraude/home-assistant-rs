@@ -261,6 +261,28 @@ impl DevicePosition {
     }
 }
 
+/// Floor plan SVG storage (singleton table)
+/// Only one floor plan can exist at a time
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FloorPlan {
+    /// SVG content as text
+    pub svg_content: String,
+
+    /// When the floor plan was uploaded
+    #[serde(with = "chrono::serde::ts_seconds")]
+    pub uploaded_at: DateTime<Utc>,
+}
+
+impl FloorPlan {
+    /// Create a new floor plan
+    pub fn new(svg_content: String) -> Self {
+        Self {
+            svg_content,
+            uploaded_at: Utc::now(),
+        }
+    }
+}
+
 /// Network topology response containing devices and their connections
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NetworkTopology {

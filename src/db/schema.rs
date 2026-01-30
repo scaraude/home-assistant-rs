@@ -32,6 +32,9 @@ impl Database {
         // Create device_positions table for floor map
         self.create_device_positions_table(&conn)?;
 
+        // Create floor_plan table for floor map SVG
+        self.create_floor_plan_table(&conn)?;
+
         // Repair foreign keys if a previous migration renamed devices
         self.repair_device_foreign_keys(&conn)?;
 
@@ -822,6 +825,27 @@ impl Database {
             Ok(_) => debug!("Index idx_device_positions_updated created/verified"),
             Err(e) => {
                 error!(error = %e, "Failed to create idx_device_positions_updated index");
+                return Err(e);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Create floor_plan singleton table for floor map SVG storage
+    fn create_floor_plan_table(&self, conn: &rusqlite::Connection) -> Result<()> {
+        debug!("Creating floor_plan table if not exists");
+        match conn.execute(
+            "CREATE TABLE IF NOT EXISTS floor_plan (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                svg_content TEXT NOT NULL,
+                uploaded_at INTEGER NOT NULL
+            )",
+            [],
+        ) {
+            Ok(_) => debug!("Floor plan table created/verified"),
+            Err(e) => {
+                error!(error = %e, "Failed to create floor_plan table");
                 return Err(e);
             }
         }

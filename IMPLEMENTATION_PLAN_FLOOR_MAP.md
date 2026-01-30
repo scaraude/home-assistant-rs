@@ -85,14 +85,20 @@ Créer la table singleton `floor_plan` pour stocker le SVG uploadé.
 
 **Critères d'acceptation**:
 
-- [ ] Table `floor_plan` créée (contrainte singleton)
-- [ ] Support BLOB ou TEXT pour SVG
-- [ ] Tests unitaires get/upsert
+- [x] Table `floor_plan` créée (contrainte singleton)
+- [x] Support BLOB ou TEXT pour SVG
+- [x] Tests unitaires get/upsert (8 tests)
 
-**Fichiers à modifier**:
+**Fichiers modifiés**:
 
 - `src/db/schema.rs` - Ajout `create_floor_plan_table()`
-- `src/db/queries/floor_plan.rs` - Nouveau fichier
+- `src/db/queries/floor_plan.rs` - Nouveau fichier CRUD
+- `src/db/queries/mod.rs` - Export nouveau module
+- `src/models/device.rs` - Ajout model `FloorPlan`
+- `src/models/mod.rs` - Export `FloorPlan`
+- `src/db/tests.rs` - 8 tests unitaires
+
+**Status**: ✅ COMPLETED
 
 ---
 

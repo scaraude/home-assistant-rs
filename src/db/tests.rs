@@ -1899,4 +1899,124 @@ mod tests {
             .unwrap();
         assert_eq!(index_exists, 1);
     }
+
+    // ==================== Floor Plan Tests (FM-002) ====================
+
+    #[test]
+    fn test_upsert_and_get_floor_plan() {
+        use crate::models::FloorPlan;
+
+        let (db, _temp_dir) = create_test_db();
+
+        // Create and upsert floor plan
+        let floor_plan = FloorPlan::new("<svg>test</svg>".to_string());
+        db.upsert_floor_plan(&floor_plan).unwrap();
+
+        // Retrieve floor plan
+        let retrieved = db.get_floor_plan().unwrap();
+        assert!(retrieved.is_some());
+
+        let retrieved = retrieved.unwrap();
+        assert_eq!(retrieved.svg_content, "<svg>test</svg>");
+    }
+
+    #[test]
+    fn test_upsert_floor_plan_update() {
+        use crate::models::FloorPlan;
+
+        let (db, _temp_dir) = create_test_db();
+
+        // Insert initial floor plan
+        let floor_plan1 = FloorPlan::new("<svg>initial</svg>".to_string());
+        db.upsert_floor_plan(&floor_plan1).unwrap();
+
+        // Update floor plan
+        let floor_plan2 = FloorPlan::new("<svg>updated</svg>".to_string());
+        db.upsert_floor_plan(&floor_plan2).unwrap();
+
+        // Retrieve and verify updated floor plan
+        let retrieved = db.get_floor_plan().unwrap().unwrap();
+        assert_eq!(retrieved.svg_content, "<svg>updated</svg>");
+    }
+
+    #[test]
+    fn test_delete_floor_plan() {
+        use crate::models::FloorPlan;
+
+        let (db, _temp_dir) = create_test_db();
+
+        // Insert floor plan
+        let floor_plan = FloorPlan::new("<svg>to_delete</svg>".to_string());
+        db.upsert_floor_plan(&floor_plan).unwrap();
+
+        // Delete floor plan
+        let deleted = db.delete_floor_plan().unwrap();
+        assert!(deleted);
+
+        // Verify floor plan is gone
+        let retrieved = db.get_floor_plan().unwrap();
+        assert!(retrieved.is_none());
+    }
+
+    #[test]
+    fn test_delete_nonexistent_floor_plan() {
+        let (db, _temp_dir) = create_test_db();
+
+        // Try to delete floor plan that doesn't exist
+        let deleted = db.delete_floor_plan().unwrap();
+        assert!(!deleted);
+    }
+
+    #[test]
+    fn test_get_floor_plan_nonexistent() {
+        let (db, _temp_dir) = create_test_db();
+
+        let floor_plan = db.get_floor_plan().unwrap();
+        assert!(floor_plan.is_none());
+    }
+
+    #[test]
+    fn test_floor_plan_table_exists() {
+        let (db, _temp_dir) = create_test_db();
+        let conn = db.conn.lock_or_recover();
+
+        // Verify floor_plan table exists
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM floor_plan", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(count, 0); // Table exists but is empty
+    }
+
+    #[test]
+    fn test_floor_plan_singleton_constraint() {
+        let (db, _temp_dir) = create_test_db();
+        let conn = db.conn.lock_or_recover();
+
+        // Manually try to insert with id = 2, should fail due to CHECK constraint
+        let result = conn.execute(
+            "INSERT INTO floor_plan (id, svg_content, uploaded_at) VALUES (2, 'test', 0)",
+            [],
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_floor_plan_large_svg() {
+        use crate::models::FloorPlan;
+
+        let (db, _temp_dir) = create_test_db();
+
+        // Create a large SVG content (simulate real floor plan)
+        let large_svg = format!(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 1000 1000\">{}</svg>",
+            "<rect x=\"0\" y=\"0\" width=\"100\" height=\"100\" fill=\"#ccc\"/>".repeat(1000)
+        );
+
+        let floor_plan = FloorPlan::new(large_svg.clone());
+        db.upsert_floor_plan(&floor_plan).unwrap();
+
+        // Retrieve and verify
+        let retrieved = db.get_floor_plan().unwrap().unwrap();
+        assert_eq!(retrieved.svg_content, large_svg);
+    }
 }
