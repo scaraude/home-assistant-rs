@@ -51,7 +51,6 @@
   let showConnections = $state(true);
   let dragActive = $state(false);
   let fileInput: HTMLInputElement | null = null;
-  let mapWrapperEl: HTMLDivElement | null = $state(null);
 
   const nodeTypes = {
     "background-svg": SVGBackgroundNode,
@@ -244,18 +243,6 @@
     );
   }
 
-  const debugSnapshot = $derived.by(() => ({
-    hasTopology: Boolean($networkTopologyStore.topology),
-    devices: $networkTopologyStore.topology?.devices.length ?? 0,
-    edges: $networkTopologyStore.topology?.edges.length ?? 0,
-    nodes: nodes.length,
-    connectionsOn: showConnections,
-    wrapperSize: mapWrapperEl
-      ? `${Math.round(mapWrapperEl.clientWidth)}x${Math.round(mapWrapperEl.clientHeight)}`
-      : "unset",
-    svgLoaded: Boolean(floorPlanSvg),
-  }));
-
   function handleDeviceClick(_deviceId: string) {
     // Placeholder for future device detail routing.
   }
@@ -385,11 +372,7 @@
       <button class="btn btn-primary" onclick={loadTopology}>Retry</button>
     </div>
   {:else}
-    <div
-      class="map-wrapper"
-      class:drag-active={dragActive}
-      bind:this={mapWrapperEl}
-    >
+    <div class="map-wrapper" class:drag-active={dragActive}>
       <SvelteFlow
         {nodes}
         {edges}
@@ -436,16 +419,6 @@
           {$floorMapStore.syncStatus === "syncing" ? "Saving..." : "Up to date"}
         </span>
       </div>
-    </div>
-
-    <div class="debug-bar">
-      <span>topology: {debugSnapshot.hasTopology ? "yes" : "no"}</span>
-      <span>devices: {debugSnapshot.devices}</span>
-      <span>edges: {debugSnapshot.edges}</span>
-      <span>nodes: {debugSnapshot.nodes}</span>
-      <span>connections: {debugSnapshot.connectionsOn ? "on" : "off"}</span>
-      <span>map: {debugSnapshot.wrapperSize}</span>
-      <span>svg: {debugSnapshot.svgLoaded ? "yes" : "no"}</span>
     </div>
   {/if}
 </div>
@@ -611,17 +584,6 @@
     background: #f9fafb;
     border-radius: 10px;
     border: 1px solid #e5e7eb;
-  }
-
-  .debug-bar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    padding: 8px 12px;
-    border-radius: 8px;
-    border: 1px dashed #d1d5db;
-    font-size: 12px;
-    color: #6b7280;
   }
 
   .status-item {
