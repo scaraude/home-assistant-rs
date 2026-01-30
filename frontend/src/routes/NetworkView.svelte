@@ -1,5 +1,5 @@
 <script lang="ts">
-  import NetworkMapView from '../lib/network/NetworkMapView.svelte';
+  import FloorMapView from "../lib/floor-map/FloorMapView.svelte";
 </script>
 
-<NetworkMapView />
+<FloorMapView />

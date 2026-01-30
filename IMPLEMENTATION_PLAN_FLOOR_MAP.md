@@ -283,16 +283,18 @@ Refactorer `NetworkGraph.svelte` en `FloorMapView.svelte` intégrant tous les no
 
 **Critères d'acceptation**:
 
-- [ ] Rendu correct du plan SVG en fond
-- [ ] Tous les devices affichés avec FloorMapCard
-- [ ] Drag & drop pour repositionner
-- [ ] Toggle connexions réseau fonctionnel
-- [ ] Upload SVG fonctionnel
+- [x] Rendu correct du plan SVG en fond
+- [x] Tous les devices affichés avec FloorMapCard
+- [x] Drag & drop pour repositionner
+- [x] Toggle connexions réseau fonctionnel
+- [x] Upload SVG fonctionnel
 
 **Fichiers à créer/modifier**:
 
 - `frontend/src/lib/floor-map/FloorMapView.svelte`
 - Migration depuis `NetworkGraph.svelte`
+
+**Status**: ✅ COMPLETED
 
 ---
 
