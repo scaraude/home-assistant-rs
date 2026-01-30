@@ -46,14 +46,14 @@
     ) {
       return "switch";
     }
-    if (device.is_bridge) {
-      return "router";
-    }
     const sensorCap = device.capabilities.find((cap) => cap.type === "sensor");
     if (sensorCap?.type === "sensor") {
       if (sensorCap.sensor_type === "temp_humidity") return "temp_humidity";
       if (sensorCap.sensor_type === "presence") return "presence";
       if (sensorCap.sensor_type === "energy_meter") return "energy_meter";
+    }
+    if (device.is_bridge) {
+      return "router";
     }
     return "router";
   });
