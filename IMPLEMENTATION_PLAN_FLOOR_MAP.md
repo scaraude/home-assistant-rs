@@ -254,14 +254,16 @@ Migrer le store `networkTopology.ts` de localStorage vers sync avec le backend.
 
 **Critères d'acceptation**:
 
-- [ ] Sync bidirectionnelle frontend ↔ backend
-- [ ] Pas de perte de positions au refresh
-- [ ] Performance smooth pendant drag (optimistic updates)
+- [x] Sync bidirectionnelle frontend ↔ backend
+- [x] Pas de perte de positions au refresh
+- [x] Performance smooth pendant drag (optimistic updates)
 
 **Fichiers à modifier**:
 
 - `frontend/src/lib/stores/networkTopology.ts` → `floorMapStore.ts`
 - `frontend/src/lib/api/floor-map.ts` - Nouveau fichier
+
+**Status**: ✅ COMPLETED
 
 ---
 
