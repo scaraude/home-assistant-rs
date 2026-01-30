@@ -224,14 +224,17 @@ Créer un custom node SvelteFlow pour afficher le SVG du plan en arrière-plan.
 
 **Critères d'acceptation**:
 
-- [ ] SVG rendu correctement dans le canvas
-- [ ] Ne bloque pas les interactions avec les device cards
-- [ ] Support du pan/zoom
-- [ ] Fallback si pas de plan uploadé
+- [x] SVG rendu correctement dans le canvas
+- [x] Ne bloque pas les interactions avec les device cards
+- [x] Support du pan/zoom
+- [x] Fallback si pas de plan uploadé
 
-**Fichiers à créer**:
+**Fichiers créés**:
 
 - `frontend/src/lib/floor-map/SVGBackgroundNode.svelte`
+- `frontend/src/lib/api/floor-map.ts` (API helper functions)
+
+**Status**: ✅ COMPLETED
 
 ---
 

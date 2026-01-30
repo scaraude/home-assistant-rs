@@ -1,5 +1,6 @@
 export * from './automation';
 export * from './devices';
+export * from './floor-map';
 export * from './logs';
 export * from './network';
 export * from './sensors';
