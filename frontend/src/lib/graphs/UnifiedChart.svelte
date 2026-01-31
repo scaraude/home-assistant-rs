@@ -65,14 +65,18 @@
   let seriesByDevice = $derived($sensorsMemory.seriesByDevice);
 
   function getDefaultRangeSeconds(range: string) {
-    const hours = TIME_RANGE_HOURS[range as keyof typeof TIME_RANGE_HOURS] ?? 24;
+    const hours =
+      TIME_RANGE_HOURS[range as keyof typeof TIME_RANGE_HOURS] ?? 24;
     const endSec = Math.floor(Date.now() / 1000);
     const startSec = endSec - hours * 3600;
     return { startSec, endSec };
   }
 
   function computeBucketSeconds(rangeSeconds: number) {
-    return Math.max(MIN_BUCKET_SECONDS, Math.ceil(rangeSeconds / TARGET_POINTS));
+    return Math.max(
+      MIN_BUCKET_SECONDS,
+      Math.ceil(rangeSeconds / TARGET_POINTS),
+    );
   }
 
   const activeRange = $derived.by(() => {
@@ -135,13 +139,14 @@
 
   const missingSeries = $derived.by(() => {
     if (visibleSensors.length === 0) return false;
-    return visibleSensors.some((sensor) =>
-      !hasCoverage(
-        sensor.deviceId,
-        activeBucketSeconds,
-        activeRange.startSec,
-        activeRange.endSec,
-      )
+    return visibleSensors.some(
+      (sensor) =>
+        !hasCoverage(
+          sensor.deviceId,
+          activeBucketSeconds,
+          activeRange.startSec,
+          activeRange.endSec,
+        ),
     );
   });
 
@@ -239,6 +244,16 @@
     };
   }
 
+  function resetZoom() {
+    chart?.resetZoom();
+    zoomRange = null;
+  }
+
+  function handleContextMenu(event: MouseEvent) {
+    event.preventDefault();
+    resetZoom();
+  }
+
   async function requestSeries(
     deviceId: string,
     startSec: number,
@@ -312,6 +327,7 @@
         interaction: {
           mode: "nearest",
           intersect: false,
+          axis: "x",
         },
         plugins: {
           legend: {
@@ -333,16 +349,13 @@
             pan: {
               enabled: true,
               mode: "x",
+              modifierKey: "shift",
               onPanComplete: ({ chart }) => {
                 updateZoomRangeFromChart(chart);
               },
             },
             zoom: {
-              wheel: {
-                enabled: true,
-                speed: 0.1,
-              },
-              pinch: {
+              drag: {
                 enabled: true,
               },
               mode: "x",
@@ -455,7 +468,6 @@
     }
     previousTimeRange = timeRange;
   });
-
   // Create or update chart when dependencies change
   $effect(() => {
     // Destroy chart if no visible sensors
@@ -487,7 +499,7 @@
       <p>No sensors selected. Click on a sensor to view its data.</p>
     </div>
   {:else}
-    <canvas bind:this={canvas}></canvas>
+    <canvas bind:this={canvas} oncontextmenu={handleContextMenu}></canvas>
     {#if missingSeries && visibleReadings.length === 0}
       <div class="no-data overlay">
         <p>Loading chart data...</p>
