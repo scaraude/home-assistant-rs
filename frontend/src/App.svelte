@@ -17,6 +17,7 @@
   import { eventStream, type SystemEvent } from "./lib/websocket";
   import SwitchDetailPage from "./lib/device-detail/SwitchDetailPage.svelte";
   import EnergyDetailPage from "./lib/device-detail/EnergyDetailPage.svelte";
+  import PresenceDetailPage from "./lib/device-detail/PresenceDetailPage.svelte";
 
   // Route definitions
   const routes = {
@@ -24,6 +25,7 @@
     "/sensors": SensorsView,
     "/switch/:id": SwitchDetailPage,
     "/energy/:id": EnergyDetailPage,
+    "/presence/:id": PresenceDetailPage,
     "/consommations": ConsommationsView,
     "/commander": CommanderView,
     "/network": NetworkView,

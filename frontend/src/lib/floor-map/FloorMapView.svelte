@@ -282,7 +282,10 @@
         push(`/energy/${deviceId}`);
         return;
       }
-      // Future: Add route for presence sensors
+      if (sensorCap.sensor_type === "presence") {
+        push(`/presence/${deviceId}`);
+        return;
+      }
     }
 
     // Check commander capabilities

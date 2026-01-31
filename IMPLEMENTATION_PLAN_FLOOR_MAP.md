@@ -409,13 +409,15 @@ Créer la page détail accessible au clic sur une card capteur présence.
 
 **Critères d'acceptation**:
 
-- [ ] État présence affiché clairement
-- [ ] Historique des événements présence
-- [ ] Timeline visuelle
+- [x] État présence affiché clairement
+- [x] Historique des événements présence
+- [x] Timeline visuelle
 
 **Fichiers à créer**:
 
 - `frontend/src/lib/device-detail/PresenceDetailPage.svelte`
+
+**Status**: ✅ COMPLETED
 
 ---
 
