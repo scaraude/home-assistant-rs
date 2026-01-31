@@ -1,5 +1,5 @@
 import { writable } from 'svelte/store';
-import { deleteFloorPlan, fetchFloorPlan, uploadFloorPlan } from '../api/floor-map';
+import { fetchFloorPlan, uploadFloorPlan } from '../api/floor-map';
 import { deleteKey, get, put } from './indexedDb';
 
 interface FloorPlanState {

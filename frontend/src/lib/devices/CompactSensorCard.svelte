@@ -22,7 +22,7 @@
   let showColorPicker = $state(false);
 
   let deviceInfo = $derived(
-    $sensorsMemory.devices.find((d) => d.device_id === sensor.deviceId)
+    $sensorsMemory.devices.find((d) => d.device_id === sensor.deviceId),
   );
 
   let deviceName = $derived(deviceInfo?.name || sensor.deviceId);
@@ -33,12 +33,12 @@
       ? formatDistanceToNow(latestReading.timestamp, {
           addSuffix: true,
         })
-      : ""
+      : "",
   );
 
   // Replace "less than a minute ago" with "now"
   let displayTimeAgo = $derived(
-    timeAgo === "less than a minute ago" ? "now" : timeAgo
+    timeAgo === "less than a minute ago" ? "now" : timeAgo,
   );
 
   function handleColorClick() {
@@ -112,10 +112,12 @@
   </div>
 
   <div class="sensor-readings">
-    {#if latestReading && latestReading.type === 'temp_humidity'}
+    {#if latestReading && latestReading.type === "temp_humidity"}
       <div class="reading">
         <span class="reading-label">Temp</span>
-        <span class="reading-value">{latestReading.temperature.toFixed(1)}°C</span>
+        <span class="reading-value"
+          >{latestReading.temperature.toFixed(1)}°C</span
+        >
       </div>
       <div class="reading">
         <span class="reading-label">Humidity</span>
@@ -188,15 +190,6 @@
     flex-direction: column;
     flex: 1;
     min-width: 0;
-  }
-
-  .sensor-name {
-    font-size: 0.9375rem;
-    font-weight: 600;
-    color: var(--color-text);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .time-ago {

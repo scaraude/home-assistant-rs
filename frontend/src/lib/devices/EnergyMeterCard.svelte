@@ -22,7 +22,7 @@
   let showColorPicker = $state(false);
 
   let deviceInfo = $derived(
-    $sensorsMemory.devices.find((d) => d.device_id === sensor.deviceId)
+    $sensorsMemory.devices.find((d) => d.device_id === sensor.deviceId),
   );
 
   let deviceName = $derived(deviceInfo?.name || sensor.deviceId);
@@ -33,12 +33,12 @@
       ? formatDistanceToNow(latestReading.timestamp, {
           addSuffix: true,
         })
-      : ""
+      : "",
   );
 
   // Replace "less than a minute ago" with "now"
   let displayTimeAgo = $derived(
-    timeAgo === "less than a minute ago" ? "now" : timeAgo
+    timeAgo === "less than a minute ago" ? "now" : timeAgo,
   );
 
   function handleColorClick() {
@@ -118,14 +118,18 @@
       {#if latestReading.energy > 0}
         <div class="reading secondary">
           <span class="reading-label">Energy</span>
-          <span class="reading-value">{latestReading.energy.toFixed(2)} kWh</span>
+          <span class="reading-value"
+            >{latestReading.energy.toFixed(2)} kWh</span
+          >
         </div>
       {/if}
 
       {#if latestReading.produced_energy > 0}
         <div class="reading secondary">
           <span class="reading-label">Produced</span>
-          <span class="reading-value">{latestReading.produced_energy.toFixed(2)} kWh</span>
+          <span class="reading-value"
+            >{latestReading.produced_energy.toFixed(2)} kWh</span
+          >
         </div>
       {/if}
 
@@ -133,15 +137,19 @@
       <div class="tertiary-group">
         <div class="reading tertiary">
           <span class="reading-label">Voltage</span>
-          <span class="reading-value">{latestReading.voltage.toFixed(1)} V</span>
+          <span class="reading-value">{latestReading.voltage.toFixed(1)} V</span
+          >
         </div>
         <div class="reading tertiary">
           <span class="reading-label">Current</span>
-          <span class="reading-value">{latestReading.current.toFixed(2)} A</span>
+          <span class="reading-value">{latestReading.current.toFixed(2)} A</span
+          >
         </div>
         <div class="reading tertiary">
           <span class="reading-label">Freq</span>
-          <span class="reading-value">{latestReading.ac_frequency.toFixed(1)} Hz</span>
+          <span class="reading-value"
+            >{latestReading.ac_frequency.toFixed(1)} Hz</span
+          >
         </div>
       </div>
     {:else}
@@ -211,15 +219,6 @@
     flex-direction: column;
     flex: 1;
     min-width: 0;
-  }
-
-  .energy-name {
-    font-size: 0.9375rem;
-    font-weight: 600;
-    color: var(--color-text);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .time-ago {

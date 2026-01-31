@@ -22,7 +22,7 @@
   let showColorPicker = $state(false);
 
   let deviceInfo = $derived(
-    $sensorsMemory.devices.find((d) => d.device_id === sensor.deviceId)
+    $sensorsMemory.devices.find((d) => d.device_id === sensor.deviceId),
   );
 
   let deviceName = $derived(deviceInfo?.name || sensor.deviceId);
@@ -33,12 +33,12 @@
       ? formatDistanceToNow(latestReading.timestamp, {
           addSuffix: true,
         })
-      : ""
+      : "",
   );
 
   // Replace "less than a minute ago" with "now"
   let displayTimeAgo = $derived(
-    timeAgo === "less than a minute ago" ? "now" : timeAgo
+    timeAgo === "less than a minute ago" ? "now" : timeAgo,
   );
 
   function handleColorClick() {
@@ -122,8 +122,21 @@
           {latestReading.occupied ? "Occupied" : "Clear"}
         </div>
         {#if latestReading.illumination}
-          <div class="illumination-badge" class:bright={latestReading.illumination === 'bright'}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <div
+            class="illumination-badge"
+            class:bright={latestReading.illumination === "bright"}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
               <circle cx="12" cy="12" r="5"></circle>
               <line x1="12" y1="1" x2="12" y2="3"></line>
               <line x1="12" y1="21" x2="12" y2="23"></line>
@@ -134,7 +147,7 @@
               <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
               <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
             </svg>
-            {latestReading.illumination === 'bright' ? 'Bright' : 'Dim'}
+            {latestReading.illumination === "bright" ? "Bright" : "Dim"}
           </div>
         {/if}
       </div>
@@ -207,15 +220,6 @@
     min-width: 0;
   }
 
-  .sensor-name {
-    font-size: 0.9375rem;
-    font-weight: 600;
-    color: var(--color-text);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
   .time-ago {
     font-size: 0.625rem;
     color: var(--color-text-subtle);
@@ -243,12 +247,21 @@
     width: 100%;
     height: 100%;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(156, 163, 175, 0.4) 0%, rgba(156, 163, 175, 0) 70%);
+    background: radial-gradient(
+      circle,
+      rgba(156, 163, 175, 0.4) 0%,
+      rgba(156, 163, 175, 0) 70%
+    );
     transition: all 0.3s ease;
   }
 
   .light-bubble.occupied .light-glow {
-    background: radial-gradient(circle, rgba(251, 191, 36, 0.6) 0%, rgba(251, 191, 36, 0.2) 50%, rgba(251, 191, 36, 0) 70%);
+    background: radial-gradient(
+      circle,
+      rgba(251, 191, 36, 0.6) 0%,
+      rgba(251, 191, 36, 0.2) 50%,
+      rgba(251, 191, 36, 0) 70%
+    );
     animation: pulse 2s ease-in-out infinite;
   }
 
