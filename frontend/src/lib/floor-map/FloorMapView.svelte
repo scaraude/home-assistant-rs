@@ -32,6 +32,7 @@
   type FloorMapBackgroundNodeData = {
     kind: "background";
     svgContent: string | null;
+    scale?: number;
   };
 
   type FloorMapNodeData = FloorMapDeviceNodeData | FloorMapBackgroundNodeData;
@@ -49,6 +50,7 @@
   let uploadError = $state<string | null>(null);
   let uploading = $state(false);
   let showConnections = $state(true);
+  let backgroundScale = $state(1.5);
   let dragActive = $state(false);
   let fileInput = $state<HTMLInputElement | null>(null);
 
@@ -175,7 +177,11 @@
         id: "floorplan-background",
         type: "background-svg",
         position: { x: 0, y: 0 },
-        data: { kind: "background", svgContent: floorPlanSvg },
+        data: {
+          kind: "background",
+          svgContent: floorPlanSvg,
+          scale: backgroundScale,
+        },
         draggable: false,
         selectable: false,
         connectable: false,
@@ -360,6 +366,21 @@
           </span>
           <span class="switch-label">Connections {connectionCount}</span>
         </label>
+
+        <div class="scale-control">
+          <label class="scale-label" for="bg-scale"
+            >Scale {backgroundScale.toFixed(1)}x</label
+          >
+          <input
+            type="range"
+            id="bg-scale"
+            min="0.5"
+            max="4"
+            step="0.1"
+            bind:value={backgroundScale}
+            class="scale-slider"
+          />
+        </div>
 
         <button
           class="btn btn-secondary overlay-button"
@@ -584,6 +605,47 @@
 
   .switch-label {
     white-space: nowrap;
+  }
+
+  .scale-control {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .scale-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1f2937;
+  }
+
+  .scale-slider {
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: #e5e7eb;
+    appearance: none;
+    cursor: pointer;
+  }
+
+  .scale-slider::-webkit-slider-thumb {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #2563eb;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+
+  .scale-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #2563eb;
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   }
 
   .status-pill {

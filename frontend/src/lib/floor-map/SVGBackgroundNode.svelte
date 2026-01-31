@@ -5,22 +5,25 @@
     svgContent: string | null;
     width?: number;
     height?: number;
+    scale?: number;
   };
 
   type SVGBackgroundNode = Node<SVGBackgroundData>;
 
   let { data }: NodeProps<SVGBackgroundNode> = $props();
 
+  const scale = $derived(data.scale ?? 1);
+
   // Extract viewBox dimensions from SVG if available
   const svgDimensions = $derived.by(() => {
-    if (!data.svgContent) return { width: 800, height: 600 };
+    if (!data.svgContent) return { width: 800 * scale, height: 600 * scale };
 
     // Try to extract viewBox
     const viewBoxMatch = data.svgContent.match(/viewBox=["']([^"']+)["']/);
     if (viewBoxMatch) {
       const parts = viewBoxMatch[1].split(/\s+/).map(Number);
       if (parts.length === 4) {
-        return { width: parts[2], height: parts[3] };
+        return { width: parts[2] * scale, height: parts[3] * scale };
       }
     }
 
@@ -29,8 +32,8 @@
     const heightMatch = data.svgContent.match(/height=["'](\d+)/);
 
     return {
-      width: widthMatch ? parseInt(widthMatch[1]) : (data.width ?? 800),
-      height: heightMatch ? parseInt(heightMatch[1]) : (data.height ?? 600),
+      width: (widthMatch ? parseInt(widthMatch[1]) : (data.width ?? 800)) * scale,
+      height: (heightMatch ? parseInt(heightMatch[1]) : (data.height ?? 600)) * scale,
     };
   });
 </script>
