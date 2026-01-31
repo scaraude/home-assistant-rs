@@ -147,7 +147,7 @@
   class:turbo-on={turboActive}
   class:is-switch={isSwitchCard}
   onclick={isSwitchCard ? undefined : onclick}
-  onkeydown={isSwitchCard ? undefined : (e) => e.key === 'Enter' && onclick?.()}
+  onkeydown={isSwitchCard ? undefined : (e) => e.key === "Enter" && onclick?.()}
   role={isSwitchCard ? undefined : "button"}
   tabindex={isSwitchCard ? undefined : 0}
 >
@@ -201,7 +201,12 @@
         {device.name}
       </div>
       {#if showTurbo}
-        <button class="turbo" onclick={handleTurboClick} type="button" aria-label={turboActive ? "Disable turbo" : "Enable turbo"}>
+        <button
+          class="turbo"
+          onclick={handleTurboClick}
+          type="button"
+          aria-label={turboActive ? "Disable turbo" : "Enable turbo"}
+        >
           <span>Turbo</span>
           <div class="toggle" class:on={turboActive}>
             <span class="toggle-knob"></span>
@@ -347,7 +352,15 @@
   }
 
   .presence-emoji {
-    font-size: 30px;
+    width: 26px;
+    height: 26px;
+    border-radius: 999px;
+    border: 2px solid #2b2b2b;
+    box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.1);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
     line-height: 1;
   }
 
@@ -368,7 +381,9 @@
     box-shadow: inset 0 0 0 1px #2b2b2b;
     font-size: 28px;
     cursor: pointer;
-    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+    transition:
+      transform var(--transition-fast),
+      box-shadow var(--transition-fast);
   }
 
   .icon-square:hover {
