@@ -57,6 +57,8 @@
   let backgroundScale = $state(1.5);
   let dragActive = $state(false);
   let fileInput = $state<HTMLInputElement | null>(null);
+  let statusDrawerOpen = $state(false);
+  let controlsDrawerOpen = $state(false);
 
   const nodeTypes = {
     "background-svg": SVGBackgroundNode,
@@ -382,68 +384,88 @@
         <Controls />
       </SvelteFlow>
 
-      <div class="map-overlay top-right">
-        <label class="switch">
-          <input type="checkbox" bind:checked={showConnections} />
-          <span class="switch-track" aria-hidden="true">
-            <span class="switch-thumb"></span>
-          </span>
-          <span class="switch-label">Connections {connectionCount}</span>
-        </label>
+      <div class="controls-drawer" class:open={controlsDrawerOpen}>
+        <button
+          class="drawer-toggle"
+          onclick={() => (controlsDrawerOpen = !controlsDrawerOpen)}
+          aria-label={controlsDrawerOpen ? "Close controls panel" : "Open controls panel"}
+          aria-expanded={controlsDrawerOpen}
+        >
+          <span class="toggle-icon">{controlsDrawerOpen ? "›" : "‹"}</span>
+        </button>
+        <div class="drawer-content">
+          <label class="switch">
+            <input type="checkbox" bind:checked={showConnections} />
+            <span class="switch-track" aria-hidden="true">
+              <span class="switch-thumb"></span>
+            </span>
+            <span class="switch-label">Connections {connectionCount}</span>
+          </label>
 
-        <div class="scale-control">
-          <label class="scale-label" for="bg-scale"
-            >Scale {backgroundScale.toFixed(1)}x</label
+          <div class="scale-control">
+            <label class="scale-label" for="bg-scale"
+              >Scale {backgroundScale.toFixed(1)}x</label
+            >
+            <input
+              type="range"
+              id="bg-scale"
+              min="0.5"
+              max="4"
+              step="0.1"
+              bind:value={backgroundScale}
+              class="scale-slider"
+            />
+          </div>
+
+          <button
+            class="btn btn-secondary overlay-button"
+            onclick={openFilePicker}
+            disabled={uploading}
           >
+            {#if uploading}
+              Uploading...
+            {:else}
+              Upload SVG
+            {/if}
+          </button>
           <input
-            type="range"
-            id="bg-scale"
-            min="0.5"
-            max="4"
-            step="0.1"
-            bind:value={backgroundScale}
-            class="scale-slider"
+            type="file"
+            accept="image/svg+xml"
+            bind:this={fileInput}
+            onchange={handleFileChange}
           />
         </div>
-
-        <button
-          class="btn btn-secondary overlay-button"
-          onclick={openFilePicker}
-          disabled={uploading}
-        >
-          {#if uploading}
-            Uploading...
-          {:else}
-            Upload SVG
-          {/if}
-        </button>
-        <input
-          type="file"
-          accept="image/svg+xml"
-          bind:this={fileInput}
-          onchange={handleFileChange}
-        />
       </div>
 
-      <div class="map-overlay bottom-right">
-        <div class="status-pill">
-          <span class="status-label">Devices</span>
-          <span class="status-value">{deviceCount}</span>
-        </div>
-        <div class="status-pill">
-          <span class="status-label">Connections</span>
-          <span class="status-value">{connectionCount}</span>
-        </div>
-        <div class="status-pill">
-          <span class="status-label">Sync</span>
-          <span
-            class="status-value"
-            class:syncing={$floorMapStore.syncStatus === "syncing"}
-          >
-            {$floorMapStore.syncStatus === "syncing"
-              ? "Saving..."
-              : "Up to date"}
-          </span>
+      <div class="status-drawer" class:open={statusDrawerOpen}>
+        <button
+          class="drawer-toggle"
+          onclick={() => (statusDrawerOpen = !statusDrawerOpen)}
+          aria-label={statusDrawerOpen ? "Close status panel" : "Open status panel"}
+          aria-expanded={statusDrawerOpen}
+        >
+          <span class="toggle-icon">{statusDrawerOpen ? "›" : "‹"}</span>
+        </button>
+        <div class="drawer-content">
+          <div class="status-pill">
+            <span class="status-label">Devices</span>
+            <span class="status-value">{deviceCount}</span>
+          </div>
+          <div class="status-pill">
+            <span class="status-label">Connections</span>
+            <span class="status-value">{connectionCount}</span>
+          </div>
+          <div class="status-pill">
+            <span class="status-label">Sync</span>
+            <span
+              class="status-value"
+              class:syncing={$floorMapStore.syncStatus === "syncing"}
+            >
+              {$floorMapStore.syncStatus === "syncing"
+                ? "Saving..."
+                : "Up to date"}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -548,34 +570,73 @@
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
   }
 
-  .map-overlay {
+  .controls-drawer,
+  .status-drawer {
     position: absolute;
+    right: 0;
     z-index: 5;
     display: flex;
-    gap: 10px;
     align-items: center;
-    background: rgba(255, 255, 255, 0.92);
-    padding: 10px 12px;
-    border-radius: 10px;
-    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
-    border: 1px solid rgba(148, 163, 184, 0.4);
-    backdrop-filter: blur(10px);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
-  .map-overlay.top-right {
+  .controls-drawer {
     top: 16px;
-    right: 16px;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
+    transform: translateX(100%);
   }
 
-  .map-overlay.bottom-right {
-    bottom: 16px;
-    right: 16px;
-    gap: 12px;
+  .controls-drawer.open {
+    transform: translateX(0);
+  }
+
+  .status-drawer {
+    top: 50%;
+    transform: translateY(-50%) translateX(100%);
+  }
+
+  .status-drawer.open {
+    transform: translateY(-50%) translateX(0);
+  }
+
+  .drawer-toggle {
+    position: absolute;
+    left: -24px;
+    width: 24px;
+    height: 48px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(148, 163, 184, 0.4);
+    border-right: none;
+    border-radius: 24px 0 0 24px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: -4px 0 12px rgba(15, 23, 42, 0.08);
+    transition: background 0.2s;
+  }
+
+  .drawer-toggle:hover {
+    background: rgba(255, 255, 255, 1);
+  }
+
+  .toggle-icon {
+    font-size: 18px;
+    font-weight: 600;
+    color: #64748b;
+    line-height: 1;
+  }
+
+  .drawer-content {
+    background: rgba(255, 255, 255, 0.95);
+    padding: 12px 14px;
+    border-radius: 10px 0 0 10px;
+    box-shadow: -4px 0 18px rgba(15, 23, 42, 0.12);
+    border: 1px solid rgba(148, 163, 184, 0.4);
+    border-right: none;
+    backdrop-filter: blur(10px);
+    display: flex;
     flex-direction: column;
-    align-items: stretch;
+    gap: 10px;
   }
 
   .overlay-button {
@@ -758,24 +819,6 @@
   @media (max-width: 800px) {
     .floor-map-view {
       height: calc(100vh - var(--app-header-height) - var(--app-nav-height));
-    }
-
-    .map-overlay.bottom-right {
-      flex-direction: column;
-      align-items: flex-start;
-    }
-
-    .map-overlay.top-right {
-      right: 10px;
-      left: 10px;
-      width: calc(100% - 20px);
-    }
-  }
-
-  @media (max-width: 640px) {
-    .map-overlay.bottom-right {
-      bottom: 72px;
-      right: 10px;
     }
   }
 </style>
