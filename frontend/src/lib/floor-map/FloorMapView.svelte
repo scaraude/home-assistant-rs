@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { push } from "svelte-spa-router";
   import { SvelteMap } from "svelte/reactivity";
   import {
     SvelteFlow,
@@ -264,8 +265,19 @@
     );
   }
 
-  function handleDeviceClick(_deviceId: string) {
-    // Placeholder for future device detail routing.
+  function handleDeviceClick(deviceId: string) {
+    // Navigate to sensor detail page for temp_humidity sensors
+    const device = $networkTopologyStore.topology?.devices.find(
+      (d) => d.id === deviceId
+    );
+    if (!device) return;
+
+    // Check if device has temp_humidity sensor capability
+    const sensorCap = device.capabilities.find((cap) => cap.type === "sensor");
+    if (sensorCap?.type === "sensor" && sensorCap.sensor_type === "temp_humidity") {
+      push(`/sensor/${deviceId}`);
+    }
+    // Future: Add routes for other device types (switch, presence, energy)
   }
 
   async function handleSwitchToggle(deviceId: string, newState: boolean) {

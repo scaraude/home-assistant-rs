@@ -316,15 +316,18 @@ Créer la page détail accessible au clic sur une card capteur température.
 
 **Critères d'acceptation**:
 
-- [ ] Affichage de toutes les métriques
-- [ ] Graphique interactif avec zoom
-- [ ] Time range selectionnable (1h, 24h, 7d, 30d)
-- [ ] Navigation retour vers floor map
+- [x] Affichage de toutes les métriques
+- [x] Graphique interactif avec zoom
+- [x] Time range selectionnable (24h, 1w, 1m, 1y)
+- [x] Navigation retour vers floor map
 
-**Fichiers à créer**:
+**Fichiers créés/modifiés**:
 
-- `frontend/src/lib/device-detail/SensorDetailPage.svelte`
-- Route dans `App.svelte`
+- `frontend/src/lib/device-detail/SensorDetailPage.svelte` - New component
+- `frontend/src/App.svelte` - Route `/sensor/:id` added
+- `frontend/src/lib/floor-map/FloorMapView.svelte` - Navigation to detail page
+
+**Status**: ✅ COMPLETED
 
 ---
 

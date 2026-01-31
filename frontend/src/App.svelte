@@ -6,6 +6,7 @@
   import CommanderView from "./routes/CommanderView.svelte";
   import NetworkView from "./routes/NetworkView.svelte";
   import ConsommationsView from "./routes/ConsommationsView.svelte";
+  import SensorDetailPage from "./lib/device-detail/SensorDetailPage.svelte";
   import {
     fetchSensors,
     fetchReadings,
@@ -23,6 +24,7 @@
     "/commander": CommanderView,
     "/network": NetworkView,
     "/logs": LogsView,
+    "/sensor/:id": SensorDetailPage,
   };
 
   const DEFAULT_SENSOR_HOURS = 24;
@@ -181,6 +183,7 @@
   let isOnCommander = $derived(currentPath === "/commander");
   let isOnNetwork = $derived(currentPath === "/network");
   let isOnLogs = $derived(currentPath === "/logs");
+  let isOnSensorDetail = $derived(currentPath.startsWith("/sensor/"));
   let permitJoinActive = $derived(permitJoinSecondsRemaining !== null);
   let permitJoinLabel = $derived(
     permitJoinSecondsRemaining === null
