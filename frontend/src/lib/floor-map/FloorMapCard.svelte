@@ -22,6 +22,8 @@
     latestReading?: SensorReading | null;
     switchState?: boolean;
     onclick?: () => void;
+    onSwitchToggle?: (deviceId: string, newState: boolean) => void;
+    onTurboToggle?: (deviceId: string, newState: boolean) => void;
   }
 
   let {
@@ -30,7 +32,19 @@
     latestReading = null,
     switchState = false,
     onclick,
+    onSwitchToggle,
+    onTurboToggle,
   }: Props = $props();
+
+  function handleSwitchClick(event: MouseEvent) {
+    event.stopPropagation();
+    onSwitchToggle?.(device.id, !switchState);
+  }
+
+  function handleTurboClick(event: MouseEvent) {
+    event.stopPropagation();
+    onTurboToggle?.(device.id, !deviceState?.turbo_mode);
+  }
 
   // Determine device type from capabilities
   const deviceType = $derived.by((): FloorMapDeviceType => {
@@ -119,7 +133,9 @@
   const turboActive = $derived(Boolean(deviceState?.turbo_mode));
 </script>
 
-<button
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+<div
   class="floor-map-card"
   class:pill={isTempHumidityCard ||
     isEnergyCard ||
@@ -129,8 +145,11 @@
   class:coordinator={isCoordinatorCard}
   class:router-outline={hasRouterCapability}
   class:turbo-on={turboActive}
-  {onclick}
-  type="button"
+  class:is-switch={isSwitchCard}
+  onclick={isSwitchCard ? undefined : onclick}
+  onkeydown={isSwitchCard ? undefined : (e) => e.key === 'Enter' && onclick?.()}
+  role={isSwitchCard ? undefined : "button"}
+  tabindex={isSwitchCard ? undefined : 0}
 >
   {#if deviceState?.link_quality != null}
     <div class="container-badge">
@@ -168,28 +187,30 @@
     </div>
   {:else}
     <div class="pill-content switch-layout" class:has-turbo={showTurbo}>
-      <div
+      <button
         class="icon-square"
         class:on={switchActive}
         class:router={hasRouterCapability}
-        aria-hidden="true"
+        onclick={handleSwitchClick}
+        type="button"
+        aria-label={switchActive ? "Turn off" : "Turn on"}
       >
         ⚙️
-      </div>
+      </button>
       <div class="switch-name" title={device.name}>
         {device.name}
       </div>
       {#if showTurbo}
-        <div class="turbo">
+        <button class="turbo" onclick={handleTurboClick} type="button" aria-label={turboActive ? "Disable turbo" : "Enable turbo"}>
           <span>Turbo</span>
           <div class="toggle" class:on={turboActive}>
             <span class="toggle-knob"></span>
           </div>
-        </div>
+        </button>
       {/if}
     </div>
   {/if}
-</button>
+</div>
 
 <style>
   .floor-map-card {
@@ -208,6 +229,10 @@
       box-shadow var(--transition-fast),
       border-color var(--transition-fast);
     font-family: inherit;
+  }
+
+  .floor-map-card.is-switch {
+    cursor: default;
   }
 
   .floor-map-card:hover {
@@ -335,12 +360,24 @@
     height: 38px;
     border-radius: 8px;
     background: #4b4b4b;
+    border: none;
     display: flex;
     align-items: center;
     justify-content: center;
     color: #d1d5db;
     box-shadow: inset 0 0 0 1px #2b2b2b;
     font-size: 28px;
+    cursor: pointer;
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  }
+
+  .icon-square:hover {
+    transform: scale(1.1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  .icon-square:active {
+    transform: scale(0.95);
   }
 
   .icon-square.on {
@@ -367,6 +404,20 @@
     gap: 8px;
     font-size: 13px;
     color: #2b2b2b;
+    background: none;
+    border: none;
+    padding: 4px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background var(--transition-fast);
+  }
+
+  .turbo:hover {
+    background: rgba(0, 0, 0, 0.08);
+  }
+
+  .turbo:active {
+    background: rgba(0, 0, 0, 0.12);
   }
 
   .switch-layout.has-turbo {

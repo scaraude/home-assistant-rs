@@ -11,6 +11,8 @@
   } from "@xyflow/svelte";
   import "@xyflow/svelte/dist/style.css";
   import { fetchDeviceStates, fetchNetworkTopology } from "../api";
+  import { executeCommand } from "../api/switches";
+  import { setDeviceOption } from "../api/devices";
   import { fetchFloorPlan, uploadFloorPlan } from "../api/floor-map";
   import { dataCache } from "../stores/dataCache";
   import { floorMapStore } from "../stores/floorMapStore";
@@ -27,6 +29,8 @@
     latestReading?: SensorReading | null;
     switchState?: boolean;
     onDeviceClick?: (deviceId: string) => void;
+    onSwitchToggle?: (deviceId: string, newState: boolean) => void;
+    onTurboToggle?: (deviceId: string, newState: boolean) => void;
   };
 
   type FloorMapBackgroundNodeData = {
@@ -212,6 +216,8 @@
             latestReading: latestReadingByDevice.get(device.id) ?? null,
             switchState,
             onDeviceClick: handleDeviceClick,
+            onSwitchToggle: handleSwitchToggle,
+            onTurboToggle: handleTurboToggle,
           },
           draggable: true,
           zIndex: 2,
@@ -258,6 +264,24 @@
 
   function handleDeviceClick(_deviceId: string) {
     // Placeholder for future device detail routing.
+  }
+
+  async function handleSwitchToggle(deviceId: string, newState: boolean) {
+    try {
+      await executeCommand(deviceId, newState);
+      dataCache.updateSwitchState(deviceId, { state: newState });
+    } catch (error) {
+      console.error("Failed to toggle switch:", error);
+    }
+  }
+
+  async function handleTurboToggle(deviceId: string, newState: boolean) {
+    try {
+      await setDeviceOption(deviceId, "turbo_time", newState ? 5 : 0);
+      dataCache.updateDeviceState(deviceId, { turbo_mode: newState });
+    } catch (error) {
+      console.error("Failed to toggle turbo mode:", error);
+    }
   }
 
   function openFilePicker() {

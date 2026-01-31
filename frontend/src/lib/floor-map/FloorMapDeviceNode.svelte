@@ -10,6 +10,8 @@
     latestReading?: SensorReading | null;
     switchState?: boolean;
     onDeviceClick?: (deviceId: string) => void;
+    onSwitchToggle?: (deviceId: string, newState: boolean) => void;
+    onTurboToggle?: (deviceId: string, newState: boolean) => void;
   };
 
   type FloorMapNode = Node<FloorMapNodeData>;
@@ -27,4 +29,6 @@
   latestReading={data.latestReading ?? null}
   switchState={data.switchState ?? false}
   onclick={handleClick}
+  onSwitchToggle={data.onSwitchToggle}
+  onTurboToggle={data.onTurboToggle}
 />
