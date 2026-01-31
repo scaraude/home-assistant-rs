@@ -285,6 +285,78 @@ impl Database {
         Ok(readings)
     }
 
+    /// Get readings for all sensors within a bounded time range
+    pub fn get_readings_range(&self, start_timestamp: i64, end_timestamp: i64) -> Result<Vec<SensorReading>> {
+        debug!(
+            start_timestamp = start_timestamp,
+            end_timestamp = end_timestamp,
+            "Querying readings for bounded range"
+        );
+        let start = std::time::Instant::now();
+
+        let conn = self.conn.lock_or_recover();
+
+        // Get temperature readings
+        let mut stmt = conn.prepare(
+            "SELECT device_id, temperature, humidity, timestamp
+             FROM temperature_readings
+             WHERE timestamp >= ?1 AND timestamp <= ?2
+             ORDER BY device_id, timestamp DESC",
+        )?;
+
+        let mut readings = stmt
+            .query_map(params![start_timestamp, end_timestamp], Self::map_sensor_reading_row)?
+            .collect::<Result<Vec<_>>>()?;
+
+        // Get presence readings
+        let mut stmt = conn.prepare(
+            "SELECT device_id, occupied, illumination, timestamp
+             FROM presence_readings
+             WHERE timestamp >= ?1 AND timestamp <= ?2
+             ORDER BY device_id, timestamp DESC",
+        )?;
+
+        let mut presence_readings = stmt
+            .query_map(params![start_timestamp, end_timestamp], Self::map_presence_reading_row)?
+            .collect::<Result<Vec<_>>>()?;
+
+        readings.append(&mut presence_readings);
+
+        // Get energy readings
+        let mut stmt = conn.prepare(
+            "SELECT device_id, power, energy, produced_energy, voltage,
+                    current, ac_frequency, power_factor, timestamp
+             FROM energy_readings
+             WHERE timestamp >= ?1 AND timestamp <= ?2
+             ORDER BY device_id, timestamp DESC",
+        )?;
+
+        let mut energy_readings = stmt
+            .query_map(params![start_timestamp, end_timestamp], Self::map_energy_reading_row)?
+            .collect::<Result<Vec<_>>>()?;
+
+        readings.append(&mut energy_readings);
+
+        let elapsed = start.elapsed();
+        info!(
+            reading_count = readings.len(),
+            start_timestamp = start_timestamp,
+            end_timestamp = end_timestamp,
+            duration_ms = elapsed.as_millis(),
+            "Retrieved readings for bounded range"
+        );
+
+        if readings.is_empty() {
+            warn!(
+                start_timestamp = start_timestamp,
+                end_timestamp = end_timestamp,
+                "No readings found for bounded range"
+            );
+        }
+
+        Ok(readings)
+    }
+
     /// Get readings for a specific device within a time range (SQL-filtered)
     pub fn get_readings_for_sensor_since(
         &self,
@@ -364,6 +436,309 @@ impl Database {
                 device_id = %device_id,
                 since_timestamp = since_timestamp,
                 "No readings found for device since timestamp"
+            );
+        }
+
+        Ok(readings)
+    }
+
+    /// Get readings for a specific device within a bounded time range (SQL-filtered)
+    pub fn get_readings_for_sensor_range(
+        &self,
+        device_id: &str,
+        start_timestamp: i64,
+        end_timestamp: i64,
+    ) -> Result<Vec<SensorReading>> {
+        debug!(
+            device_id = %device_id,
+            start_timestamp = start_timestamp,
+            end_timestamp = end_timestamp,
+            "Querying readings for specific device in bounded range"
+        );
+        let start = std::time::Instant::now();
+
+        let conn = self.conn.lock_or_recover();
+
+        // Try temperature readings first
+        let mut stmt = conn.prepare(
+            "SELECT device_id, temperature, humidity, timestamp
+             FROM temperature_readings
+             WHERE device_id = ?1 AND timestamp >= ?2 AND timestamp <= ?3
+             ORDER BY timestamp DESC",
+        )?;
+
+        let mut readings = stmt
+            .query_map(
+                params![device_id, start_timestamp, end_timestamp],
+                Self::map_sensor_reading_row,
+            )?
+            .collect::<Result<Vec<_>>>()?;
+
+        // Try presence readings
+        let mut stmt = conn.prepare(
+            "SELECT device_id, occupied, illumination, timestamp
+             FROM presence_readings
+             WHERE device_id = ?1 AND timestamp >= ?2 AND timestamp <= ?3
+             ORDER BY timestamp DESC",
+        )?;
+
+        let mut presence_readings = stmt
+            .query_map(
+                params![device_id, start_timestamp, end_timestamp],
+                Self::map_presence_reading_row,
+            )?
+            .collect::<Result<Vec<_>>>()?;
+
+        readings.append(&mut presence_readings);
+
+        // Try energy readings
+        let mut stmt = conn.prepare(
+            "SELECT device_id, power, energy, produced_energy, voltage,
+                    current, ac_frequency, power_factor, timestamp
+             FROM energy_readings
+             WHERE device_id = ?1 AND timestamp >= ?2 AND timestamp <= ?3
+             ORDER BY timestamp DESC",
+        )?;
+
+        let mut energy_readings = stmt
+            .query_map(
+                params![device_id, start_timestamp, end_timestamp],
+                Self::map_energy_reading_row,
+            )?
+            .collect::<Result<Vec<_>>>()?;
+
+        readings.append(&mut energy_readings);
+
+        let elapsed = start.elapsed();
+        info!(
+            device_id = %device_id,
+            reading_count = readings.len(),
+            start_timestamp = start_timestamp,
+            end_timestamp = end_timestamp,
+            duration_ms = elapsed.as_millis(),
+            "Retrieved readings for specific device in bounded range"
+        );
+
+        if readings.is_empty() {
+            warn!(
+                device_id = %device_id,
+                start_timestamp = start_timestamp,
+                end_timestamp = end_timestamp,
+                "No readings found for device in bounded range"
+            );
+        }
+
+        Ok(readings)
+    }
+
+    /// Get aggregated readings for all sensors within a bounded time range
+    pub fn get_aggregated_readings_range(
+        &self,
+        start_timestamp: i64,
+        end_timestamp: i64,
+        bucket_seconds: i64,
+    ) -> Result<Vec<SensorReading>> {
+        debug!(
+            start_timestamp = start_timestamp,
+            end_timestamp = end_timestamp,
+            bucket_seconds = bucket_seconds,
+            "Querying aggregated readings for bounded range"
+        );
+        let start = std::time::Instant::now();
+
+        let conn = self.conn.lock_or_recover();
+
+        // Aggregate temperature readings
+        let mut stmt = conn.prepare(
+            "SELECT device_id,
+                    AVG(temperature) AS temperature,
+                    AVG(humidity) AS humidity,
+                    (timestamp / ?1) * ?1 AS bucket_ts
+             FROM temperature_readings
+             WHERE timestamp >= ?2 AND timestamp <= ?3
+             GROUP BY device_id, bucket_ts
+             ORDER BY device_id, bucket_ts",
+        )?;
+
+        let mut readings = stmt
+            .query_map(
+                params![bucket_seconds, start_timestamp, end_timestamp],
+                Self::map_sensor_reading_row,
+            )?
+            .collect::<Result<Vec<_>>>()?;
+
+        // Aggregate presence readings
+        let mut stmt = conn.prepare(
+            "SELECT device_id,
+                    MAX(occupied) AS occupied,
+                    MAX(illumination) AS illumination,
+                    (timestamp / ?1) * ?1 AS bucket_ts
+             FROM presence_readings
+             WHERE timestamp >= ?2 AND timestamp <= ?3
+             GROUP BY device_id, bucket_ts
+             ORDER BY device_id, bucket_ts",
+        )?;
+
+        let mut presence_readings = stmt
+            .query_map(
+                params![bucket_seconds, start_timestamp, end_timestamp],
+                Self::map_presence_reading_row,
+            )?
+            .collect::<Result<Vec<_>>>()?;
+
+        readings.append(&mut presence_readings);
+
+        // Aggregate energy readings
+        let mut stmt = conn.prepare(
+            "SELECT device_id,
+                    AVG(power) AS power,
+                    AVG(energy) AS energy,
+                    AVG(produced_energy) AS produced_energy,
+                    AVG(voltage) AS voltage,
+                    AVG(current) AS current,
+                    AVG(ac_frequency) AS ac_frequency,
+                    AVG(power_factor) AS power_factor,
+                    (timestamp / ?1) * ?1 AS bucket_ts
+             FROM energy_readings
+             WHERE timestamp >= ?2 AND timestamp <= ?3
+             GROUP BY device_id, bucket_ts
+             ORDER BY device_id, bucket_ts",
+        )?;
+
+        let mut energy_readings = stmt
+            .query_map(
+                params![bucket_seconds, start_timestamp, end_timestamp],
+                Self::map_energy_reading_row,
+            )?
+            .collect::<Result<Vec<_>>>()?;
+
+        readings.append(&mut energy_readings);
+
+        let elapsed = start.elapsed();
+        info!(
+            reading_count = readings.len(),
+            start_timestamp = start_timestamp,
+            end_timestamp = end_timestamp,
+            bucket_seconds = bucket_seconds,
+            duration_ms = elapsed.as_millis(),
+            "Retrieved aggregated readings for bounded range"
+        );
+
+        if readings.is_empty() {
+            warn!(
+                start_timestamp = start_timestamp,
+                end_timestamp = end_timestamp,
+                bucket_seconds = bucket_seconds,
+                "No aggregated readings found for bounded range"
+            );
+        }
+
+        Ok(readings)
+    }
+
+    /// Get aggregated readings for a specific device within a bounded time range
+    pub fn get_aggregated_readings_for_sensor_range(
+        &self,
+        device_id: &str,
+        start_timestamp: i64,
+        end_timestamp: i64,
+        bucket_seconds: i64,
+    ) -> Result<Vec<SensorReading>> {
+        debug!(
+            device_id = %device_id,
+            start_timestamp = start_timestamp,
+            end_timestamp = end_timestamp,
+            bucket_seconds = bucket_seconds,
+            "Querying aggregated readings for device in bounded range"
+        );
+        let start = std::time::Instant::now();
+
+        let conn = self.conn.lock_or_recover();
+
+        // Aggregate temperature readings
+        let mut stmt = conn.prepare(
+            "SELECT device_id,
+                    AVG(temperature) AS temperature,
+                    AVG(humidity) AS humidity,
+                    (timestamp / ?2) * ?2 AS bucket_ts
+             FROM temperature_readings
+             WHERE device_id = ?1 AND timestamp >= ?3 AND timestamp <= ?4
+             GROUP BY bucket_ts
+             ORDER BY bucket_ts",
+        )?;
+
+        let mut readings = stmt
+            .query_map(
+                params![device_id, bucket_seconds, start_timestamp, end_timestamp],
+                Self::map_sensor_reading_row,
+            )?
+            .collect::<Result<Vec<_>>>()?;
+
+        // Aggregate presence readings
+        let mut stmt = conn.prepare(
+            "SELECT device_id,
+                    MAX(occupied) AS occupied,
+                    MAX(illumination) AS illumination,
+                    (timestamp / ?2) * ?2 AS bucket_ts
+             FROM presence_readings
+             WHERE device_id = ?1 AND timestamp >= ?3 AND timestamp <= ?4
+             GROUP BY bucket_ts
+             ORDER BY bucket_ts",
+        )?;
+
+        let mut presence_readings = stmt
+            .query_map(
+                params![device_id, bucket_seconds, start_timestamp, end_timestamp],
+                Self::map_presence_reading_row,
+            )?
+            .collect::<Result<Vec<_>>>()?;
+
+        readings.append(&mut presence_readings);
+
+        // Aggregate energy readings
+        let mut stmt = conn.prepare(
+            "SELECT device_id,
+                    AVG(power) AS power,
+                    AVG(energy) AS energy,
+                    AVG(produced_energy) AS produced_energy,
+                    AVG(voltage) AS voltage,
+                    AVG(current) AS current,
+                    AVG(ac_frequency) AS ac_frequency,
+                    AVG(power_factor) AS power_factor,
+                    (timestamp / ?2) * ?2 AS bucket_ts
+             FROM energy_readings
+             WHERE device_id = ?1 AND timestamp >= ?3 AND timestamp <= ?4
+             GROUP BY bucket_ts
+             ORDER BY bucket_ts",
+        )?;
+
+        let mut energy_readings = stmt
+            .query_map(
+                params![device_id, bucket_seconds, start_timestamp, end_timestamp],
+                Self::map_energy_reading_row,
+            )?
+            .collect::<Result<Vec<_>>>()?;
+
+        readings.append(&mut energy_readings);
+
+        let elapsed = start.elapsed();
+        info!(
+            device_id = %device_id,
+            reading_count = readings.len(),
+            start_timestamp = start_timestamp,
+            end_timestamp = end_timestamp,
+            bucket_seconds = bucket_seconds,
+            duration_ms = elapsed.as_millis(),
+            "Retrieved aggregated readings for device in bounded range"
+        );
+
+        if readings.is_empty() {
+            warn!(
+                device_id = %device_id,
+                start_timestamp = start_timestamp,
+                end_timestamp = end_timestamp,
+                bucket_seconds = bucket_seconds,
+                "No aggregated readings found for device in bounded range"
             );
         }
 

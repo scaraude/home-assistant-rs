@@ -13,6 +13,7 @@ interface SensorStoreState {
   latestTimestamp: Date | null;
   rangeHours: number;
   loaded: boolean;
+  graphSeries: Record<string, GraphSeriesWindow[]>;
 }
 
 interface SwitchStoreState {
@@ -31,6 +32,13 @@ interface DataCacheState {
   };
 }
 
+interface GraphSeriesWindow {
+  bucketSeconds: number;
+  start: number;
+  end: number;
+  readings: SensorReading[];
+}
+
 const createInitialState = (): DataCacheState => ({
   sensors: {
     devices: [],
@@ -38,6 +46,7 @@ const createInitialState = (): DataCacheState => ({
     latestTimestamp: null,
     rangeHours: 24,
     loaded: false,
+    graphSeries: {},
   },
   switches: {
     devices: [],
@@ -53,6 +62,23 @@ const createInitialState = (): DataCacheState => ({
 
 function sortReadings(readings: SensorReading[]): SensorReading[] {
   return [...readings].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+}
+
+function mergeGraphWindows(
+  existing: GraphSeriesWindow[],
+  nextWindow: GraphSeriesWindow,
+): GraphSeriesWindow[] {
+  const filtered = existing.filter(
+    (window) =>
+      window.bucketSeconds !== nextWindow.bucketSeconds ||
+      window.end < nextWindow.start ||
+      window.start > nextWindow.end,
+  );
+
+  const merged = [...filtered, nextWindow].sort((a, b) => a.start - b.start);
+
+  // Keep the newest 8 windows per sensor to cap memory usage.
+  return merged.slice(Math.max(0, merged.length - 8));
 }
 
 function trimReadings(readings: SensorReading[], hours: number): SensorReading[] {
@@ -152,6 +178,58 @@ function createDataCache() {
           loaded: true,
         },
       }));
+    },
+
+    setGraphSeries(
+      deviceId: string,
+      bucketSeconds: number,
+      start: number,
+      end: number,
+      readings: SensorReading[],
+    ) {
+      const sorted = sortReadings(readings);
+      update((state) => {
+        const existing = state.sensors.graphSeries[deviceId] || [];
+        const nextWindow: GraphSeriesWindow = {
+          bucketSeconds,
+          start,
+          end,
+          readings: sorted,
+        };
+        return {
+          ...state,
+          sensors: {
+            ...state.sensors,
+            graphSeries: {
+              ...state.sensors.graphSeries,
+              [deviceId]: mergeGraphWindows(existing, nextWindow),
+            },
+          },
+        };
+      });
+    },
+
+    clearGraphSeries(deviceId?: string) {
+      update((state) => {
+        if (!deviceId) {
+          return {
+            ...state,
+            sensors: {
+              ...state.sensors,
+              graphSeries: {},
+            },
+          };
+        }
+
+        const { [deviceId]: _removed, ...rest } = state.sensors.graphSeries;
+        return {
+          ...state,
+          sensors: {
+            ...state.sensors,
+            graphSeries: rest,
+          },
+        };
+      });
     },
 
     mergeSensorReading(reading: SensorReading) {

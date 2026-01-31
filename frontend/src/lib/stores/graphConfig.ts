@@ -168,6 +168,17 @@ function createGraphConfig() {
       });
     },
 
+    // Hide all sensors
+    hideAll: () => {
+      update(state => {
+        const newState = {
+          ...state,
+          sensors: state.sensors.map(s => ({ ...s, visible: false })),
+        };
+        return newState; // Don't persist visibility
+      });
+    },
+
     // Update sensor color
     setSensorColor: (deviceId: string, color: string) => {
       update(state => {

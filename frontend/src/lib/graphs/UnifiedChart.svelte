@@ -15,6 +15,8 @@
   import zoomPlugin from "chartjs-plugin-zoom";
   import "chartjs-adapter-date-fns";
   import type { SensorUIConfig } from "../stores/graphConfig";
+  import { TIME_RANGE_HOURS } from "../stores/graphConfig";
+  import { fetchAggregatedReadings } from "../api";
   import { dataCache } from "../stores/dataCache";
 
   // Register Chart.js components
@@ -45,6 +47,11 @@
 
   let canvas = $state<HTMLCanvasElement>();
   let chart = $state<Chart | null>(null);
+  let zoomRange = $state<{ startSec: number; endSec: number } | null>(null);
+
+  const TARGET_POINTS = 1500;
+  const MIN_BUCKET_SECONDS = 1;
+  const inflightRequests = new Set<string>();
 
   // Derived: visible sensors
   let visibleSensors = $derived(sensors.filter((s) => s.visible));
@@ -54,12 +61,103 @@
     new Map($dataCache.sensors.devices.map((d) => [d.device_id, d])),
   );
 
-  // Derived: readings filtered by visible sensors
-  let visibleReadings = $derived(
-    $dataCache.sensors.readings.filter((r) =>
-      visibleSensors.some((s) => s.deviceId === r.device_id),
-    ),
+  // Derived: aggregated series cache
+  let graphSeries = $derived($dataCache.sensors.graphSeries);
+
+  function getDefaultRangeSeconds(range: string) {
+    const hours = TIME_RANGE_HOURS[range as keyof typeof TIME_RANGE_HOURS] ?? 24;
+    const endSec = Math.floor(Date.now() / 1000);
+    const startSec = endSec - hours * 3600;
+    return { startSec, endSec };
+  }
+
+  function computeBucketSeconds(rangeSeconds: number) {
+    return Math.max(MIN_BUCKET_SECONDS, Math.ceil(rangeSeconds / TARGET_POINTS));
+  }
+
+  const activeRange = $derived.by(() => {
+    if (zoomRange) {
+      return zoomRange;
+    }
+    return getDefaultRangeSeconds(timeRange);
+  });
+
+  const activeBucketSeconds = $derived.by(() =>
+    computeBucketSeconds(activeRange.endSec - activeRange.startSec),
   );
+
+  function hasCoverage(
+    deviceId: string,
+    bucketSeconds: number,
+    startSec: number,
+    endSec: number,
+  ): boolean {
+    const windows = graphSeries[deviceId] || [];
+    return windows.some(
+      (window) =>
+        window.bucketSeconds === bucketSeconds &&
+        window.start <= startSec &&
+        window.end >= endSec,
+    );
+  }
+
+  function getCachedReadings(
+    deviceId: string,
+    bucketSeconds: number,
+    startSec: number,
+    endSec: number,
+  ) {
+    const windows = graphSeries[deviceId] || [];
+    const matching = windows.filter(
+      (window) =>
+        window.bucketSeconds === bucketSeconds &&
+        window.start <= endSec &&
+        window.end >= startSec,
+    );
+
+    if (matching.length === 0) {
+      return [];
+    }
+
+    const readings = matching.flatMap((window) => window.readings);
+    const startMs = startSec * 1000;
+    const endMs = endSec * 1000;
+    return readings
+      .filter((reading) => {
+        const ts = reading.timestamp.getTime();
+        return ts >= startMs && ts <= endMs;
+      })
+      .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+  }
+
+  // Derived: readings filtered by visible sensors and active range
+  let visibleReadings = $derived.by(() => {
+    if (visibleSensors.length === 0) return [];
+    const readings: typeof $dataCache.sensors.readings = [];
+    for (const sensor of visibleSensors) {
+      readings.push(
+        ...getCachedReadings(
+          sensor.deviceId,
+          activeBucketSeconds,
+          activeRange.startSec,
+          activeRange.endSec,
+        ),
+      );
+    }
+    return readings;
+  });
+
+  const missingSeries = $derived.by(() => {
+    if (visibleSensors.length === 0) return false;
+    return visibleSensors.some((sensor) =>
+      !hasCoverage(
+        sensor.deviceId,
+        activeBucketSeconds,
+        activeRange.startSec,
+        activeRange.endSec,
+      )
+    );
+  });
 
   // Build datasets for visible sensors
   function buildDatasets() {
@@ -143,6 +241,60 @@
     return datasets;
   }
 
+  function updateZoomRangeFromChart(sourceChart: Chart) {
+    const xScale = sourceChart.scales?.x as any;
+    if (!xScale) return;
+    const min = xScale.min;
+    const max = xScale.max;
+    if (typeof min !== "number" || typeof max !== "number") return;
+    zoomRange = {
+      startSec: Math.floor(min / 1000),
+      endSec: Math.floor(max / 1000),
+    };
+  }
+
+  async function requestSeries(
+    deviceId: string,
+    startSec: number,
+    endSec: number,
+    bucketSeconds: number,
+  ) {
+    const key = `${deviceId}:${bucketSeconds}:${startSec}:${endSec}`;
+    if (inflightRequests.has(key)) {
+      return;
+    }
+    inflightRequests.add(key);
+    try {
+      const result = await fetchAggregatedReadings(
+        deviceId,
+        new Date(startSec * 1000),
+        new Date(endSec * 1000),
+        bucketSeconds,
+      );
+      dataCache.setGraphSeries(deviceId, bucketSeconds, startSec, endSec, result.readings);
+    } catch (error) {
+      console.error("Failed to fetch aggregated readings:", error);
+    } finally {
+      inflightRequests.delete(key);
+    }
+  }
+
+  $effect(() => {
+    if (visibleSensors.length === 0) {
+      return;
+    }
+
+    const startSec = activeRange.startSec;
+    const endSec = activeRange.endSec;
+    const bucketSeconds = activeBucketSeconds;
+
+    for (const sensor of visibleSensors) {
+      if (!hasCoverage(sensor.deviceId, bucketSeconds, startSec, endSec)) {
+        void requestSeries(sensor.deviceId, startSec, endSec, bucketSeconds);
+      }
+    }
+  });
+
   function getTimeDisplayFormats(range: string) {
     switch (range) {
       case "24h":
@@ -196,6 +348,9 @@
             pan: {
               enabled: true,
               mode: "x",
+              onPanComplete: ({ chart }) => {
+                updateZoomRangeFromChart(chart);
+              },
             },
             zoom: {
               wheel: {
@@ -206,6 +361,9 @@
                 enabled: true,
               },
               mode: "x",
+              onZoomComplete: ({ chart }) => {
+                updateZoomRangeFromChart(chart);
+              },
             },
             limits: {
               x: { min: "original", max: "original" },
@@ -305,10 +463,18 @@
     }
   });
 
+  let previousTimeRange: string | undefined = $state(undefined);
+  $effect(() => {
+    if (previousTimeRange !== undefined && timeRange !== previousTimeRange) {
+      zoomRange = null;
+    }
+    previousTimeRange = timeRange;
+  });
+
   // Create or update chart when dependencies change
   $effect(() => {
-    // Destroy chart if no visible sensors or readings
-    if (visibleSensors.length === 0 || visibleReadings.length === 0) {
+    // Destroy chart if no visible sensors
+    if (visibleSensors.length === 0) {
       if (chart) {
         chart.destroy();
         chart = null;
@@ -335,12 +501,17 @@
     <div class="no-data">
       <p>No sensors selected. Click on a sensor to view its data.</p>
     </div>
-  {:else if visibleReadings.length === 0}
-    <div class="no-data">
-      <p>No data available for the selected time range.</p>
-    </div>
   {:else}
     <canvas bind:this={canvas}></canvas>
+    {#if missingSeries && visibleReadings.length === 0}
+      <div class="no-data overlay">
+        <p>Loading chart data...</p>
+      </div>
+    {:else if visibleReadings.length === 0}
+      <div class="no-data overlay">
+        <p>No data available for the selected time range.</p>
+      </div>
+    {/if}
   {/if}
 </div>
 
@@ -367,5 +538,12 @@
     height: 100%;
     color: #6b7280;
     font-size: 0.9375rem;
+    text-align: center;
+  }
+
+  .overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.9);
   }
 </style>

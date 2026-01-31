@@ -92,6 +92,39 @@ export async function fetchReadings(
 }
 
 /**
+ * Fetch aggregated sensor readings for a specific device and time range
+ * @param sensorId - Sensor device ID (required)
+ * @param start - Range start time
+ * @param end - Range end time
+ * @param bucketSeconds - Bucket size in seconds
+ */
+export async function fetchAggregatedReadings(
+  sensorId: string,
+  start: Date,
+  end: Date,
+  bucketSeconds: number,
+): Promise<{ readings: SensorReading[]; latestTimestamp: Date | null }> {
+  const params = new URLSearchParams();
+  params.append('device_id', sensorId);
+  params.append('start', dateToUnixSeconds(start).toString());
+  params.append('end', dateToUnixSeconds(end).toString());
+  params.append('bucket', Math.max(1, Math.floor(bucketSeconds)).toString());
+
+  const response = await fetch(`/api/readings?${params.toString()}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch aggregated readings: ${response.statusText}`);
+  }
+
+  const readings = (await response.json()) as SensorReadingResponse[];
+  const latestTimestamp = response.headers.get('X-Latest-Timestamp');
+
+  return {
+    readings: readings.map(parseSensorReading),
+    latestTimestamp: latestTimestamp ? parseUnixSeconds(parseInt(latestTimestamp, 10)) : null,
+  };
+}
+
+/**
  * Fetch sensor readings since a specific timestamp (delta update)
  * @param sinceTimestamp - Fetch readings after this timestamp
  * @param sensorId - Optional sensor ID filter

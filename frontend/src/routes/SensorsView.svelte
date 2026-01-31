@@ -10,6 +10,7 @@
 
   let loading = $state(true);
   let error = $state<string | null>(null);
+  let initialized = $state(false);
 
   // Filter: exclude energy meters (they belong in ConsommationsView)
   const isEnergyMeter = (device: DeviceInfo) =>
@@ -32,6 +33,10 @@
     // just re-initialize graphConfig with cached devices
     if (!force && sensorState.loaded && sensorState.rangeHours === hours) {
       initializeGraphConfig(sensorState.devices);
+      if (!initialized) {
+        graphConfig.hideAll();
+        initialized = true;
+      }
       loading = false;
       return;
     }
@@ -54,6 +59,10 @@
 
       // Always initialize graphConfig for this view
       initializeGraphConfig(sensors);
+      if (!initialized) {
+        graphConfig.hideAll();
+        initialized = true;
+      }
 
       try {
         const states = await fetchDeviceStates();

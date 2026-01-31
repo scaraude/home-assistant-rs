@@ -39,32 +39,59 @@ pub fn serve_sensors(db: &Database) -> Response<Full<Bytes>> {
 pub fn serve_readings(db: &Database, query: Option<&str>) -> Response<Full<Bytes>> {
     debug!(query = ?query, "Parsing query parameters");
 
-    // Parse query parameters for device_id, hours, and since
+    // Parse query parameters for device_id, hours, since, start/end, and bucket
     let params = QueryParams::new(query);
     let device_id = params.get("device_id");
     let since_param = params.get_optional_i64("since");
+    let start_param = params.get_optional_i64("start");
+    let end_param = params.get_optional_i64("end");
+    let bucket_seconds = params.get_optional_i64("bucket").unwrap_or(1).max(1);
 
-    // Determine timestamp: use 'since' if provided, otherwise calculate from 'hours'
-    let since = since_param.unwrap_or_else(|| {
-        let hours = params.get_i64("hours", 24);
-        chrono::Utc::now().timestamp() - (hours * 3600)
-    });
+    // Determine time range: prefer explicit start/end, otherwise use since/hours
+    let (start_ts, end_ts) = if let (Some(start), Some(end)) = (start_param, end_param) {
+        (start, end)
+    } else {
+        let since = since_param.unwrap_or_else(|| {
+            let hours = params.get_i64("hours", 24);
+            chrono::Utc::now().timestamp() - (hours * 3600)
+        });
+        (since, chrono::Utc::now().timestamp())
+    };
 
     info!(
         device_id = ?device_id,
-        since_timestamp = since,
-        "Querying readings (delta support enabled)"
+        start_timestamp = start_ts,
+        end_timestamp = end_ts,
+        bucket_seconds = bucket_seconds,
+        "Querying readings (range + aggregation support enabled)"
     );
 
     // Use SQL-filtered queries - no more Rust-side filtering!
-    let result = if let Some(sid) = device_id {
-        debug!(device_id = %sid, since = since, "Querying readings for specific sensor");
-        // Get readings for specific sensor with time filter in SQL
-        db.get_readings_for_sensor_since(sid, since)
+    let result = if bucket_seconds <= 1 {
+        if let Some(sid) = device_id {
+            debug!(device_id = %sid, start = start_ts, end = end_ts, "Querying raw readings for specific sensor");
+            db.get_readings_for_sensor_range(sid, start_ts, end_ts)
+        } else {
+            debug!(start = start_ts, end = end_ts, "Querying raw readings for all sensors");
+            db.get_readings_range(start_ts, end_ts)
+        }
+    } else if let Some(sid) = device_id {
+        debug!(
+            device_id = %sid,
+            start = start_ts,
+            end = end_ts,
+            bucket_seconds = bucket_seconds,
+            "Querying aggregated readings for specific sensor"
+        );
+        db.get_aggregated_readings_for_sensor_range(sid, start_ts, end_ts, bucket_seconds)
     } else {
-        debug!(since = since, "Querying readings for all sensors");
-        // Get all readings since timestamp
-        db.get_readings_since(since)
+        debug!(
+            start = start_ts,
+            end = end_ts,
+            bucket_seconds = bucket_seconds,
+            "Querying aggregated readings for all sensors"
+        );
+        db.get_aggregated_readings_range(start_ts, end_ts, bucket_seconds)
     };
 
     match result {
@@ -79,7 +106,7 @@ pub fn serve_readings(db: &Database, query: Option<&str>) -> Response<Full<Bytes
                 .iter()
                 .map(|r| r.timestamp().timestamp())
                 .max()
-                .unwrap_or(since);
+                .unwrap_or(end_ts);
 
             let json = match serialize_to_json(&readings, "sensor readings") {
                 Ok(json) => json,
@@ -97,7 +124,7 @@ pub fn serve_readings(db: &Database, query: Option<&str>) -> Response<Full<Bytes
             json_response_with_timestamp(json, latest_timestamp)
         }
         Err(e) => {
-            error!(error = %e, device_id = ?device_id, since = since, "Database error while fetching readings");
+            error!(error = %e, device_id = ?device_id, start = start_ts, end = end_ts, "Database error while fetching readings");
             internal_error_response("Database error")
         }
     }
