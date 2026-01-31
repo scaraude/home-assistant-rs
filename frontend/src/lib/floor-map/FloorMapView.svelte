@@ -266,30 +266,32 @@
   }
 
   function handleDeviceClick(deviceId: string) {
-    // Navigate to sensor detail page for temp_humidity sensors
     const device = $networkTopologyStore.topology?.devices.find(
       (d) => d.id === deviceId,
     );
     if (!device) return;
 
-    // Check if device has temp_humidity sensor capability
+    // Check sensor capabilities
     const sensorCap = device.capabilities.find((cap) => cap.type === "sensor");
-    if (
-      sensorCap?.type === "sensor" &&
-      sensorCap.sensor_type === "temp_humidity"
-    ) {
-      push(`/sensor/${deviceId}`);
+    if (sensorCap?.type === "sensor") {
+      if (sensorCap.sensor_type === "temp_humidity") {
+        push(`/sensor/${deviceId}`);
+        return;
+      }
+      if (sensorCap.sensor_type === "energy_meter") {
+        push(`/energy/${deviceId}`);
+        return;
+      }
+      // Future: Add route for presence sensors
     }
 
-    console.log("device.capabilities", device.capabilities);
-    // Check if device has temp_humidity sensor capability
+    // Check commander capabilities
     const switchCap = device.capabilities.find(
       (cap) => cap.type === "commander",
     );
     if (switchCap?.type === "commander") {
       push(`/switch/${deviceId}`);
     }
-    // Future: Add routes for other device types (switch, presence, energy)
   }
 
   async function handleSwitchToggle(deviceId: string, newState: boolean) {

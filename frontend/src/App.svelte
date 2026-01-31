@@ -16,12 +16,14 @@
   import { dataCache } from "./lib/stores/dataCache";
   import { eventStream, type SystemEvent } from "./lib/websocket";
   import SwitchDetailPage from "./lib/device-detail/SwitchDetailPage.svelte";
+  import EnergyDetailPage from "./lib/device-detail/EnergyDetailPage.svelte";
 
   // Route definitions
   const routes = {
     "/": SensorsView,
     "/sensors": SensorsView,
     "/switch/:id": SwitchDetailPage,
+    "/energy/:id": EnergyDetailPage,
     "/consommations": ConsommationsView,
     "/commander": CommanderView,
     "/network": NetworkView,

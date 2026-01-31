@@ -372,17 +372,24 @@ Créer la page détail accessible au clic sur une card energy meter.
 
 - Header: Nom device (éditable), icône
 - Métriques actuelles: Power, Voltage, Current, Energy totale
-- Graphique historique puissance
+- Métriques secondaires: Produced Energy, AC Frequency, Power Factor
+- Graphique historique avec sélecteur de métrique (Power, Voltage, Current, Energy)
 
 **Critères d'acceptation**:
 
-- [ ] Toutes les métriques energy affichées
-- [ ] Graphique puissance dans le temps
-- [ ] Time range selectionnable
+- [x] Toutes les métriques energy affichées
+- [x] Graphique puissance dans le temps
+- [x] Time range selectionnable (24h, 1w, 1m, 1y)
+- [x] Metric selectionnable (Power, Voltage, Current, Energy)
+- [x] Navigation retour vers floor map
 
-**Fichiers à créer**:
+**Fichiers créés/modifiés**:
 
-- `frontend/src/lib/device-detail/EnergyDetailPage.svelte`
+- `frontend/src/lib/device-detail/EnergyDetailPage.svelte` - New component
+- `frontend/src/App.svelte` - Route `/energy/:id` added
+- `frontend/src/lib/floor-map/FloorMapView.svelte` - Navigation to detail page
+
+**Status**: ✅ COMPLETED
 
 ---
 
