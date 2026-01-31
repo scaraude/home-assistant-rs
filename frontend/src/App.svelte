@@ -15,11 +15,13 @@
   } from "./lib/api";
   import { dataCache } from "./lib/stores/dataCache";
   import { eventStream, type SystemEvent } from "./lib/websocket";
+  import SwitchDetailPage from "./lib/device-detail/SwitchDetailPage.svelte";
 
   // Route definitions
   const routes = {
     "/": SensorsView,
     "/sensors": SensorsView,
+    "/switch/:id": SwitchDetailPage,
     "/consommations": ConsommationsView,
     "/commander": CommanderView,
     "/network": NetworkView,
@@ -56,7 +58,7 @@
       dataCache.setSensorReadings(
         readingsResult.readings,
         readingsResult.latestTimestamp ?? null,
-        DEFAULT_SENSOR_HOURS
+        DEFAULT_SENSOR_HOURS,
       );
       dataCache.setSwitches(switches);
     } catch (error) {
@@ -183,12 +185,13 @@
   let isOnCommander = $derived(currentPath === "/commander");
   let isOnNetwork = $derived(currentPath === "/network");
   let isOnLogs = $derived(currentPath === "/logs");
-  let isOnSensorDetail = $derived(currentPath.startsWith("/sensor/"));
+  // let isOnSensorDetail = $derived(currentPath.startsWith("/sensor/"));
+  // let isOnSwitchDetail = $derived(currentPath.startsWith("/switch/"));
   let permitJoinActive = $derived(permitJoinSecondsRemaining !== null);
   let permitJoinLabel = $derived(
     permitJoinSecondsRemaining === null
       ? "Open network"
-      : `Network open ${formatCountdown(permitJoinSecondsRemaining)}`
+      : `Network open ${formatCountdown(permitJoinSecondsRemaining)}`,
   );
 </script>
 
@@ -208,7 +211,11 @@
 
       <nav class="nav-buttons">
         <a href="#/" class="nav-button" class:active={isOnSensors}> Sensors </a>
-        <a href="#/consommations" class="nav-button" class:active={isOnConsommations}>
+        <a
+          href="#/consommations"
+          class="nav-button"
+          class:active={isOnConsommations}
+        >
           Consommations
         </a>
         <a href="#/commander" class="nav-button" class:active={isOnCommander}>

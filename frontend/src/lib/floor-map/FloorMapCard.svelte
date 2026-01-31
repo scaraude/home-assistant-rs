@@ -146,7 +146,7 @@
   class:router-outline={hasRouterCapability}
   class:turbo-on={turboActive}
   class:is-switch={isSwitchCard}
-  onclick={isSwitchCard ? undefined : onclick}
+  {onclick}
   onkeydown={isSwitchCard ? undefined : (e) => e.key === "Enter" && onclick?.()}
   role={isSwitchCard ? undefined : "button"}
   tabindex={isSwitchCard ? undefined : 0}

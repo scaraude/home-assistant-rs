@@ -268,14 +268,26 @@
   function handleDeviceClick(deviceId: string) {
     // Navigate to sensor detail page for temp_humidity sensors
     const device = $networkTopologyStore.topology?.devices.find(
-      (d) => d.id === deviceId
+      (d) => d.id === deviceId,
     );
     if (!device) return;
 
     // Check if device has temp_humidity sensor capability
     const sensorCap = device.capabilities.find((cap) => cap.type === "sensor");
-    if (sensorCap?.type === "sensor" && sensorCap.sensor_type === "temp_humidity") {
+    if (
+      sensorCap?.type === "sensor" &&
+      sensorCap.sensor_type === "temp_humidity"
+    ) {
       push(`/sensor/${deviceId}`);
+    }
+
+    console.log("device.capabilities", device.capabilities);
+    // Check if device has temp_humidity sensor capability
+    const switchCap = device.capabilities.find(
+      (cap) => cap.type === "commander",
+    );
+    if (switchCap?.type === "commander") {
+      push(`/switch/${deviceId}`);
     }
     // Future: Add routes for other device types (switch, presence, energy)
   }

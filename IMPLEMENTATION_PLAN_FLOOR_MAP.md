@@ -348,14 +348,16 @@ Créer la page détail accessible au clic sur une card switch.
 
 **Critères d'acceptation**:
 
-- [ ] Toggle switch fonctionnel
-- [ ] Liste des règles d'automation
-- [ ] Création de règle depuis cette page
-- [ ] Navigation retour vers floor map
+- [x] Toggle switch fonctionnel
+- [x] Liste des règles d'automation
+- [x] Création de règle depuis cette page
+- [x] Navigation retour vers floor map
 
 **Fichiers à créer**:
 
 - `frontend/src/lib/device-detail/SwitchDetailPage.svelte`
+
+**Status**: ✅ COMPLETED
 
 ---
 
