@@ -13,7 +13,6 @@
   import ProcessTableView from "./ProcessTableView.svelte";
   import TopConsumersView from "./TopConsumersView.svelte";
   import { cache } from "../stores/cache";
-  import { dataCache } from "../stores/dataCache";
   import { eventStream, type LogEntriesEvent } from "../websocket";
 
   type Tab = "system" | "processes" | "top-cpu" | "top-ram";
@@ -125,7 +124,6 @@
   async function loadStorageBreakdown(): Promise<void> {
     try {
       const breakdown = await fetchStorageBreakdown();
-      dataCache.setStorageBreakdown(breakdown);
       storageBreakdown = breakdown;
     } catch (e) {
       console.error("Failed to load storage breakdown:", e);

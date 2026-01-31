@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { SwitchDevice, AutomationRule } from "../api";
-  import { executeCommand, fetchAutomationRules } from "../api";
+  import { fetchAutomationRules } from "../api";
   import { formatDistanceToNow } from "date-fns";
   import StatusBadge from "../shared/StatusBadge.svelte";
   import Card from "../design-system/Card.svelte";
@@ -9,7 +9,7 @@
   import { icons } from "../icons";
   import { slide } from "svelte/transition";
   import { rulesByDevice } from "../stores/automations";
-  import { dataCache } from "../stores/dataCache";
+  import { switchesMemory } from "../memory";
 
   let { device }: { device: SwitchDevice } = $props();
 
@@ -53,8 +53,8 @@
     device.state = newState;
 
     try {
-      await executeCommand(device.id, newState);
-      dataCache.updateSwitchState(device.id, { state: newState });
+      await switchesMemory.sendSwitchCommand(device.id, newState);
+      switchesMemory.updateSwitchState(device.id, { state: newState });
     } catch (err) {
       device.state = previousState;
       error = err instanceof Error ? err.message : "Failed to toggle switch";

@@ -1,9 +1,9 @@
 <script lang="ts">
   import EnergyMeterCard from "./EnergyMeterCard.svelte";
-  import { dataCache } from "../stores/dataCache";
   import { graphConfig } from "../stores/graphConfig";
   import type { EnergySensorReading } from "../api";
   import type { DeviceInfo } from "../api/devices";
+  import { sensorsMemory } from "../memory";
 
   let editMode = $state(false);
 
@@ -18,21 +18,22 @@
 
   let energyMeters = $derived(
     $graphConfig.sensors.filter(s => {
-      const device = $dataCache.sensors.devices.find(d => d.device_id === s.deviceId);
+      const device = $sensorsMemory.devices.find(d => d.device_id === s.deviceId);
       return isEnergyMeter(device);
     })
   );
 
   function getLatestReading(deviceId: string): EnergySensorReading | null {
-    const deviceReadings = $dataCache.sensors.readings
-      .filter(r => r.device_id === deviceId)
-      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-
-    if (deviceReadings.length === 0) return null;
-
-    const latestReading = deviceReadings[0];
+    const latestReading = $sensorsMemory.latestByDevice[deviceId] ?? null;
+    if (!latestReading) return null;
     return latestReading.type === "energy_meter" ? latestReading : null;
   }
+
+  $effect(() => {
+    for (const meter of energyMeters) {
+      void sensorsMemory.ensureRecentReadings(meter.deviceId, 24);
+    }
+  });
 </script>
 
 <div class="energy-list-panel">

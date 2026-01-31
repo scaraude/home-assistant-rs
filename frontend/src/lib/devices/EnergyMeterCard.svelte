@@ -3,9 +3,8 @@
   import Card from "../design-system/Card.svelte";
   import EditableDeviceName from "./EditableDeviceName.svelte";
   import StatusBadge from "../shared/StatusBadge.svelte";
-  import { updateDeviceColor } from "../api";
   import { graphConfig } from "../stores/graphConfig";
-  import { dataCache } from "../stores/dataCache";
+  import { deviceStateMemory, devicesMemory, sensorsMemory } from "../memory";
   import { formatDistanceToNow } from "date-fns";
   import type { SensorUIConfig } from "../stores/graphConfig";
   import type { EnergySensorReading } from "../api";
@@ -23,11 +22,11 @@
   let showColorPicker = $state(false);
 
   let deviceInfo = $derived(
-    $dataCache.sensors.devices.find((d) => d.device_id === sensor.deviceId)
+    $sensorsMemory.devices.find((d) => d.device_id === sensor.deviceId)
   );
 
   let deviceName = $derived(deviceInfo?.name || sensor.deviceId);
-  let deviceState = $derived($dataCache.deviceStates[sensor.deviceId] || null);
+  let deviceState = $derived($deviceStateMemory.byId[sensor.deviceId] || null);
 
   let timeAgo = $derived(
     latestReading
@@ -49,14 +48,14 @@
   async function handleColorSelect(color: string) {
     const previousColor = sensor.color;
     graphConfig.setSensorColor(sensor.deviceId, color);
-    dataCache.updateDeviceColor(sensor.deviceId, color);
+    sensorsMemory.applySensorColor(sensor.deviceId, color);
 
     try {
-      await updateDeviceColor(sensor.deviceId, color);
+      await devicesMemory.setDeviceColor(sensor.deviceId, color);
     } catch (err) {
       console.error("Failed to persist device color:", err);
       graphConfig.setSensorColor(sensor.deviceId, previousColor);
-      dataCache.updateDeviceColor(sensor.deviceId, previousColor);
+      sensorsMemory.applySensorColor(sensor.deviceId, previousColor);
     }
   }
 

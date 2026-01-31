@@ -2,13 +2,13 @@
   import CompactSensorCard from "./CompactSensorCard.svelte";
   import PresenceCard from "./PresenceCard.svelte";
   import { graphConfig } from "../stores/graphConfig";
-  import { dataCache } from "../stores/dataCache";
   import type { SensorReading } from "../api";
   import type { DeviceInfo } from "../api/devices";
+  import { sensorsMemory } from "../memory";
 
   const allSensors = $derived($graphConfig.sensors);
-  const devices = $derived($dataCache.sensors.devices);
-  const readings = $derived($dataCache.sensors.readings);
+  const devices = $derived($sensorsMemory.devices);
+  const latestByDevice = $derived($sensorsMemory.latestByDevice);
 
   // Filter out energy meters - they belong in ConsommationsView
   const isEnergyMeter = (device: DeviceInfo) =>
@@ -30,11 +30,7 @@
 
   // Get latest reading for each sensor
   function getLatestReading(deviceId: string): SensorReading | null {
-    const sensorReadings = readings
-      .filter(r => r.device_id === deviceId)
-      .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-
-    return sensorReadings[0] || null;
+    return latestByDevice[deviceId] ?? null;
   }
 
   // Check if sensor is a presence sensor
@@ -65,6 +61,12 @@
   const toggleEditMode = () => {
     editMode = !editMode;
   };
+
+  $effect(() => {
+    for (const sensor of sensors) {
+      void sensorsMemory.ensureRecentReadings(sensor.deviceId, 24);
+    }
+  });
 </script>
 
 <div class="sensor-list-panel">

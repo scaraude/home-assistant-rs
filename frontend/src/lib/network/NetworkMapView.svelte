@@ -2,7 +2,8 @@
   import { onMount } from "svelte";
   import { SvelteMap } from "svelte/reactivity";
   import { networkTopologyStore } from "../stores/networkTopology";
-  import { fetchDeviceStates, fetchNetworkTopology, refreshNetworkMap } from "../api";
+  import { fetchNetworkTopology, refreshNetworkMap } from "../api";
+  import { deviceStateMemory } from "../memory";
   import NetworkGraph from "./NetworkGraph.svelte";
 
   let deviceStates = new SvelteMap<
@@ -24,7 +25,7 @@
       console.log("Topology loaded:", topology);
       networkTopologyStore.setTopology(topology);
 
-      const states = await fetchDeviceStates();
+      const states = await deviceStateMemory.ensureDeviceStates();
       deviceStates.clear();
       for (const state of states) {
         deviceStates.set(state.device_id, {

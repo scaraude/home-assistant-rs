@@ -15,9 +15,10 @@
   import zoomPlugin from "chartjs-plugin-zoom";
   import "chartjs-adapter-date-fns";
   import type { SensorUIConfig } from "../stores/graphConfig";
+  import type { SensorReading } from "../api";
   import { TIME_RANGE_HOURS } from "../stores/graphConfig";
-  import { fetchAggregatedReadings } from "../api";
-  import { dataCache } from "../stores/dataCache";
+  import { sensorsMemory } from "../memory";
+  import { coversRange } from "../memory/rangeSet";
 
   // Register Chart.js components
   Chart.register(
@@ -58,11 +59,10 @@
 
   // Derived: get device info map for names
   let deviceMap = $derived(
-    new Map($dataCache.sensors.devices.map((d) => [d.device_id, d])),
+    new Map($sensorsMemory.devices.map((d) => [d.device_id, d])),
   );
 
-  // Derived: aggregated series cache
-  let graphSeries = $derived($dataCache.sensors.graphSeries);
+  let seriesByDevice = $derived($sensorsMemory.seriesByDevice);
 
   function getDefaultRangeSeconds(range: string) {
     const hours = TIME_RANGE_HOURS[range as keyof typeof TIME_RANGE_HOURS] ?? 24;
@@ -92,13 +92,9 @@
     startSec: number,
     endSec: number,
   ): boolean {
-    const windows = graphSeries[deviceId] || [];
-    return windows.some(
-      (window) =>
-        window.bucketSeconds === bucketSeconds &&
-        window.start <= startSec &&
-        window.end >= endSec,
-    );
+    const series = seriesByDevice[deviceId]?.[bucketSeconds];
+    if (!series) return false;
+    return coversRange(series.ranges, startSec, endSec);
   }
 
   function getCachedReadings(
@@ -107,19 +103,9 @@
     startSec: number,
     endSec: number,
   ) {
-    const windows = graphSeries[deviceId] || [];
-    const matching = windows.filter(
-      (window) =>
-        window.bucketSeconds === bucketSeconds &&
-        window.start <= endSec &&
-        window.end >= startSec,
-    );
-
-    if (matching.length === 0) {
-      return [];
-    }
-
-    const readings = matching.flatMap((window) => window.readings);
+    const series = seriesByDevice[deviceId]?.[bucketSeconds];
+    if (!series) return [];
+    const readings = series.readings;
     const startMs = startSec * 1000;
     const endMs = endSec * 1000;
     return readings
@@ -133,7 +119,7 @@
   // Derived: readings filtered by visible sensors and active range
   let visibleReadings = $derived.by(() => {
     if (visibleSensors.length === 0) return [];
-    const readings: typeof $dataCache.sensors.readings = [];
+    const readings: SensorReading[] = [];
     for (const sensor of visibleSensors) {
       readings.push(
         ...getCachedReadings(
@@ -265,13 +251,12 @@
     }
     inflightRequests.add(key);
     try {
-      const result = await fetchAggregatedReadings(
+      await sensorsMemory.ensureAggregatedSeries(
         deviceId,
-        new Date(startSec * 1000),
-        new Date(endSec * 1000),
+        startSec,
+        endSec,
         bucketSeconds,
       );
-      dataCache.setGraphSeries(deviceId, bucketSeconds, startSec, endSec, result.readings);
     } catch (error) {
       console.error("Failed to fetch aggregated readings:", error);
     } finally {

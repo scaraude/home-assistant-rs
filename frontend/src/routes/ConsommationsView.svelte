@@ -2,10 +2,9 @@
   import UnifiedGraphPanel from "../lib/graphs/UnifiedGraphPanel.svelte";
   import EnergyListPanel from "../lib/devices/EnergyListPanel.svelte";
   import PageState from "../lib/shared/PageState.svelte";
-  import { fetchSensors, fetchReadings, fetchDeviceStates } from "../lib/api";
   import type { DeviceInfo } from "../lib/api/devices";
-  import { dataCache } from "../lib/stores/dataCache";
-  import { graphConfig, TIME_RANGE_HOURS } from "../lib/stores/graphConfig";
+  import { deviceStateMemory, sensorsMemory } from "../lib/memory";
+  import { graphConfig } from "../lib/stores/graphConfig";
   import { onMount } from "svelte";
 
   let loading = $state(true);
@@ -26,12 +25,10 @@
     graphConfig.initializeSensors(energyMeters);
   }
 
-  async function loadData(hours: number, force = false) {
-    const sensorState = $dataCache.sensors;
+  async function loadData(force = false) {
+    const sensorState = $sensorsMemory;
 
-    // If data is already loaded and we're not forcing refresh,
-    // just re-initialize graphConfig with cached devices
-    if (!force && sensorState.loaded && sensorState.rangeHours === hours) {
+    if (!force && sensorState.devicesLoaded) {
       initializeGraphConfig(sensorState.devices);
       if (!initialized) {
         graphConfig.hideAll();
@@ -45,17 +42,7 @@
     error = null;
 
     try {
-      const [sensors, readingsResult] = await Promise.all([
-        fetchSensors(),
-        fetchReadings(undefined, hours),
-      ]);
-
-      dataCache.setSensors(sensors);
-      dataCache.setSensorReadings(
-        readingsResult.readings,
-        readingsResult.latestTimestamp ?? null,
-        hours
-      );
+      const sensors = await sensorsMemory.ensureDevices(force);
 
       // Always initialize graphConfig for this view
       initializeGraphConfig(sensors);
@@ -63,15 +50,9 @@
         graphConfig.hideAll();
         initialized = true;
       }
-
-      try {
-        const states = await fetchDeviceStates();
-        states.forEach((state) => {
-          dataCache.updateDeviceState(state.device_id, state);
-        });
-      } catch (err) {
+      void deviceStateMemory.ensureDeviceStates(force).catch((err) => {
         console.error("Failed to fetch device states:", err);
-      }
+      });
     } catch (err) {
       error = err instanceof Error ? err.message : "Failed to load energy data";
     } finally {
@@ -80,23 +61,11 @@
   }
 
   function retryLoad() {
-    const currentHours = TIME_RANGE_HOURS[$graphConfig.timeRange];
-    void loadData(currentHours, true);
+    void loadData(true);
   }
 
   onMount(() => {
-    const currentHours = TIME_RANGE_HOURS[$graphConfig.timeRange];
-    void loadData(currentHours);
-  });
-
-  let previousTimeRange: string | undefined = $state(undefined);
-  $effect.pre(() => {
-    const currentTimeRange = $graphConfig.timeRange;
-    if (previousTimeRange !== undefined && currentTimeRange !== previousTimeRange) {
-      const currentHours = TIME_RANGE_HOURS[currentTimeRange];
-      void loadData(currentHours, true);
-    }
-    previousTimeRange = currentTimeRange;
+    void loadData();
   });
 </script>
 

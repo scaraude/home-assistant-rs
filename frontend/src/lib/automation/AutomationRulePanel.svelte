@@ -3,9 +3,8 @@
   import {
     deleteAutomationRule,
     updateAutomationRule,
-    fetchSensors,
-    fetchSwitches,
   } from "../api";
+  import { sensorsMemory, switchesMemory } from "../memory";
   import { automationStore } from "../stores/automations";
   import { formatDistanceToNow } from "date-fns";
   import { slide, fade } from "svelte/transition";
@@ -37,8 +36,8 @@
     if (availableSensors.length === 0) {
       try {
         [availableSensors, availableSwitches] = await Promise.all([
-          fetchSensors(),
-          fetchSwitches(),
+          sensorsMemory.ensureDevices(),
+          switchesMemory.ensureSwitches(),
         ]);
       } catch (err) {
         console.error("Failed to load devices:", err);
@@ -54,8 +53,8 @@
     if (availableSensors.length === 0) {
       try {
         [availableSensors, availableSwitches] = await Promise.all([
-          fetchSensors(),
-          fetchSwitches(),
+          sensorsMemory.ensureDevices(),
+          switchesMemory.ensureSwitches(),
         ]);
       } catch (err) {
         console.error("Failed to load devices:", err);

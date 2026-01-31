@@ -82,7 +82,7 @@ function createGraphConfig() {
           sensors: state.sensors.map(s => ({
             deviceId: s.deviceId,
             color: s.color,
-            // Don't persist visible state - always start with all visible
+            // Don't persist visible state - default to all hidden on load
           })),
         }));
       } catch (e) {
@@ -119,8 +119,8 @@ function createGraphConfig() {
           return {
             deviceId: device.deviceId,
             color: deviceColor || existing?.color || RECOMMENDED_COLORS[idx % RECOMMENDED_COLORS.length],
-            // Preserve visibility if sensor exists, otherwise default to visible
-            visible: existing?.visible ?? true,
+            // Preserve visibility if sensor exists, otherwise default to hidden
+            visible: existing?.visible ?? false,
           };
         });
 

@@ -11,11 +11,10 @@
     type Edge,
   } from "@xyflow/svelte";
   import "@xyflow/svelte/dist/style.css";
-  import { fetchDeviceStates, fetchNetworkTopology } from "../api";
-  import { executeCommand } from "../api/switches";
+  import { fetchNetworkTopology } from "../api";
   import { setDeviceOption } from "../api/devices";
   import { fetchFloorPlan, uploadFloorPlan } from "../api/floor-map";
-  import { dataCache } from "../stores/dataCache";
+  import { deviceStateMemory, sensorsMemory, switchesMemory } from "../memory";
   import { floorMapStore } from "../stores/floorMapStore";
   import { networkTopologyStore } from "../stores/networkTopology";
   import type { NetworkDevice } from "../types/devices";
@@ -90,10 +89,7 @@
 
   async function loadDeviceStates() {
     try {
-      const states = await fetchDeviceStates();
-      for (const state of states) {
-        dataCache.updateDeviceState(state.device_id, state);
-      }
+      await deviceStateMemory.ensureDeviceStates();
     } catch (error) {
       console.error("Failed to load device states:", error);
     }
@@ -171,8 +167,10 @@
 
   const latestReadingByDevice = $derived.by(() => {
     const map = new SvelteMap<string, SensorReading>();
-    for (const reading of $dataCache.sensors.readings) {
-      map.set(reading.device_id, reading);
+    for (const [deviceId, reading] of Object.entries($sensorsMemory.latestByDevice)) {
+      if (reading) {
+        map.set(deviceId, reading);
+      }
     }
     return map;
   });
@@ -206,7 +204,7 @@
         const position =
           savedPosition ??
           calculateInitialPosition(device, index, topology.devices.length);
-        const switchState = $dataCache.switches.byId[device.id]?.state ?? false;
+        const switchState = $switchesMemory.byId[device.id]?.state ?? false;
 
         return {
           id: device.id,
@@ -215,7 +213,7 @@
           data: {
             kind: "device",
             device,
-            deviceState: $dataCache.deviceStates[device.id] ?? null,
+            deviceState: $deviceStateMemory.byId[device.id] ?? null,
             latestReading: latestReadingByDevice.get(device.id) ?? null,
             switchState,
             onDeviceClick: handleDeviceClick,
@@ -299,8 +297,8 @@
 
   async function handleSwitchToggle(deviceId: string, newState: boolean) {
     try {
-      await executeCommand(deviceId, newState);
-      dataCache.updateSwitchState(deviceId, { state: newState });
+      await switchesMemory.sendSwitchCommand(deviceId, newState);
+      switchesMemory.updateSwitchState(deviceId, { state: newState });
     } catch (error) {
       console.error("Failed to toggle switch:", error);
     }
@@ -309,7 +307,7 @@
   async function handleTurboToggle(deviceId: string, newState: boolean) {
     try {
       await setDeviceOption(deviceId, "turbo_mode", newState);
-      dataCache.updateDeviceState(deviceId, { turbo_mode: newState });
+      deviceStateMemory.updateDeviceState(deviceId, { turbo_mode: newState });
     } catch (error) {
       console.error("Failed to toggle turbo mode:", error);
     }

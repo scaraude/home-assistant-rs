@@ -1,10 +1,9 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { push } from "svelte-spa-router";
-  import { fetchReadings, fetchDeviceState, updateDeviceName } from "../api";
+  import { devicesMemory, deviceStateMemory, sensorsMemory } from "../memory";
   import type { PresenceSensorReading } from "../api/sensors";
   import type { DeviceInfo, DeviceState } from "../types/devices";
-  import { dataCache } from "../stores/dataCache";
   import { TIME_RANGE_HOURS } from "../stores/graphConfig";
   import StatusBadge from "../shared/StatusBadge.svelte";
 
@@ -32,11 +31,9 @@
 
   // Get the latest reading for this presence sensor
   const latestReading = $derived.by(() => {
-    const readings = $dataCache.sensors.readings.filter(
-      (r) => r.device_id === params.id && r.type === "presence",
-    );
-    if (readings.length === 0) return null;
-    return readings[readings.length - 1] as PresenceSensorReading;
+    const reading = $sensorsMemory.latestByDevice[params.id] ?? null;
+    if (!reading || reading.type !== "presence") return null;
+    return reading as PresenceSensorReading;
   });
 
   // Detect presence state changes in history for timeline
@@ -87,8 +84,9 @@
     error = null;
 
     try {
-      // Find device info from dataCache
-      const deviceInfo = $dataCache.sensors.devices.find(
+      await sensorsMemory.ensureDevices();
+      // Find device info from sensors memory
+      const deviceInfo = $sensorsMemory.devices.find(
         (d) => d.device_id === params.id,
       );
 
@@ -102,10 +100,9 @@
       editedName = deviceInfo.name;
 
       // Fetch device state (battery, link quality)
-      const state = await fetchDeviceState(params.id);
+      const state = await deviceStateMemory.ensureDeviceState(params.id);
       if (state) {
         deviceState = state;
-        dataCache.updateDeviceState(params.id, state);
       }
 
       // Load initial history
@@ -125,8 +122,11 @@
     loadingHistory = true;
     const hours = TIME_RANGE_HOURS[range];
     try {
-      const result = await fetchReadings(params.id, hours);
-      presenceHistory = result.readings.filter(
+      await sensorsMemory.ensureRecentReadings(params.id, hours);
+      const endSec = Math.floor(Date.now() / 1000);
+      const startSec = endSec - hours * 3600;
+      const readings = sensorsMemory.getReadings(params.id, startSec, endSec, 0);
+      presenceHistory = readings.filter(
         (r): r is PresenceSensorReading => r.type === "presence",
       );
     } catch (err) {
@@ -159,8 +159,7 @@
 
     savingName = true;
     try {
-      await updateDeviceName(params.id, editedName.trim());
-      dataCache.updateDeviceName(params.id, editedName.trim());
+      await devicesMemory.setDeviceName(params.id, editedName.trim());
       device = { ...device, name: editedName.trim() };
       editingName = false;
     } catch (err) {

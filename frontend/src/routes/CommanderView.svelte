@@ -2,19 +2,19 @@
   import { onMount } from 'svelte';
   import SwitchCard from '../lib/devices/SwitchCard.svelte';
   import PageState from '../lib/shared/PageState.svelte';
-  import { fetchSwitches, fetchAutomationRules } from '../lib/api';
+  import { fetchAutomationRules } from '../lib/api';
   import { automationStore } from '../lib/stores/automations';
-  import { dataCache } from '../lib/stores/dataCache';
+  import { switchesMemory } from '../lib/memory';
 
   let loading = $state(true);
   let error = $state<string | null>(null);
   let isFetching = $state(false);
 
-  let switches = $derived($dataCache.switches.devices);
+  let switches = $derived($switchesMemory.devices);
 
   async function loadSwitches(force = false) {
     if (isFetching) return;
-    if (!force && $dataCache.switches.loaded) {
+    if (!force && $switchesMemory.loaded) {
       loading = false;
       return;
     }
@@ -24,8 +24,7 @@
     error = null;
 
     try {
-      const result = await fetchSwitches();
-      dataCache.setSwitches(result);
+      await switchesMemory.ensureSwitches(force);
     } catch (err) {
       error = err instanceof Error ? err.message : 'Failed to load switches';
       console.error('Failed to load switches:', err);
@@ -45,7 +44,7 @@
   }
 
   onMount(() => {
-    void loadSwitches(!$dataCache.switches.loaded);
+    void loadSwitches(!$switchesMemory.loaded);
     void loadAutomationRules();
   });
 </script>

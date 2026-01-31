@@ -7,13 +7,8 @@
   import NetworkView from "./routes/NetworkView.svelte";
   import ConsommationsView from "./routes/ConsommationsView.svelte";
   import SensorDetailPage from "./lib/device-detail/SensorDetailPage.svelte";
-  import {
-    fetchSensors,
-    fetchReadings,
-    fetchSwitches,
-    setZigbeePermitJoin,
-  } from "./lib/api";
-  import { dataCache } from "./lib/stores/dataCache";
+  import { setZigbeePermitJoin } from "./lib/api";
+  import { deviceStateMemory, sensorsMemory, switchesMemory } from "./lib/memory";
   import { eventStream, type SystemEvent } from "./lib/websocket";
   import SwitchDetailPage from "./lib/device-detail/SwitchDetailPage.svelte";
   import EnergyDetailPage from "./lib/device-detail/EnergyDetailPage.svelte";
@@ -33,7 +28,6 @@
     "/sensor/:id": SensorDetailPage,
   };
 
-  const DEFAULT_SENSOR_HOURS = 24;
   const PERMIT_JOIN_SECONDS = 180;
   let initializing = $state(true);
   let initError = $state<string | null>(null);
@@ -52,19 +46,10 @@
     initError = null;
 
     try {
-      const [sensors, readingsResult, switches] = await Promise.all([
-        fetchSensors(),
-        fetchReadings(undefined, DEFAULT_SENSOR_HOURS),
-        fetchSwitches(),
+      await Promise.all([
+        sensorsMemory.ensureDevices(),
+        switchesMemory.ensureSwitches(),
       ]);
-
-      dataCache.setSensors(sensors);
-      dataCache.setSensorReadings(
-        readingsResult.readings,
-        readingsResult.latestTimestamp ?? null,
-        DEFAULT_SENSOR_HOURS,
-      );
-      dataCache.setSwitches(switches);
     } catch (error) {
       console.error("Failed to load initial data:", error);
       initError =
@@ -85,19 +70,26 @@
   function handleEvent(event: SystemEvent) {
     switch (event.event) {
       case "sensor_reading":
-        dataCache.mergeSensorReading(event.reading);
+        sensorsMemory.mergeIncomingReading(event.reading);
         break;
       case "switch_state":
-        dataCache.updateSwitchState(event.device_id, {
+        switchesMemory.updateSwitchState(event.device_id, {
           state: normalizeSwitchState(event.state),
           last_seen: event.timestamp,
         });
-        dataCache.updateDeviceState(event.device_id, {
+        deviceStateMemory.updateDeviceState(event.device_id, {
           last_seen: event.timestamp,
         });
         break;
       case "device_state":
-        dataCache.updateDeviceState(event.device_id, {
+        deviceStateMemory.updateDeviceState(event.device_id, {
+          battery_level: event.battery,
+          link_quality: event.link_quality,
+          turbo_mode: event.turbo_mode,
+          last_seen: event.timestamp,
+        });
+        switchesMemory.applyDeviceState(event.device_id, {
+          device_id: event.device_id,
           battery_level: event.battery,
           link_quality: event.link_quality,
           turbo_mode: event.turbo_mode,

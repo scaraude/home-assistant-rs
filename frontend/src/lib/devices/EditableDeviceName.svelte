@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { updateDeviceName } from "../api";
-  import { dataCache } from "../stores/dataCache";
+  import { devicesMemory } from "../memory";
 
   let {
     deviceId,
@@ -64,8 +63,7 @@
     error = null;
 
     try {
-      await updateDeviceName(deviceId, trimmed);
-      dataCache.updateDeviceName(deviceId, trimmed);
+      await devicesMemory.setDeviceName(deviceId, trimmed);
       if (!isControlled) {
         internalIsEditing = false;
       }

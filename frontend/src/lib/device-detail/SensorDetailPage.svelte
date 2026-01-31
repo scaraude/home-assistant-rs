@@ -1,13 +1,11 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { push } from "svelte-spa-router";
-  import { fetchReadings, fetchDeviceState, updateDeviceName } from "../api";
+  import { devicesMemory, deviceStateMemory, sensorsMemory } from "../memory";
   import type { TempHumiditySensorReading } from "../api/sensors";
   import type { DeviceInfo, DeviceState } from "../types/devices";
-  import { dataCache } from "../stores/dataCache";
   import {
     graphConfig,
-    TIME_RANGE_HOURS,
     RECOMMENDED_COLORS,
   } from "../stores/graphConfig";
   import StatusBadge from "../shared/StatusBadge.svelte";
@@ -35,11 +33,9 @@
 
   // Get the latest reading for this sensor
   const latestReading = $derived.by(() => {
-    const readings = $dataCache.sensors.readings.filter(
-      (r) => r.device_id === params.id && r.type === "temp_humidity",
-    );
-    if (readings.length === 0) return null;
-    return readings[readings.length - 1] as TempHumiditySensorReading;
+    const reading = $sensorsMemory.latestByDevice[params.id] ?? null;
+    if (!reading || reading.type !== "temp_humidity") return null;
+    return reading as TempHumiditySensorReading;
   });
 
   // Get sensor config for the chart
@@ -60,8 +56,9 @@
     error = null;
 
     try {
-      // Find device info from dataCache
-      const deviceInfo = $dataCache.sensors.devices.find(
+      await sensorsMemory.ensureDevices();
+      // Find device info from sensors memory
+      const deviceInfo = $sensorsMemory.devices.find(
         (d) => d.device_id === params.id,
       );
 
@@ -75,16 +72,18 @@
       editedName = deviceInfo.name;
 
       // Fetch device state (battery, link quality)
-      const state = await fetchDeviceState(params.id);
+      const state = await deviceStateMemory.ensureDeviceState(params.id);
       if (state) {
         deviceState = state;
-        dataCache.updateDeviceState(params.id, state);
       }
 
       // Initialize graph config for this sensor
       graphConfig.initializeSensors([
         { deviceId: params.id, color: deviceInfo.color },
       ]);
+      graphConfig.isolateSensor(params.id);
+
+      void sensorsMemory.ensureRecentReadings(params.id, 24);
     } catch (err) {
       console.error("Failed to load sensor data:", err);
       error = err instanceof Error ? err.message : "Failed to load sensor data";
@@ -93,24 +92,9 @@
     }
   }
 
-  async function loadReadingsForRange(range: TimeRange) {
-    const hours = TIME_RANGE_HOURS[range];
-    try {
-      const result = await fetchReadings(params.id, hours);
-      dataCache.setSensorReadings(
-        result.readings,
-        result.latestTimestamp,
-        hours,
-      );
-    } catch (err) {
-      console.error("Failed to load readings:", err);
-    }
-  }
-
   function handleTimeRangeChange(range: TimeRange) {
     timeRange = range;
     graphConfig.setTimeRange(range);
-    void loadReadingsForRange(range);
   }
 
   function handleMetricChange(m: Metric) {
@@ -136,8 +120,7 @@
 
     savingName = true;
     try {
-      await updateDeviceName(params.id, editedName.trim());
-      dataCache.updateDeviceName(params.id, editedName.trim());
+      await devicesMemory.setDeviceName(params.id, editedName.trim());
       device = { ...device, name: editedName.trim() };
       editingName = false;
     } catch (err) {

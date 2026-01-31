@@ -1,13 +1,11 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { push } from "svelte-spa-router";
-  import { fetchReadings, fetchDeviceState, updateDeviceName } from "../api";
+  import { devicesMemory, deviceStateMemory, sensorsMemory } from "../memory";
   import type { EnergySensorReading } from "../api/sensors";
   import type { DeviceInfo, DeviceState } from "../types/devices";
-  import { dataCache } from "../stores/dataCache";
   import {
     graphConfig,
-    TIME_RANGE_HOURS,
     RECOMMENDED_COLORS,
   } from "../stores/graphConfig";
   import StatusBadge from "../shared/StatusBadge.svelte";
@@ -33,11 +31,9 @@
 
   // Get the latest reading for this energy meter
   const latestReading = $derived.by(() => {
-    const readings = $dataCache.sensors.readings.filter(
-      (r) => r.device_id === params.id && r.type === "energy_meter",
-    );
-    if (readings.length === 0) return null;
-    return readings[readings.length - 1] as EnergySensorReading;
+    const reading = $sensorsMemory.latestByDevice[params.id] ?? null;
+    if (!reading || reading.type !== "energy_meter") return null;
+    return reading as EnergySensorReading;
   });
 
   // Get sensor config for the chart
@@ -58,8 +54,9 @@
     error = null;
 
     try {
-      // Find device info from dataCache - energy meters are sensors
-      const deviceInfo = $dataCache.sensors.devices.find(
+      await sensorsMemory.ensureDevices();
+      // Find device info from sensors memory - energy meters are sensors
+      const deviceInfo = $sensorsMemory.devices.find(
         (d) => d.device_id === params.id,
       );
 
@@ -73,16 +70,18 @@
       editedName = deviceInfo.name;
 
       // Fetch device state (battery, link quality)
-      const state = await fetchDeviceState(params.id);
+      const state = await deviceStateMemory.ensureDeviceState(params.id);
       if (state) {
         deviceState = state;
-        dataCache.updateDeviceState(params.id, state);
       }
 
       // Initialize graph config for this sensor
       graphConfig.initializeSensors([
         { deviceId: params.id, color: deviceInfo.color },
       ]);
+      graphConfig.isolateSensor(params.id);
+
+      void sensorsMemory.ensureRecentReadings(params.id, 24);
     } catch (err) {
       console.error("Failed to load energy meter data:", err);
       error =
@@ -92,24 +91,9 @@
     }
   }
 
-  async function loadReadingsForRange(range: TimeRange) {
-    const hours = TIME_RANGE_HOURS[range];
-    try {
-      const result = await fetchReadings(params.id, hours);
-      dataCache.setSensorReadings(
-        result.readings,
-        result.latestTimestamp,
-        hours,
-      );
-    } catch (err) {
-      console.error("Failed to load readings:", err);
-    }
-  }
-
   function handleTimeRangeChange(range: TimeRange) {
     timeRange = range;
     graphConfig.setTimeRange(range);
-    void loadReadingsForRange(range);
   }
 
   function startEditingName() {
@@ -130,8 +114,7 @@
 
     savingName = true;
     try {
-      await updateDeviceName(params.id, editedName.trim());
-      dataCache.updateDeviceName(params.id, editedName.trim());
+      await devicesMemory.setDeviceName(params.id, editedName.trim());
       device = { ...device, name: editedName.trim() };
       editingName = false;
     } catch (err) {

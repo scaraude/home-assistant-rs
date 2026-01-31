@@ -1,15 +1,10 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { push } from "svelte-spa-router";
-  import {
-    fetchDeviceState,
-    updateDeviceName,
-    executeCommand,
-    fetchAutomationRules,
-  } from "../api";
+  import { fetchAutomationRules } from "../api";
   import type { SwitchDevice, AutomationRule } from "../api";
   import type { DeviceState } from "../types/devices";
-  import { dataCache } from "../stores/dataCache";
+  import { devicesMemory, deviceStateMemory, switchesMemory } from "../memory";
   import { automationStore, rulesByDevice } from "../stores/automations";
   import StatusBadge from "../shared/StatusBadge.svelte";
   import AutomationRulePanel from "../automation/AutomationRulePanel.svelte";
@@ -54,8 +49,8 @@
     error = null;
 
     try {
-      // Find switch device info from dataCache
-      const switchDevice = $dataCache.switches.byId[params.id];
+      await switchesMemory.ensureSwitches();
+      const switchDevice = $switchesMemory.byId[params.id];
 
       if (!switchDevice) {
         error = "Switch not found";
@@ -67,10 +62,9 @@
       editedName = switchDevice.name;
 
       // Fetch device state (battery, link quality)
-      const state = await fetchDeviceState(params.id);
+      const state = await deviceStateMemory.ensureDeviceState(params.id);
       if (state) {
         deviceState = state;
-        dataCache.updateDeviceState(params.id, state);
       }
     } catch (err) {
       console.error("Failed to load switch data:", err);
@@ -110,8 +104,8 @@
     device = { ...device, state: newState };
 
     try {
-      await executeCommand(params.id, newState);
-      dataCache.updateSwitchState(params.id, { state: newState });
+      await switchesMemory.sendSwitchCommand(params.id, newState);
+      switchesMemory.updateSwitchState(params.id, { state: newState });
     } catch (err) {
       // Revert on error
       device = { ...device, state: previousState };
@@ -141,8 +135,7 @@
 
     savingName = true;
     try {
-      await updateDeviceName(params.id, editedName.trim());
-      dataCache.updateDeviceName(params.id, editedName.trim());
+      await devicesMemory.setDeviceName(params.id, editedName.trim());
       device = { ...device, name: editedName.trim() };
       editingName = false;
     } catch (err) {
