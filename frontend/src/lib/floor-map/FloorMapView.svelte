@@ -13,8 +13,12 @@
   import "@xyflow/svelte/dist/style.css";
   import { fetchNetworkTopology } from "../api";
   import { setDeviceOption } from "../api/devices";
-  import { fetchFloorPlan, uploadFloorPlan } from "../api/floor-map";
-  import { deviceStateMemory, sensorsMemory, switchesMemory } from "../memory";
+  import {
+    deviceStateMemory,
+    floorPlanMemory,
+    sensorsMemory,
+    switchesMemory,
+  } from "../memory";
   import { floorMapStore } from "../stores/floorMapStore";
   import { networkTopologyStore } from "../stores/networkTopology";
   import type { NetworkDevice } from "../types/devices";
@@ -99,8 +103,8 @@
     floorPlanLoading = true;
     floorPlanError = null;
     try {
-      const floorPlan = await fetchFloorPlan();
-      floorPlanSvg = floorPlan?.svg_content ?? null;
+      await floorPlanMemory.ensureFloorPlan();
+      floorPlanSvg = $floorPlanMemory.svgContent ?? null;
     } catch (error) {
       console.error("Failed to load floor plan:", error);
       floorPlanError =
@@ -109,6 +113,10 @@
       floorPlanLoading = false;
     }
   }
+
+  $effect(() => {
+    floorPlanSvg = $floorPlanMemory.svgContent ?? null;
+  });
 
   function getSvgDimensions(svgContent: string | null): {
     width: number;
@@ -364,8 +372,7 @@
       if (!svgContent.includes("<svg")) {
         throw new Error("Invalid SVG content");
       }
-      await uploadFloorPlan(svgContent);
-      floorPlanSvg = svgContent;
+      await floorPlanMemory.uploadNewFloorPlan(svgContent);
     } catch (error) {
       console.error("Failed to upload floor plan:", error);
       uploadError =

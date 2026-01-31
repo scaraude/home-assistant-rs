@@ -3,16 +3,18 @@ export type StoreName =
   | 'sensor_series'
   | 'switch_devices'
   | 'device_states'
+  | 'floor_plan'
   | 'meta';
 
 const DB_NAME = 'home_automation_frontend_cache';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 const STORE_DEFS: Array<{ name: StoreName; options?: IDBObjectStoreParameters }> = [
   { name: 'sensor_devices', options: { keyPath: 'device_id' } },
   { name: 'sensor_series', options: { keyPath: 'key' } },
   { name: 'switch_devices', options: { keyPath: 'id' } },
   { name: 'device_states', options: { keyPath: 'device_id' } },
+  { name: 'floor_plan', options: { keyPath: 'key' } },
   { name: 'meta' },
 ];
 
