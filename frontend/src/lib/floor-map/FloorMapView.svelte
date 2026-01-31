@@ -50,7 +50,7 @@
   let uploading = $state(false);
   let showConnections = $state(true);
   let dragActive = $state(false);
-  let fileInput: HTMLInputElement | null = null;
+  let fileInput = $state<HTMLInputElement | null>(null);
 
   const nodeTypes = {
     "background-svg": SVGBackgroundNode,
@@ -234,6 +234,13 @@
     });
   });
 
+  const connectionCount = $derived(
+    $networkTopologyStore.topology?.edges.length ?? 0,
+  );
+  const deviceCount = $derived(
+    $networkTopologyStore.topology?.devices.length ?? 0,
+  );
+
   function handleNodeDragStop({ targetNode }: NodeDragStopEvent) {
     if (!targetNode || targetNode.id === "floorplan-background") return;
     floorMapStore.updatePosition(
@@ -319,48 +326,6 @@
   role="region"
   aria-label="Floor map"
 >
-  <div class="header">
-    <div class="title">
-      <h2>Floor Map</h2>
-      <p>Drag devices to position them on your floor plan.</p>
-    </div>
-
-    <div class="toolbar">
-      <label class="toggle">
-        <input type="checkbox" bind:checked={showConnections} />
-        <span>Network connections</span>
-      </label>
-
-      <button
-        class="btn btn-secondary"
-        onclick={openFilePicker}
-        disabled={uploading}
-      >
-        {#if uploading}
-          Uploading...
-        {:else}
-          Upload SVG
-        {/if}
-      </button>
-      <input
-        type="file"
-        accept="image/svg+xml"
-        bind:this={fileInput}
-        onchange={handleFileChange}
-      />
-    </div>
-  </div>
-
-  {#if floorPlanError}
-    <div class="banner error">❌ {floorPlanError}</div>
-  {/if}
-  {#if uploadError}
-    <div class="banner error">❌ {uploadError}</div>
-  {/if}
-  {#if $floorMapStore.error}
-    <div class="banner warning">⚠️ {$floorMapStore.error}</div>
-  {/if}
-
   {#if $networkTopologyStore.loading || floorPlanLoading}
     <div class="loading">
       <div class="spinner"></div>
@@ -387,6 +352,70 @@
         <Controls />
       </SvelteFlow>
 
+      <div class="map-overlay top-right">
+        <label class="switch">
+          <input type="checkbox" bind:checked={showConnections} />
+          <span class="switch-track" aria-hidden="true">
+            <span class="switch-thumb"></span>
+          </span>
+          <span class="switch-label">Connections {connectionCount}</span>
+        </label>
+
+        <button
+          class="btn btn-secondary overlay-button"
+          onclick={openFilePicker}
+          disabled={uploading}
+        >
+          {#if uploading}
+            Uploading...
+          {:else}
+            Upload SVG
+          {/if}
+        </button>
+        <input
+          type="file"
+          accept="image/svg+xml"
+          bind:this={fileInput}
+          onchange={handleFileChange}
+        />
+      </div>
+
+      <div class="map-overlay bottom-right">
+        <div class="status-pill">
+          <span class="status-label">Devices</span>
+          <span class="status-value">{deviceCount}</span>
+        </div>
+        <div class="status-pill">
+          <span class="status-label">Connections</span>
+          <span class="status-value">{connectionCount}</span>
+        </div>
+        <div class="status-pill">
+          <span class="status-label">Sync</span>
+          <span
+            class="status-value"
+            class:syncing={$floorMapStore.syncStatus === "syncing"}
+          >
+            {$floorMapStore.syncStatus === "syncing"
+              ? "Saving..."
+              : "Up to date"}
+          </span>
+        </div>
+      </div>
+
+      {#if floorPlanError || uploadError || $floorMapStore.error}
+        <div class="map-notices">
+          {#if floorPlanError}
+            <div class="banner error">❌ {floorPlanError}</div>
+          {/if}
+          {#if uploadError}
+            <div class="banner error">❌ {uploadError}</div>
+          {/if}
+          {#if $floorMapStore.error}
+            <div class="banner warning">⚠️ {$floorMapStore.error}</div>
+          {/if}
+        </div>
+      {/if}
+
       {#if dragActive}
         <div class="drop-overlay">
           <div class="drop-card">
@@ -396,80 +425,17 @@
         </div>
       {/if}
     </div>
-
-    <div class="status-bar">
-      <div class="status-item">
-        <span class="status-label">Devices</span>
-        <span class="status-value">
-          {$networkTopologyStore.topology?.devices.length ?? 0}
-        </span>
-      </div>
-      <div class="status-item">
-        <span class="status-label">Connections</span>
-        <span class="status-value">
-          {$networkTopologyStore.topology?.edges.length ?? 0}
-        </span>
-      </div>
-      <div class="status-item">
-        <span class="status-label">Sync</span>
-        <span
-          class="status-value"
-          class:syncing={$floorMapStore.syncStatus === "syncing"}
-        >
-          {$floorMapStore.syncStatus === "syncing" ? "Saving..." : "Up to date"}
-        </span>
-      </div>
-    </div>
   {/if}
 </div>
 
 <style>
   .floor-map-view {
-    padding: 20px;
-    max-width: 1500px;
-    margin: 0 auto;
+    height: calc(100vh - var(--app-header-height) - var(--app-nav-height));
+    width: 100vw;
+    margin: 0 calc(50% - 50vw);
+    padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 16px;
-  }
-
-  .header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    flex-wrap: wrap;
-  }
-
-  .title h2 {
-    margin: 0;
-    font-size: 24px;
-  }
-
-  .title p {
-    margin: 4px 0 0;
-    color: #6b7280;
-    font-size: 14px;
-  }
-
-  .toolbar {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-  }
-
-  .toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 14px;
-    color: #374151;
-  }
-
-  .toggle input {
-    width: 16px;
-    height: 16px;
   }
 
   .btn {
@@ -520,11 +486,10 @@
   .map-wrapper {
     position: relative;
     border: 1px solid #e5e7eb;
-    border-radius: 12px;
+    border-radius: 0;
     overflow: hidden;
-    min-height: 520px;
-    height: 70vh;
-    max-height: 720px;
+    min-height: 0;
+    height: 100%;
     background: #f9fafb;
   }
 
@@ -536,6 +501,121 @@
   .map-wrapper.drag-active {
     border-color: #3b82f6;
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+  }
+
+  .map-overlay {
+    position: absolute;
+    z-index: 5;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.92);
+    padding: 10px 12px;
+    border-radius: 10px;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+    border: 1px solid rgba(148, 163, 184, 0.4);
+    backdrop-filter: blur(10px);
+  }
+
+  .map-overlay.top-right {
+    top: 16px;
+    right: 16px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .map-overlay.bottom-right {
+    bottom: 16px;
+    right: 16px;
+    gap: 12px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .overlay-button {
+    width: 100%;
+  }
+
+  .switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1f2937;
+    cursor: pointer;
+  }
+
+  .switch input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .switch-track {
+    width: 42px;
+    height: 22px;
+    border-radius: 999px;
+    background: #cbd5f5;
+    display: inline-flex;
+    align-items: center;
+    padding: 2px;
+    transition: background 0.2s ease;
+  }
+
+  .switch-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    background: white;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.25);
+    transform: translateX(0);
+    transition: transform 0.2s ease;
+  }
+
+  .switch input:checked + .switch-track {
+    background: #2563eb;
+  }
+
+  .switch input:checked + .switch-track .switch-thumb {
+    transform: translateX(20px);
+  }
+
+  .switch-label {
+    white-space: nowrap;
+  }
+
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .status-pill .status-value {
+    font-size: 14px;
+    font-weight: 700;
+    color: #0f172a;
+    text-transform: none;
+    letter-spacing: -0.01em;
+  }
+
+  .map-notices {
+    position: absolute;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 6;
   }
 
   .drop-overlay {
@@ -564,6 +644,9 @@
   .error {
     text-align: center;
     padding: 60px 20px;
+    height: 100%;
+    display: grid;
+    place-items: center;
   }
 
   .loading .spinner {
@@ -574,35 +657,6 @@
     border-radius: 50%;
     margin: 0 auto 12px;
     animation: spin 0.8s linear infinite;
-  }
-
-  .status-bar {
-    display: flex;
-    gap: 20px;
-    flex-wrap: wrap;
-    padding: 12px 16px;
-    background: #f9fafb;
-    border-radius: 10px;
-    border: 1px solid #e5e7eb;
-  }
-
-  .status-item {
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-  }
-
-  .status-label {
-    font-size: 12px;
-    color: #6b7280;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
-  .status-value {
-    font-size: 16px;
-    font-weight: 600;
-    color: #111827;
   }
 
   .status-value.syncing {
@@ -617,15 +671,25 @@
 
   @media (max-width: 800px) {
     .floor-map-view {
-      padding: 16px;
+      height: calc(100vh - var(--app-header-height) - var(--app-nav-height));
     }
 
-    .map-wrapper {
-      min-height: 420px;
+    .map-overlay.bottom-right {
+      flex-direction: column;
+      align-items: flex-start;
     }
 
-    .status-bar {
-      gap: 12px;
+    .map-overlay.top-right {
+      right: 10px;
+      left: 10px;
+      width: calc(100% - 20px);
+    }
+  }
+
+  @media (max-width: 640px) {
+    .map-overlay.bottom-right {
+      bottom: 72px;
+      right: 10px;
     }
   }
 </style>

@@ -258,12 +258,17 @@
     </div>
   {/if}
 
-  <div class="container">
+  <div class="container" class:full-bleed={isOnNetwork}>
     <Router {routes} />
   </div>
 </main>
 
 <style>
+  :global(:root) {
+    --app-header-height: 88px;
+    --app-nav-height: 0px;
+  }
+
   main {
     min-height: 100vh;
     background: #f3f4f6;
@@ -418,6 +423,11 @@
     padding: 2rem 1rem;
   }
 
+  .container.full-bleed {
+    max-width: none;
+    padding: 0;
+  }
+
   .sync-indicator {
     display: flex;
     align-items: center;
@@ -474,6 +484,11 @@
   }
 
   @media (max-width: 640px) {
+    :global(:root) {
+      --app-header-height: 96px;
+      --app-nav-height: 76px;
+    }
+
     h1 {
       font-size: 1.25rem;
     }
@@ -525,6 +540,11 @@
 
   /* Small phones - compact nav */
   @media (max-width: 480px) {
+    :global(:root) {
+      --app-header-height: 84px;
+      --app-nav-height: 64px;
+    }
+
     header {
       padding: 0.75rem 0;
     }
