@@ -53,7 +53,7 @@
   let floorPlanError = $state<string | null>(null);
   let uploadError = $state<string | null>(null);
   let uploading = $state(false);
-  let showConnections = $state(true);
+  let showConnections = $state(false);
   let backgroundScale = $state(1.5);
   let dragActive = $state(false);
   let fileInput = $state<HTMLInputElement | null>(null);
@@ -279,7 +279,7 @@
 
   async function handleTurboToggle(deviceId: string, newState: boolean) {
     try {
-      await setDeviceOption(deviceId, "turbo_time", newState ? 5 : 0);
+      await setDeviceOption(deviceId, "turbo_mode", newState);
       dataCache.updateDeviceState(deviceId, { turbo_mode: newState });
     } catch (error) {
       console.error("Failed to toggle turbo mode:", error);
@@ -388,7 +388,9 @@
         <button
           class="drawer-toggle"
           onclick={() => (controlsDrawerOpen = !controlsDrawerOpen)}
-          aria-label={controlsDrawerOpen ? "Close controls panel" : "Open controls panel"}
+          aria-label={controlsDrawerOpen
+            ? "Close controls panel"
+            : "Open controls panel"}
           aria-expanded={controlsDrawerOpen}
         >
           <span class="toggle-icon">{controlsDrawerOpen ? "›" : "‹"}</span>
@@ -441,7 +443,9 @@
         <button
           class="drawer-toggle"
           onclick={() => (statusDrawerOpen = !statusDrawerOpen)}
-          aria-label={statusDrawerOpen ? "Close status panel" : "Open status panel"}
+          aria-label={statusDrawerOpen
+            ? "Close status panel"
+            : "Open status panel"}
           aria-expanded={statusDrawerOpen}
         >
           <span class="toggle-icon">{statusDrawerOpen ? "›" : "‹"}</span>
