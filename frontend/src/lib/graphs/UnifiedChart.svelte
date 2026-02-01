@@ -298,13 +298,24 @@
   function getTimeDisplayFormats(range: string) {
     switch (range) {
       case "24h":
-        return { hour: "HH:mm", day: "HH:mm" };
+        return { minute: "HH:mm", hour: "HH:mm", day: "HH:mm" };
       case "1w":
-        return { day: "MMM dd", hour: "MMM dd" };
+        return { minute: "HH:mm", day: "MMM dd", hour: "HH:mm" };
       case "1m":
-        return { day: "MMM dd", week: "MMM dd" };
+        return {
+          minute: "HH:mm",
+          hour: "HH:mm",
+          day: "MMM dd",
+          week: "MMM dd",
+        };
       case "1y":
-        return { month: "MMM yyyy", week: "MMM yyyy" };
+        return {
+          minute: "HH:mm",
+          hour: "HH:mm",
+          day: "MMM dd",
+          month: "MMM yyyy",
+          week: "MMM yyyy",
+        };
       default:
         return { hour: "HH:mm", day: "MMM dd" };
     }
