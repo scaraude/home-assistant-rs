@@ -8,7 +8,11 @@
   import ConsommationsView from "./routes/ConsommationsView.svelte";
   import SensorDetailPage from "./lib/device-detail/SensorDetailPage.svelte";
   import { setZigbeePermitJoin } from "./lib/api";
-  import { deviceStateMemory, sensorsMemory, switchesMemory } from "./lib/memory";
+  import {
+    deviceStateMemory,
+    sensorsMemory,
+    switchesMemory,
+  } from "./lib/memory";
   import { eventStream, type SystemEvent } from "./lib/websocket";
   import SwitchDetailPage from "./lib/device-detail/SwitchDetailPage.svelte";
   import EnergyDetailPage from "./lib/device-detail/EnergyDetailPage.svelte";
@@ -180,6 +184,7 @@
   let isOnConsommations = $derived(currentPath === "/consommations");
   let isOnCommander = $derived(currentPath === "/commander");
   let isOnNetwork = $derived(currentPath === "/network");
+  let isOnEnergy = $derived(currentPath.startsWith("/energy"));
   let isOnLogs = $derived(currentPath === "/logs");
   // let isOnSensorDetail = $derived(currentPath.startsWith("/sensor/"));
   // let isOnSwitchDetail = $derived(currentPath.startsWith("/switch/"));
@@ -264,7 +269,7 @@
     </div>
   {/if}
 
-  <div class="container" class:full-bleed={isOnNetwork}>
+  <div class="container" class:full-bleed={isOnNetwork || isOnEnergy}>
     <Router {routes} />
   </div>
 </main>

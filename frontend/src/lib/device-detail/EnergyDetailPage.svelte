@@ -1,15 +1,13 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { push } from "svelte-spa-router";
-  import { devicesMemory, deviceStateMemory, sensorsMemory } from "../memory";
+  import { deviceStateMemory, sensorsMemory } from "../memory";
   import type { EnergySensorReading } from "../api/sensors";
   import type { DeviceInfo, DeviceState } from "../types/devices";
-  import {
-    graphConfig,
-    RECOMMENDED_COLORS,
-  } from "../stores/graphConfig";
+  import { graphConfig, RECOMMENDED_COLORS } from "../stores/graphConfig";
   import StatusBadge from "../shared/StatusBadge.svelte";
   import UnifiedChart from "../graphs/UnifiedChart.svelte";
+  import EditableDeviceName from "../devices/EditableDeviceName.svelte";
 
   interface Props {
     params: { id: string };
@@ -22,8 +20,6 @@
   let loading = $state(true);
   let error = $state<string | null>(null);
   let editingName = $state(false);
-  let editedName = $state("");
-  let savingName = $state(false);
 
   // Time range state (local to this page)
   type TimeRange = "24h" | "1w" | "1m" | "1y";
@@ -36,6 +32,15 @@
     return reading as EnergySensorReading;
   });
 
+  // Derived power level for gauge (0-100 scale, assuming 3000W max typical)
+  const powerLevel = $derived.by(() => {
+    if (!latestReading?.power) return 0;
+    return Math.min(100, (Math.abs(latestReading.power) / 3000) * 100);
+  });
+
+  // Power flow direction
+  const isProducing = $derived((latestReading?.power ?? 0) < 0);
+
   // Get sensor config for the chart
   const sensorConfig = $derived([
     {
@@ -44,6 +49,13 @@
       visible: true,
     },
   ]);
+
+  const deviceName = $derived.by(() => {
+    const memoryDevice = $sensorsMemory.devices.find(
+      (d) => d.device_id === params.id,
+    );
+    return memoryDevice?.name ?? device?.name ?? params.id;
+  });
 
   onMount(async () => {
     await loadData();
@@ -67,7 +79,6 @@
       }
 
       device = deviceInfo;
-      editedName = deviceInfo.name;
 
       // Fetch device state (battery, link quality)
       const state = await deviceStateMemory.ensureDeviceState(params.id);
@@ -97,38 +108,16 @@
   }
 
   function startEditingName() {
-    editedName = device?.name || "";
     editingName = true;
   }
 
-  function cancelEditingName() {
+  function handleNameSaved() {
     editingName = false;
-    editedName = device?.name || "";
-  }
-
-  async function saveName() {
-    if (!device || editedName.trim() === device.name) {
-      editingName = false;
-      return;
-    }
-
-    savingName = true;
-    try {
-      await devicesMemory.setDeviceName(params.id, editedName.trim());
-      device = { ...device, name: editedName.trim() };
-      editingName = false;
-    } catch (err) {
-      console.error("Failed to save name:", err);
-    } finally {
-      savingName = false;
-    }
-  }
-
-  function handleNameKeydown(event: KeyboardEvent) {
-    if (event.key === "Enter") {
-      void saveName();
-    } else if (event.key === "Escape") {
-      cancelEditingName();
+    const memoryDevice = $sensorsMemory.devices.find(
+      (d) => d.device_id === params.id,
+    );
+    if (memoryDevice) {
+      device = memoryDevice;
     }
   }
 
@@ -153,29 +142,37 @@
   function formatPower(value: number | undefined): string {
     if (value === undefined) return "--";
     if (Math.abs(value) >= 1000) {
-      return `${(value / 1000).toFixed(2)} kW`;
+      return (value / 1000).toFixed(2);
     }
-    return `${value.toFixed(0)} W`;
+    return value.toFixed(0);
+  }
+
+  function formatPowerUnit(value: number | undefined): string {
+    if (value === undefined) return "W";
+    if (Math.abs(value) >= 1000) {
+      return "kW";
+    }
+    return "W";
   }
 
   function formatEnergy(value: number | undefined): string {
     if (value === undefined) return "--";
-    return `${value.toFixed(2)} kWh`;
+    return value.toFixed(2);
   }
 
   function formatVoltage(value: number | undefined): string {
     if (value === undefined) return "--";
-    return `${value.toFixed(1)} V`;
+    return value.toFixed(1);
   }
 
   function formatCurrent(value: number | undefined): string {
     if (value === undefined) return "--";
-    return `${value.toFixed(2)} A`;
+    return value.toFixed(2);
   }
 
   function formatFrequency(value: number | undefined): string {
     if (value === undefined) return "--";
-    return `${value.toFixed(1)} Hz`;
+    return value.toFixed(1);
   }
 
   function formatPowerFactor(value: number | undefined): string {
@@ -185,228 +182,456 @@
 </script>
 
 <div class="energy-detail-page">
+  <!-- Ambient background -->
+  <div class="ambient-bg"></div>
+  <div class="grid-overlay"></div>
+
   <header class="page-header">
     <button class="back-button" onclick={goBack} type="button">
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill="currentColor"
-        width="20"
-        height="20"
-      >
+      <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
         <path
           d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"
         />
       </svg>
-      Back
+      <span>Back</span>
     </button>
   </header>
 
   {#if loading}
     <div class="loading-state">
-      <div class="spinner"></div>
-      <p>Loading energy meter data...</p>
+      <div class="loading-ring">
+        <div class="ring-segment"></div>
+        <div class="ring-segment"></div>
+        <div class="ring-segment"></div>
+      </div>
+      <p class="loading-text">Connecting to energy meter...</p>
     </div>
   {:else if error}
     <div class="error-state">
-      <p>{error}</p>
-      <button class="btn btn-primary" onclick={loadData} type="button">
-        Retry
+      <div class="error-icon">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="48" height="48">
+          <path
+            d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"
+          />
+        </svg>
+      </div>
+      <p class="error-text">{error}</p>
+      <button class="retry-btn" onclick={loadData} type="button">
+        Retry Connection
       </button>
     </div>
   {:else if device}
     <div class="content">
-      <div class="device-header">
-        <div class="device-icon">
-          <span class="icon-emoji">⚡</span>
+      <!-- Device Identity Section -->
+      <section class="device-identity">
+        <div class="identity-icon">
+          <svg viewBox="0 0 24 24" fill="currentColor" width="32" height="32">
+            <path
+              d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66.19-.34.05-.08.07-.12C8.48 10.94 10.42 7.54 13 3h1l-1 7h3.5c.49 0 .56.33.47.51l-.07.15C12.96 17.55 11 21 11 21z"
+            />
+          </svg>
+          <div class="power-pulse"></div>
         </div>
-        <div class="device-info">
-          {#if editingName}
-            <div class="name-edit">
-              <input
-                type="text"
-                bind:value={editedName}
-                onkeydown={handleNameKeydown}
-                class="name-input"
-                disabled={savingName}
-              />
+
+        <div class="identity-details">
+          <h1 class="device-name">
+            <EditableDeviceName
+              deviceId={params.id}
+              name={deviceName}
+              isEdit={editingName}
+              onSaved={handleNameSaved}
+              class="device-name-text"
+            />
+            {#if !editingName}
               <button
-                class="btn btn-sm btn-primary"
-                onclick={saveName}
-                disabled={savingName}
-                type="button"
-              >
-                {savingName ? "Saving..." : "Save"}
-              </button>
-              <button
-                class="btn btn-sm btn-secondary"
-                onclick={cancelEditingName}
-                disabled={savingName}
-                type="button"
-              >
-                Cancel
-              </button>
-            </div>
-          {:else}
-            <h1 class="device-name">
-              {device.name}
-              <button
-                class="edit-name-btn"
+                class="edit-trigger"
                 onclick={startEditingName}
                 title="Edit name"
                 type="button"
               >
                 <svg
-                  xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 24 24"
                   fill="currentColor"
+                  width="16"
+                  height="16"
                 >
                   <path
                     d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
                   />
                 </svg>
               </button>
-            </h1>
-          {/if}
-          <p class="device-id">{params.id}</p>
-        </div>
-      </div>
+            {/if}
+          </h1>
 
-      <div class="metrics-grid">
-        <div class="metric-card power">
-          <span class="metric-label">Power</span>
-          <span class="metric-value">
-            {formatPower(latestReading?.power)}
-          </span>
-        </div>
-        <div class="metric-card voltage">
-          <span class="metric-label">Voltage</span>
-          <span class="metric-value">
-            {formatVoltage(latestReading?.voltage)}
-          </span>
-        </div>
-        <div class="metric-card current">
-          <span class="metric-label">Current</span>
-          <span class="metric-value">
-            {formatCurrent(latestReading?.current)}
-          </span>
-        </div>
-        <div class="metric-card energy">
-          <span class="metric-label">Energy Consumed</span>
-          <span class="metric-value">
-            {formatEnergy(latestReading?.energy)}
-          </span>
-        </div>
-      </div>
-
-      <div class="secondary-metrics">
-        <div class="secondary-metric">
-          <span class="secondary-label">Produced Energy</span>
-          <span class="secondary-value">
-            {formatEnergy(latestReading?.produced_energy)}
-          </span>
-        </div>
-        <div class="secondary-metric">
-          <span class="secondary-label">AC Frequency</span>
-          <span class="secondary-value">
-            {formatFrequency(latestReading?.ac_frequency)}
-          </span>
-        </div>
-        <div class="secondary-metric">
-          <span class="secondary-label">Power Factor</span>
-          <span class="secondary-value">
-            {formatPowerFactor(latestReading?.power_factor)}
-          </span>
-        </div>
-      </div>
-
-      <div class="status-section">
-        <h2 class="section-title">Device Status</h2>
-        <div class="status-grid">
-          {#if deviceState?.battery_level != null}
-            <div class="status-item">
-              <StatusBadge type="battery" value={deviceState.battery_level} />
-            </div>
-          {/if}
-          {#if deviceState?.link_quality != null}
-            <div class="status-item">
-              <StatusBadge type="signal" value={deviceState.link_quality} />
-            </div>
-          {/if}
-          <div class="status-item last-seen">
-            <span class="status-label">Last seen</span>
-            <span class="status-value">
+          <div class="identity-meta">
+            <span class="device-id">{params.id}</span>
+            <span class="meta-divider">•</span>
+            <span class="last-seen">
               {formatLastSeen(
                 deviceState?.last_seen || latestReading?.timestamp,
               )}
             </span>
           </div>
         </div>
-      </div>
 
-      <div class="chart-section">
-        <h2 class="section-title">Power History</h2>
+        <div class="device-badges">
+          {#if deviceState?.battery_level != null}
+            <StatusBadge type="battery" value={deviceState.battery_level} />
+          {/if}
+          {#if deviceState?.link_quality != null}
+            <StatusBadge type="signal" value={deviceState.link_quality} />
+          {/if}
+        </div>
+      </section>
 
-        <div class="toolbar">
-          <div class="toolbar-section">
-            <span class="section-label">Range:</span>
-            <div class="button-group">
-              <button
-                class="toolbar-btn"
-                class:active={timeRange === "24h"}
-                onclick={() => handleTimeRangeChange("24h")}
-                type="button"
-              >
-                24h
-              </button>
-              <button
-                class="toolbar-btn"
-                class:active={timeRange === "1w"}
-                onclick={() => handleTimeRangeChange("1w")}
-                type="button"
-              >
-                1w
-              </button>
-              <button
-                class="toolbar-btn"
-                class:active={timeRange === "1m"}
-                onclick={() => handleTimeRangeChange("1m")}
-                type="button"
-              >
-                1m
-              </button>
-              <button
-                class="toolbar-btn"
-                class:active={timeRange === "1y"}
-                onclick={() => handleTimeRangeChange("1y")}
-                type="button"
-              >
-                1y
-              </button>
+      <!-- Power Display Hero -->
+      <section class="power-hero">
+        <div class="power-gauge">
+          <div class="gauge-core">
+            <!-- Outer ring with gradient -->
+            <svg class="gauge-ring" viewBox="0 0 200 200">
+              <defs>
+                <linearGradient
+                  id="powerGradient"
+                  x1="0%"
+                  y1="0%"
+                  x2="100%"
+                  y2="100%"
+                >
+                  <stop offset="0%" stop-color="#06b6d4" />
+                  <stop offset="50%" stop-color="#0ea5e9" />
+                  <stop offset="100%" stop-color="#3b82f6" />
+                </linearGradient>
+                <linearGradient
+                  id="produceGradient"
+                  x1="0%"
+                  y1="0%"
+                  x2="100%"
+                  y2="100%"
+                >
+                  <stop offset="0%" stop-color="#22c55e" />
+                  <stop offset="100%" stop-color="#10b981" />
+                </linearGradient>
+              </defs>
+              <!-- Background arc -->
+              <circle
+                cx="100"
+                cy="100"
+                r="85"
+                fill="none"
+                stroke="rgba(255,255,255,0.1)"
+                stroke-width="12"
+                stroke-linecap="round"
+                stroke-dasharray="401.92"
+                stroke-dashoffset="100.48"
+                transform="rotate(135, 100, 100)"
+              />
+              <!-- Power level arc -->
+              <circle
+                cx="100"
+                cy="100"
+                r="85"
+                fill="none"
+                stroke={isProducing
+                  ? "url(#produceGradient)"
+                  : "url(#powerGradient)"}
+                stroke-width="12"
+                stroke-linecap="round"
+                stroke-dasharray="401.92"
+                stroke-dashoffset={401.92 -
+                  (powerLevel / 100) * 301.44 +
+                  100.48}
+                transform="rotate(135, 100, 100)"
+                class="power-arc"
+              />
+            </svg>
+
+            <!-- Center content -->
+            <div class="gauge-center">
+              <div class="flow-indicator" class:producing={isProducing}>
+                <span class="flow-arrow">{isProducing ? "↑" : "↓"}</span>
+                <span class="flow-label"
+                  >{isProducing ? "PRODUCING" : "CONSUMING"}</span
+                >
+              </div>
+              <div class="power-value">
+                <span class="value-number"
+                  >{formatPower(latestReading?.power)}</span
+                >
+                <span class="value-unit"
+                  >{formatPowerUnit(latestReading?.power)}</span
+                >
+              </div>
             </div>
+          </div>
+          <div class="gauge-label">Real-time Power</div>
+        </div>
+      </section>
+
+      <!-- Live Metrics Grid -->
+      <section class="metrics-section">
+        <h2 class="section-header">
+          <span class="header-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+              <path
+                d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7 10h2v7H7zm4-3h2v10h-2zm4 6h2v4h-2z"
+              />
+            </svg>
+          </span>
+          Live Metrics
+        </h2>
+
+        <div class="metrics-grid">
+          <div class="metric-card voltage">
+            <div class="metric-icon">
+              <svg
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                width="20"
+                height="20"
+              >
+                <path
+                  d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66.19-.34.05-.08.07-.12C8.48 10.94 10.42 7.54 13 3h1l-1 7h3.5c.49 0 .56.33.47.51l-.07.15C12.96 17.55 11 21 11 21z"
+                />
+              </svg>
+            </div>
+            <div class="metric-data">
+              <span class="metric-value"
+                >{formatVoltage(latestReading?.voltage)}</span
+              >
+              <span class="metric-unit">V</span>
+            </div>
+            <span class="metric-label">Voltage</span>
+          </div>
+
+          <div class="metric-card current">
+            <div class="metric-icon">
+              <svg
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                width="20"
+                height="20"
+              >
+                <path
+                  d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.31-8.86c-1.77-.45-2.34-.94-2.34-1.67 0-.84.79-1.43 2.1-1.43 1.38 0 1.9.66 1.94 1.64h1.71c-.05-1.34-.87-2.57-2.49-2.97V5H10.9v1.69c-1.51.32-2.72 1.3-2.72 2.81 0 1.79 1.49 2.69 3.66 3.21 1.95.46 2.34 1.15 2.34 1.87 0 .53-.39 1.39-2.1 1.39-1.6 0-2.23-.72-2.32-1.64H8.04c.1 1.7 1.36 2.66 2.86 2.97V19h2.34v-1.67c1.52-.29 2.72-1.16 2.73-2.77-.01-2.2-1.9-2.96-3.66-3.42z"
+                />
+              </svg>
+            </div>
+            <div class="metric-data">
+              <span class="metric-value"
+                >{formatCurrent(latestReading?.current)}</span
+              >
+              <span class="metric-unit">A</span>
+            </div>
+            <span class="metric-label">Current</span>
+          </div>
+
+          <div class="metric-card frequency">
+            <div class="metric-icon">
+              <svg
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                width="20"
+                height="20"
+              >
+                <path
+                  d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"
+                />
+              </svg>
+            </div>
+            <div class="metric-data">
+              <span class="metric-value"
+                >{formatFrequency(latestReading?.ac_frequency)}</span
+              >
+              <span class="metric-unit">Hz</span>
+            </div>
+            <span class="metric-label">AC Frequency</span>
+          </div>
+
+          <div class="metric-card power-factor">
+            <div class="metric-icon">
+              <svg
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                width="20"
+                height="20"
+              >
+                <path
+                  d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.41 16.09V20h-2.67v-1.93c-1.71-.36-3.16-1.46-3.27-3.4h1.96c.1 1.05.82 1.87 2.65 1.87 1.96 0 2.4-.98 2.4-1.59 0-.83-.44-1.61-2.67-2.14-2.48-.6-4.18-1.62-4.18-3.67 0-1.72 1.39-2.84 3.11-3.21V4h2.67v1.95c1.86.45 2.79 1.86 2.85 3.39H14.3c-.05-1.11-.64-1.87-2.22-1.87-1.5 0-2.4.68-2.4 1.64 0 .84.65 1.39 2.67 1.91s4.18 1.39 4.18 3.91c-.01 1.83-1.38 2.83-3.12 3.16z"
+                />
+              </svg>
+            </div>
+            <div class="metric-data">
+              <span class="metric-value"
+                >{formatPowerFactor(latestReading?.power_factor)}</span
+              >
+              <span class="metric-unit">PF</span>
+            </div>
+            <span class="metric-label">Power Factor</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Energy Totals -->
+      <section class="energy-totals">
+        <h2 class="section-header">
+          <span class="header-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+              <path
+                d="M11 21h-1l1-7H7.5c-.58 0-.57-.32-.38-.66.19-.34.05-.08.07-.12C8.48 10.94 10.42 7.54 13 3h1l-1 7h3.5c.49 0 .56.33.47.51l-.07.15C12.96 17.55 11 21 11 21z"
+              />
+            </svg>
+          </span>
+          Energy Totals
+        </h2>
+
+        <div class="energy-cards">
+          <div class="energy-card consumed">
+            <div class="energy-visual">
+              <div class="energy-bar">
+                <div class="bar-fill"></div>
+              </div>
+              <svg
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                width="24"
+                height="24"
+                class="energy-icon"
+              >
+                <path
+                  d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z"
+                />
+              </svg>
+            </div>
+            <div class="energy-info">
+              <span class="energy-label">Consumed</span>
+              <div class="energy-value">
+                <span class="value">{formatEnergy(latestReading?.energy)}</span>
+                <span class="unit">kWh</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="energy-card produced">
+            <div class="energy-visual">
+              <div class="energy-bar">
+                <div class="bar-fill"></div>
+              </div>
+              <svg
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                width="24"
+                height="24"
+                class="energy-icon"
+              >
+                <path
+                  d="M16 18l2.29-2.29-4.88-4.88-4 4L2 7.41 3.41 6l6 6 4-4 6.3 6.29L22 12v6z"
+                />
+              </svg>
+            </div>
+            <div class="energy-info">
+              <span class="energy-label">Produced</span>
+              <div class="energy-value">
+                <span class="value"
+                  >{formatEnergy(latestReading?.produced_energy)}</span
+                >
+                <span class="unit">kWh</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Chart Section -->
+      <section class="chart-section">
+        <div class="chart-header">
+          <h2 class="section-header">
+            <span class="header-icon">
+              <svg
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                width="18"
+                height="18"
+              >
+                <path
+                  d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"
+                />
+              </svg>
+            </span>
+            Power History
+          </h2>
+
+          <div class="time-range-selector">
+            {#each ["24h", "1w", "1m", "1y"] as range}
+              <button
+                class="range-btn"
+                class:active={timeRange === range}
+                onclick={() => handleTimeRangeChange(range as TimeRange)}
+                type="button"
+              >
+                {range}
+              </button>
+            {/each}
           </div>
         </div>
 
         <div class="chart-container">
-          <UnifiedChart
-            sensors={sensorConfig}
-            {timeRange}
-            metricType="power"
-          />
+          <UnifiedChart sensors={sensorConfig} {timeRange} metricType="power" />
         </div>
-      </div>
+      </section>
     </div>
   {/if}
 </div>
 
 <style>
   .energy-detail-page {
-    min-height: calc(100vh - var(--app-header-height) - var(--app-nav-height));
-    background: #f3f4f6;
+    position: relative;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
     padding: 1.5rem;
+    overflow: hidden;
+  }
+
+  /* Ambient background effects */
+  .ambient-bg {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: radial-gradient(
+        ellipse 80% 50% at 50% -20%,
+        rgba(6, 182, 212, 0.15),
+        transparent
+      ),
+      radial-gradient(
+        ellipse 60% 40% at 80% 100%,
+        rgba(59, 130, 246, 0.1),
+        transparent
+      );
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .grid-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: linear-gradient(
+        rgba(6, 182, 212, 0.03) 1px,
+        transparent 1px
+      ),
+      linear-gradient(90deg, rgba(6, 182, 212, 0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
   }
 
   .page-header {
+    position: relative;
+    z-index: 1;
     margin-bottom: 1.5rem;
   }
 
@@ -414,418 +639,753 @@
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.5rem 1rem;
-    background: white;
-    border: 1px solid #d1d5db;
+    padding: 0.625rem 1rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 8px;
-    font-size: 0.875rem;
+    font-family: "SF Mono", "Fira Code", monospace;
+    font-size: 0.8125rem;
     font-weight: 500;
-    color: #374151;
+    color: rgba(255, 255, 255, 0.7);
     cursor: pointer;
-    transition: all 0.15s;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(8px);
   }
 
   .back-button:hover {
-    background: #f9fafb;
-    border-color: #9ca3af;
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(6, 182, 212, 0.3);
+    color: #06b6d4;
   }
 
-  .loading-state,
-  .error-state {
-    text-align: center;
-    padding: 4rem 2rem;
+  /* Loading state */
+  .loading-state {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 6rem 2rem;
   }
 
-  .spinner {
-    width: 32px;
-    height: 32px;
-    border: 3px solid rgba(59, 130, 246, 0.2);
-    border-top-color: #3b82f6;
+  .loading-ring {
+    position: relative;
+    width: 80px;
+    height: 80px;
+    margin-bottom: 1.5rem;
+  }
+
+  .ring-segment {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border: 3px solid transparent;
+    border-top-color: #06b6d4;
     border-radius: 50%;
-    margin: 0 auto 1rem;
-    animation: spin 0.8s linear infinite;
+    animation: spin 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+  }
+
+  .ring-segment:nth-child(2) {
+    animation-delay: -0.4s;
+    border-top-color: #0ea5e9;
+  }
+
+  .ring-segment:nth-child(3) {
+    animation-delay: -0.8s;
+    border-top-color: #3b82f6;
   }
 
   @keyframes spin {
-    to {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
       transform: rotate(360deg);
     }
   }
 
-  .content {
-    max-width: 900px;
-    margin: 0 auto;
+  .loading-text {
+    font-family: "SF Mono", "Fira Code", monospace;
+    font-size: 0.875rem;
+    color: rgba(255, 255, 255, 0.5);
+    letter-spacing: 0.05em;
   }
 
-  .device-header {
+  /* Error state */
+  .error-state {
+    position: relative;
+    z-index: 1;
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 1rem;
-    background: white;
-    padding: 1.5rem;
-    border-radius: 12px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    padding: 4rem 2rem;
+    text-align: center;
+  }
+
+  .error-icon {
+    color: #ef4444;
+    margin-bottom: 1rem;
+    opacity: 0.8;
+  }
+
+  .error-text {
+    font-size: 1rem;
+    color: rgba(255, 255, 255, 0.7);
     margin-bottom: 1.5rem;
   }
 
-  .device-icon {
-    width: 64px;
-    height: 64px;
-    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  .retry-btn {
+    padding: 0.75rem 1.5rem;
+    background: linear-gradient(135deg, #06b6d4, #0ea5e9);
+    border: none;
+    border-radius: 8px;
+    font-family: "SF Mono", "Fira Code", monospace;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .retry-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px rgba(6, 182, 212, 0.3);
+  }
+
+  /* Content */
+  .content {
+    position: relative;
+    z-index: 1;
+    max-width: 900px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  /* Device Identity */
+  .device-identity {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.25rem 1.5rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 16px;
+    backdrop-filter: blur(12px);
+  }
+
+  .identity-icon {
+    position: relative;
+    width: 56px;
+    height: 56px;
+    background: linear-gradient(
+      135deg,
+      rgba(6, 182, 212, 0.2),
+      rgba(59, 130, 246, 0.2)
+    );
+    border: 1px solid rgba(6, 182, 212, 0.3);
+    border-radius: 14px;
     display: flex;
     align-items: center;
     justify-content: center;
+    color: #06b6d4;
+    flex-shrink: 0;
   }
 
-  .icon-emoji {
-    font-size: 32px;
+  .power-pulse {
+    position: absolute;
+    inset: -4px;
+    border: 2px solid rgba(6, 182, 212, 0.4);
+    border-radius: 18px;
+    animation: pulse-ring 2s ease-out infinite;
   }
 
-  .device-info {
+  @keyframes pulse-ring {
+    0% {
+      transform: scale(1);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(1.2);
+      opacity: 0;
+    }
+  }
+
+  .identity-details {
     flex: 1;
+    min-width: 0;
   }
 
   .device-name {
-    font-size: 1.5rem;
+    font-family:
+      "SF Pro Display",
+      -apple-system,
+      sans-serif;
+    font-size: 1.375rem;
     font-weight: 600;
-    color: #111827;
+    color: #f1f5f9;
     margin: 0 0 0.25rem;
     display: flex;
     align-items: center;
     gap: 0.5rem;
   }
 
-  .edit-name-btn {
-    background: none;
+  .edit-trigger {
+    padding: 0.375rem;
+    background: transparent;
     border: none;
+    border-radius: 6px;
+    color: rgba(255, 255, 255, 0.3);
     cursor: pointer;
-    opacity: 0.5;
-    transition: opacity 0.15s;
-    padding: 0.25rem;
+    transition: all 0.15s ease;
     display: flex;
     align-items: center;
     justify-content: center;
   }
 
-  .edit-name-btn:hover {
-    opacity: 1;
+  .edit-trigger:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.7);
   }
 
-  .edit-name-btn svg {
-    width: 18px;
-    height: 18px;
-    color: #6b7280;
-  }
-
-  .device-id {
-    font-size: 0.8125rem;
-    color: #6b7280;
-    font-family: monospace;
-    margin: 0;
-  }
-
-  .name-edit {
+  .identity-meta {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-  }
-
-  .name-input {
-    font-size: 1.25rem;
-    font-weight: 600;
-    padding: 0.375rem 0.75rem;
-    border: 2px solid #3b82f6;
-    border-radius: 6px;
-    outline: none;
-    min-width: 200px;
-  }
-
-  .btn {
-    padding: 0.5rem 1rem;
-    border: none;
-    border-radius: 6px;
-    font-size: 0.875rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-
-  .btn-sm {
-    padding: 0.375rem 0.75rem;
     font-size: 0.8125rem;
+    color: rgba(255, 255, 255, 0.4);
   }
 
-  .btn-primary {
-    background: #3b82f6;
-    color: white;
+  .device-id {
+    font-family: "SF Mono", "Fira Code", monospace;
+    font-size: 0.75rem;
   }
 
-  .btn-primary:hover {
-    background: #2563eb;
+  .meta-divider {
+    opacity: 0.3;
   }
 
-  .btn-secondary {
-    background: #e5e7eb;
-    color: #374151;
+  .device-badges {
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
   }
 
-  .btn-secondary:hover {
-    background: #d1d5db;
+  :global(.device-name-text) {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #f8fafc;
   }
 
-  .btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
+  /* Power Hero Section */
+  .power-hero {
+    display: flex;
+    justify-content: center;
+    padding: 2rem;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 20px;
+    backdrop-filter: blur(12px);
+  }
+
+  .power-gauge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .gauge-core {
+    position: relative;
+    width: 240px;
+    height: 240px;
+    display: grid;
+    place-items: center;
+  }
+
+  .gauge-ring {
+    width: 100%;
+    height: 100%;
+  }
+
+  .power-arc {
+    transition: stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+    filter: drop-shadow(0 0 12px rgba(6, 182, 212, 0.5));
+  }
+
+  .gauge-center {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 0 1rem;
+  }
+
+  .flow-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25rem 0.625rem;
+    background: rgba(6, 182, 212, 0.15);
+    border: 1px solid rgba(6, 182, 212, 0.3);
+    border-radius: 20px;
+    margin-bottom: 0.75rem;
+  }
+
+  .flow-indicator.producing {
+    background: rgba(34, 197, 94, 0.15);
+    border-color: rgba(34, 197, 94, 0.3);
+  }
+
+  .flow-arrow {
+    font-size: 0.875rem;
+    color: #06b6d4;
+    animation: flow-bounce 1.5s ease-in-out infinite;
+  }
+
+  .flow-indicator.producing .flow-arrow {
+    color: #22c55e;
+  }
+
+  @keyframes flow-bounce {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-2px);
+    }
+  }
+
+  .flow-label {
+    font-family: "SF Mono", "Fira Code", monospace;
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    color: #06b6d4;
+  }
+
+  .flow-indicator.producing .flow-label {
+    color: #22c55e;
+  }
+
+  .power-value {
+    display: flex;
+    align-items: baseline;
+    gap: 0.25rem;
+  }
+
+  .value-number {
+    font-family:
+      "SF Pro Display",
+      -apple-system,
+      sans-serif;
+    font-size: 3rem;
+    font-weight: 700;
+    color: #f1f5f9;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+
+  .value-unit {
+    font-family: "SF Mono", "Fira Code", monospace;
+    font-size: 1.25rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .gauge-label {
+    font-family: "SF Mono", "Fira Code", monospace;
+    font-size: 0.6875rem;
+    color: rgba(255, 255, 255, 0.35);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  /* Metrics Section */
+  .metrics-section,
+  .energy-totals,
+  .chart-section {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    backdrop-filter: blur(12px);
+    padding: 1.5rem;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    font-family: "SF Mono", "Fira Code", monospace;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.6);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin: 0 0 1.25rem;
+  }
+
+  .header-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: rgba(6, 182, 212, 0.15);
+    border-radius: 6px;
+    color: #06b6d4;
   }
 
   .metrics-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 1rem;
-    margin-bottom: 1rem;
   }
 
   .metric-card {
-    background: white;
-    padding: 1.5rem;
-    border-radius: 12px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     display: flex;
     flex-direction: column;
+    align-items: center;
     gap: 0.5rem;
+    padding: 1.25rem 1rem;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+    text-align: center;
+    transition: all 0.2s ease;
   }
 
-  .metric-card.power {
-    border-left: 4px solid #f59e0b;
+  .metric-card:hover {
+    background: rgba(0, 0, 0, 0.3);
+    border-color: rgba(6, 182, 212, 0.2);
   }
 
-  .metric-card.voltage {
-    border-left: 4px solid #8b5cf6;
+  .metric-icon {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    color: white;
   }
 
-  .metric-card.current {
-    border-left: 4px solid #10b981;
+  .metric-card.voltage .metric-icon {
+    background: linear-gradient(
+      135deg,
+      rgba(139, 92, 246, 0.3),
+      rgba(139, 92, 246, 0.1)
+    );
+    color: #a78bfa;
   }
 
-  .metric-card.energy {
-    border-left: 4px solid #3b82f6;
+  .metric-card.current .metric-icon {
+    background: linear-gradient(
+      135deg,
+      rgba(34, 197, 94, 0.3),
+      rgba(34, 197, 94, 0.1)
+    );
+    color: #4ade80;
   }
 
-  .metric-label {
-    font-size: 0.875rem;
-    color: #6b7280;
-    font-weight: 500;
+  .metric-card.frequency .metric-icon {
+    background: linear-gradient(
+      135deg,
+      rgba(251, 191, 36, 0.3),
+      rgba(251, 191, 36, 0.1)
+    );
+    color: #fbbf24;
+  }
+
+  .metric-card.power-factor .metric-icon {
+    background: linear-gradient(
+      135deg,
+      rgba(59, 130, 246, 0.3),
+      rgba(59, 130, 246, 0.1)
+    );
+    color: #60a5fa;
+  }
+
+  .metric-data {
+    display: flex;
+    align-items: baseline;
+    gap: 0.125rem;
   }
 
   .metric-value {
-    font-size: 2rem;
+    font-family:
+      "SF Pro Display",
+      -apple-system,
+      sans-serif;
+    font-size: 1.5rem;
     font-weight: 700;
-    color: #111827;
-    letter-spacing: -0.02em;
+    color: #f1f5f9;
+    letter-spacing: -0.01em;
   }
 
-  .secondary-metrics {
+  .metric-unit {
+    font-family: "SF Mono", "Fira Code", monospace;
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.4);
+  }
+
+  .metric-label {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.4);
+  }
+
+  /* Energy Totals */
+  .energy-cards {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+
+  .energy-card {
     display: flex;
     gap: 1rem;
-    margin-bottom: 1.5rem;
-    flex-wrap: wrap;
+    padding: 1.25rem;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
   }
 
-  .secondary-metric {
-    flex: 1;
-    min-width: 120px;
-    background: white;
-    padding: 1rem;
-    border-radius: 8px;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  .energy-visual {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
+  }
+
+  .energy-bar {
+    position: absolute;
+    inset: 0;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .energy-card.consumed .energy-bar {
+    background: rgba(6, 182, 212, 0.1);
+    border: 1px solid rgba(6, 182, 212, 0.2);
+  }
+
+  .energy-card.produced .energy-bar {
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.2);
+  }
+
+  .bar-fill {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60%;
+    transition: height 0.5s ease;
+  }
+
+  .energy-card.consumed .bar-fill {
+    background: linear-gradient(
+      to top,
+      rgba(6, 182, 212, 0.4),
+      rgba(6, 182, 212, 0.1)
+    );
+  }
+
+  .energy-card.produced .bar-fill {
+    background: linear-gradient(
+      to top,
+      rgba(34, 197, 94, 0.4),
+      rgba(34, 197, 94, 0.1)
+    );
+  }
+
+  .energy-icon {
+    position: relative;
+    z-index: 1;
+  }
+
+  .energy-card.consumed .energy-icon {
+    color: #06b6d4;
+  }
+
+  .energy-card.produced .energy-icon {
+    color: #22c55e;
+  }
+
+  .energy-info {
     display: flex;
     flex-direction: column;
+    justify-content: center;
+  }
+
+  .energy-label {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.4);
+    margin-bottom: 0.25rem;
+  }
+
+  .energy-value {
+    display: flex;
+    align-items: baseline;
     gap: 0.25rem;
   }
 
-  .secondary-label {
+  .energy-value .value {
+    font-family:
+      "SF Pro Display",
+      -apple-system,
+      sans-serif;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #f1f5f9;
+  }
+
+  .energy-value .unit {
+    font-family: "SF Mono", "Fira Code", monospace;
     font-size: 0.75rem;
-    color: #9ca3af;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    color: rgba(255, 255, 255, 0.4);
   }
 
-  .secondary-value {
-    font-size: 1.125rem;
-    font-weight: 600;
-    color: #374151;
-  }
-
-  .status-section,
-  .chart-section {
-    background: white;
-    padding: 1.5rem;
-    border-radius: 12px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    margin-bottom: 1.5rem;
-  }
-
-  .section-title {
-    font-size: 1.125rem;
-    font-weight: 600;
-    color: #111827;
-    margin: 0 0 1rem;
-  }
-
-  .status-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1rem;
-    align-items: center;
-  }
-
-  .status-item {
+  /* Chart Section */
+  .chart-header {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-  }
-
-  .status-item.last-seen {
-    padding: 0.5rem 0.75rem;
-    background: #f3f4f6;
-    border-radius: 8px;
-  }
-
-  .status-label {
-    font-size: 0.8125rem;
-    color: #6b7280;
-  }
-
-  .status-value {
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: #111827;
-  }
-
-  .toolbar {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    background: #f9fafb;
-    padding: 0.75rem 1rem;
-    border-radius: 8px;
-    border: 1px solid #e5e7eb;
+    justify-content: space-between;
     margin-bottom: 1rem;
     flex-wrap: wrap;
+    gap: 1rem;
   }
 
-  .toolbar-section {
+  .chart-header .section-header {
+    margin: 0;
+  }
+
+  .time-range-selector {
     display: flex;
-    align-items: center;
-    gap: 0.625rem;
-  }
-
-  .section-label {
-    font-size: 0.8125rem;
-    color: #6b7280;
-    font-weight: 500;
-  }
-
-  .button-group {
-    display: flex;
-    gap: 0.375rem;
-    background: white;
+    gap: 0.25rem;
     padding: 0.25rem;
-    border-radius: 6px;
-    border: 1px solid #d1d5db;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
   }
 
-  .toolbar-btn {
-    padding: 0.375rem 0.75rem;
+  .range-btn {
+    padding: 0.5rem 0.875rem;
     background: transparent;
     border: none;
-    border-radius: 4px;
-    font-size: 0.8125rem;
+    border-radius: 6px;
+    font-family: "SF Mono", "Fira Code", monospace;
+    font-size: 0.75rem;
     font-weight: 500;
-    color: #6b7280;
+    color: rgba(255, 255, 255, 0.5);
     cursor: pointer;
-    transition: all 0.15s;
-    white-space: nowrap;
+    transition: all 0.15s ease;
   }
 
-  .toolbar-btn:hover {
-    background: #f3f4f6;
-    color: #111827;
+  .range-btn:hover {
+    color: rgba(255, 255, 255, 0.8);
+    background: rgba(255, 255, 255, 0.05);
   }
 
-  .toolbar-btn.active {
-    background: #3b82f6;
+  .range-btn.active {
+    background: #06b6d4;
     color: white;
+    box-shadow: 0 2px 8px rgba(6, 182, 212, 0.3);
   }
 
   .chart-container {
     height: 400px;
-    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 12px;
     overflow: hidden;
   }
 
-  @media (max-width: 640px) {
+  /* Responsive */
+  @media (max-width: 768px) {
     .energy-detail-page {
       padding: 1rem;
     }
 
-    .device-header {
-      flex-direction: column;
-      text-align: center;
+    .device-identity {
+      flex-wrap: wrap;
     }
 
-    .device-name {
+    .device-badges {
+      width: 100%;
+      justify-content: flex-start;
+      margin-top: 0.5rem;
+    }
+
+    .power-gauge {
+      width: 200px;
+      height: 200px;
+    }
+
+    .value-number {
+      font-size: 2.5rem;
+    }
+
+    .metrics-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .energy-cards {
+      grid-template-columns: 1fr;
+    }
+
+    .chart-header {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .time-range-selector {
       justify-content: center;
+    }
+
+    .chart-container {
+      height: 300px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .power-hero {
+      padding: 1.5rem 1rem;
+    }
+
+    .power-gauge {
+      width: 180px;
+      height: 180px;
+    }
+
+    .value-number {
+      font-size: 2rem;
     }
 
     .metrics-grid {
       grid-template-columns: 1fr;
     }
 
-    .metric-value {
-      font-size: 1.75rem;
+    .metric-card {
+      flex-direction: row;
+      text-align: left;
+      padding: 1rem;
     }
 
-    .secondary-metrics {
-      flex-direction: column;
-    }
-
-    .secondary-metric {
-      min-width: auto;
-    }
-
-    .toolbar {
-      flex-direction: column;
-      align-items: stretch;
-      gap: 0.75rem;
-    }
-
-    .toolbar-section {
-      justify-content: space-between;
-    }
-
-    .button-group {
-      flex: 1;
-    }
-
-    .toolbar-btn {
-      flex: 1;
-      text-align: center;
+    .metric-icon {
+      flex-shrink: 0;
     }
 
     .chart-container {
-      height: 300px;
-    }
-
-    .name-edit {
-      flex-wrap: wrap;
-    }
-
-    .name-input {
-      flex: 1;
-      min-width: 150px;
+      height: 250px;
     }
   }
 </style>

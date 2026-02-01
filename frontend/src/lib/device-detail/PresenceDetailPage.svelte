@@ -1,11 +1,13 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { push } from "svelte-spa-router";
-  import { devicesMemory, deviceStateMemory, sensorsMemory } from "../memory";
+  import { deviceStateMemory, sensorsMemory } from "../memory";
   import type { PresenceSensorReading } from "../api/sensors";
   import type { DeviceInfo, DeviceState } from "../types/devices";
   import { TIME_RANGE_HOURS } from "../stores/graphConfig";
   import StatusBadge from "../shared/StatusBadge.svelte";
+  import Icon from "../design-system/Icon.svelte";
+  import EditableDeviceName from "../devices/EditableDeviceName.svelte";
 
   interface Props {
     params: { id: string };
@@ -18,8 +20,6 @@
   let loading = $state(true);
   let error = $state<string | null>(null);
   let editingName = $state(false);
-  let editedName = $state("");
-  let savingName = $state(false);
 
   // Time range state for history
   type TimeRange = "24h" | "1w" | "1m" | "1y";
@@ -34,6 +34,13 @@
     const reading = $sensorsMemory.latestByDevice[params.id] ?? null;
     if (!reading || reading.type !== "presence") return null;
     return reading as PresenceSensorReading;
+  });
+
+  const deviceName = $derived.by(() => {
+    const memoryDevice = $sensorsMemory.devices.find(
+      (d) => d.device_id === params.id,
+    );
+    return memoryDevice?.name ?? device?.name ?? params.id;
   });
 
   // Detect presence state changes in history for timeline
@@ -51,9 +58,7 @@
 
     for (const reading of presenceHistory) {
       if (lastState === null || reading.occupied !== lastState) {
-        // State changed
         if (events.length > 0 && lastTimestamp) {
-          // Calculate duration of previous state
           events[events.length - 1].duration =
             reading.timestamp.getTime() - lastTimestamp.getTime();
         }
@@ -66,13 +71,11 @@
       }
     }
 
-    // Calculate duration for last event (until now)
     if (events.length > 0 && lastTimestamp) {
-      events[events.length - 1].duration =
-        Date.now() - lastTimestamp.getTime();
+      events[events.length - 1].duration = Date.now() - lastTimestamp.getTime();
     }
 
-    return events.reverse(); // Most recent first
+    return events.reverse();
   });
 
   onMount(async () => {
@@ -85,7 +88,6 @@
 
     try {
       await sensorsMemory.ensureDevices();
-      // Find device info from sensors memory
       const deviceInfo = $sensorsMemory.devices.find(
         (d) => d.device_id === params.id,
       );
@@ -97,15 +99,12 @@
       }
 
       device = deviceInfo;
-      editedName = deviceInfo.name;
 
-      // Fetch device state (battery, link quality)
       const state = await deviceStateMemory.ensureDeviceState(params.id);
       if (state) {
         deviceState = state;
       }
 
-      // Load initial history
       await loadHistoryForRange(timeRange);
     } catch (err) {
       console.error("Failed to load presence sensor data:", err);
@@ -125,7 +124,12 @@
       await sensorsMemory.ensureRecentReadings(params.id, hours);
       const endSec = Math.floor(Date.now() / 1000);
       const startSec = endSec - hours * 3600;
-      const readings = sensorsMemory.getReadings(params.id, startSec, endSec, 0);
+      const readings = sensorsMemory.getReadings(
+        params.id,
+        startSec,
+        endSec,
+        0,
+      );
       presenceHistory = readings.filter(
         (r): r is PresenceSensorReading => r.type === "presence",
       );
@@ -142,38 +146,16 @@
   }
 
   function startEditingName() {
-    editedName = device?.name || "";
     editingName = true;
   }
 
-  function cancelEditingName() {
+  function handleNameSaved() {
     editingName = false;
-    editedName = device?.name || "";
-  }
-
-  async function saveName() {
-    if (!device || editedName.trim() === device.name) {
-      editingName = false;
-      return;
-    }
-
-    savingName = true;
-    try {
-      await devicesMemory.setDeviceName(params.id, editedName.trim());
-      device = { ...device, name: editedName.trim() };
-      editingName = false;
-    } catch (err) {
-      console.error("Failed to save name:", err);
-    } finally {
-      savingName = false;
-    }
-  }
-
-  function handleNameKeydown(event: KeyboardEvent) {
-    if (event.key === "Enter") {
-      void saveName();
-    } else if (event.key === "Escape") {
-      cancelEditingName();
+    const memoryDevice = $sensorsMemory.devices.find(
+      (d) => d.device_id === params.id,
+    );
+    if (memoryDevice) {
+      device = memoryDevice;
     }
   }
 
@@ -256,167 +238,230 @@
   });
 </script>
 
-<div class="presence-detail-page">
+<div class="detail-page">
+  <!-- Radar sweep effect background -->
+  <div class="ambient-bg"></div>
+  <div class="radar-sweep" class:active={latestReading?.occupied}></div>
+
   <header class="page-header">
-    <button class="back-button" onclick={goBack} type="button">
+    <button class="back-btn" onclick={goBack} type="button">
       <svg
-        xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 24 24"
-        fill="currentColor"
-        width="20"
-        height="20"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
       >
-        <path
-          d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"
-        />
+        <path d="M19 12H5M12 19l-7-7 7-7" />
       </svg>
-      Back
+      <span>Back</span>
     </button>
+
+    <div class="header-badges">
+      {#if deviceState?.battery_level != null}
+        <StatusBadge type="battery" value={deviceState.battery_level} />
+      {/if}
+      {#if deviceState?.link_quality != null}
+        <StatusBadge type="signal" value={deviceState.link_quality} />
+      {/if}
+    </div>
   </header>
 
   {#if loading}
     <div class="loading-state">
-      <div class="spinner"></div>
+      <div class="loader">
+        <div class="loader-ring"></div>
+        <div class="loader-ring"></div>
+        <div class="loader-ring"></div>
+      </div>
       <p>Loading presence sensor data...</p>
     </div>
   {:else if error}
     <div class="error-state">
+      <div class="error-icon">
+        <Icon name="error" size={48} />
+      </div>
       <p>{error}</p>
-      <button class="btn btn-primary" onclick={loadData} type="button">
+      <button class="btn-primary" onclick={loadData} type="button">
         Retry
       </button>
     </div>
   {:else if device}
     <div class="content">
-      <div class="device-header">
-        <div class="device-icon" class:active={latestReading?.occupied}>
-          <span class="icon-emoji">{latestReading?.occupied ? "🟡" : "⚪"}</span>
-        </div>
-        <div class="device-info">
-          {#if editingName}
-            <div class="name-edit">
-              <input
-                type="text"
-                bind:value={editedName}
-                onkeydown={handleNameKeydown}
-                class="name-input"
-                disabled={savingName}
-              />
-              <button
-                class="btn btn-sm btn-primary"
-                onclick={saveName}
-                disabled={savingName}
-                type="button"
-              >
-                {savingName ? "Saving..." : "Save"}
-              </button>
-              <button
-                class="btn btn-sm btn-secondary"
-                onclick={cancelEditingName}
-                disabled={savingName}
-                type="button"
-              >
-                Cancel
-              </button>
+      <!-- Hero Section -->
+      <section class="hero-section">
+        <div class="device-identity">
+          <div class="device-icon-wrapper">
+            <div class="device-icon" class:active={latestReading?.occupied}>
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path
+                  d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
+                />
+              </svg>
             </div>
-          {:else}
+            {#if latestReading?.occupied}
+              <div class="detection-ring"></div>
+              <div class="detection-ring delay-1"></div>
+              <div class="detection-ring delay-2"></div>
+            {/if}
+          </div>
+
+          <div class="device-meta">
             <h1 class="device-name">
-              {device.name}
-              <button
-                class="edit-name-btn"
-                onclick={startEditingName}
-                title="Edit name"
-                type="button"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
+              <EditableDeviceName
+                deviceId={params.id}
+                name={deviceName}
+                isEdit={editingName}
+                onSaved={handleNameSaved}
+                class="device-name-text"
+              />
+              {#if !editingName}
+                <button
+                  class="edit-btn"
+                  onclick={startEditingName}
+                  title="Edit name"
+                  type="button"
                 >
-                  <path
-                    d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
-                  />
-                </svg>
-              </button>
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    width="16"
+                    height="16"
+                  >
+                    <path
+                      d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
+                    />
+                  </svg>
+                </button>
+              {/if}
             </h1>
-          {/if}
-          <p class="device-id">{params.id}</p>
-        </div>
-      </div>
-
-      <div class="state-section">
-        <div class="state-card">
-          <div class="state-header">
-            <span class="state-label">Current State</span>
-          </div>
-          <div class="presence-state" class:occupied={latestReading?.occupied}>
-            <div class="presence-indicator">
-              <div class="presence-dot"></div>
-            </div>
-            <span class="presence-text">
-              {latestReading?.occupied ? "Presence Detected" : "No Presence"}
-            </span>
-          </div>
-          {#if latestReading?.illumination}
-            <div class="illumination">
-              <span class="illumination-label">Illumination</span>
-              <span class="illumination-value">{latestReading.illumination}</span>
-            </div>
-          {/if}
-        </div>
-      </div>
-
-      {#if stats}
-        <div class="stats-grid">
-          <div class="stat-card">
-            <span class="stat-label">Detections</span>
-            <span class="stat-value">{stats.occupiedCount}</span>
-            <span class="stat-sublabel">in selected period</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-label">Total Occupied</span>
-            <span class="stat-value">{formatDuration(stats.totalOccupiedTime)}</span>
-            <span class="stat-sublabel">presence time</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-label">Occupancy Rate</span>
-            <span class="stat-value">{stats.occupancyRate.toFixed(1)}%</span>
-            <span class="stat-sublabel">of time occupied</span>
-          </div>
-        </div>
-      {/if}
-
-      <div class="status-section">
-        <h2 class="section-title">Device Status</h2>
-        <div class="status-grid">
-          {#if deviceState?.battery_level != null}
-            <div class="status-item">
-              <StatusBadge type="battery" value={deviceState.battery_level} />
-            </div>
-          {/if}
-          {#if deviceState?.link_quality != null}
-            <div class="status-item">
-              <StatusBadge type="signal" value={deviceState.link_quality} />
-            </div>
-          {/if}
-          <div class="status-item last-seen">
-            <span class="status-label">Last seen</span>
-            <span class="status-value">
-              {formatLastSeen(
+            <p class="device-id">{params.id}</p>
+            <p class="last-seen">
+              Last seen: {formatLastSeen(
                 deviceState?.last_seen || latestReading?.timestamp,
               )}
-            </span>
+            </p>
           </div>
         </div>
-      </div>
 
-      <div class="history-section">
-        <h2 class="section-title">Detection History</h2>
+        <!-- Presence Status Display -->
+        <div class="presence-display" class:detected={latestReading?.occupied}>
+          <div class="presence-visual">
+            <div class="presence-circle">
+              <div class="presence-inner">
+                {#if latestReading?.occupied}
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    class="presence-icon"
+                  >
+                    <path
+                      d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
+                    />
+                  </svg>
+                {:else}
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    class="presence-icon"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M8 12h8" />
+                  </svg>
+                {/if}
+              </div>
+            </div>
+            {#if latestReading?.occupied}
+              <div class="ripple"></div>
+              <div class="ripple delay-1"></div>
+            {/if}
+          </div>
 
-        <div class="toolbar">
-          <div class="toolbar-section">
-            <span class="section-label">Range:</span>
-            <div class="button-group">
+          <div class="presence-info">
+            <span class="presence-status">
+              {latestReading?.occupied ? "Motion Detected" : "No Motion"}
+            </span>
+            {#if latestReading?.illumination !== undefined}
+              <div class="illumination-badge">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  width="14"
+                  height="14"
+                >
+                  <path
+                    d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1z"
+                  />
+                </svg>
+                <span>{latestReading.illumination} lux</span>
+              </div>
+            {/if}
+          </div>
+        </div>
+      </section>
+
+      <!-- Stats Grid -->
+      {#if stats}
+        <section class="stats-section">
+          <div class="stat-card">
+            <div class="stat-icon">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path
+                  d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"
+                />
+              </svg>
+            </div>
+            <div class="stat-content">
+              <span class="stat-value">{stats.occupiedCount}</span>
+              <span class="stat-label">Detections</span>
+            </div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-icon time">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path
+                  d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"
+                />
+              </svg>
+            </div>
+            <div class="stat-content">
+              <span class="stat-value"
+                >{formatDuration(stats.totalOccupiedTime)}</span
+              >
+              <span class="stat-label">Occupied Time</span>
+            </div>
+          </div>
+
+          <div class="stat-card highlight">
+            <div class="stat-icon rate">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path
+                  d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"
+                />
+              </svg>
+            </div>
+            <div class="stat-content">
+              <span class="stat-value">{stats.occupancyRate.toFixed(0)}%</span>
+              <span class="stat-label">Occupancy Rate</span>
+            </div>
+            <div class="stat-bar">
+              <div
+                class="stat-bar-fill"
+                style="width: {stats.occupancyRate}%"
+              ></div>
+            </div>
+          </div>
+        </section>
+      {/if}
+
+      <!-- History Section -->
+      <section class="history-section">
+        <div class="section-header">
+          <h2>Detection Timeline</h2>
+          <div class="toolbar">
+            <div class="btn-group">
               <button
                 class="toolbar-btn"
                 class:active={timeRange === "24h"}
@@ -455,97 +500,212 @@
 
         {#if loadingHistory}
           <div class="loading-history">
-            <div class="spinner-small"></div>
-            <span>Loading history...</span>
+            <div class="mini-spinner"></div>
+            <span>Loading timeline...</span>
           </div>
         {:else if presenceEvents.length === 0}
-          <div class="empty-history">
+          <div class="empty-state">
+            <svg viewBox="0 0 24 24" fill="currentColor" class="empty-icon">
+              <path
+                d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"
+              />
+            </svg>
             <p>No presence events in selected period</p>
           </div>
         {:else}
           <div class="timeline">
-            {#each presenceEvents as event (event.timestamp.getTime())}
+            {#each presenceEvents as event, index (event.timestamp.getTime())}
               <div class="timeline-item" class:occupied={event.occupied}>
-                <div class="timeline-marker">
-                  <div class="marker-dot"></div>
-                  <div class="marker-line"></div>
+                <div class="timeline-connector">
+                  <div class="connector-dot"></div>
+                  {#if index < presenceEvents.length - 1}
+                    <div class="connector-line"></div>
+                  {/if}
                 </div>
-                <div class="timeline-content">
-                  <div class="event-header">
-                    <span class="event-status">
-                      {event.occupied ? "Presence detected" : "No presence"}
+                <div class="timeline-card">
+                  <div class="event-status">
+                    <span class="status-badge" class:active={event.occupied}>
+                      {event.occupied ? "Detected" : "Clear"}
                     </span>
                     {#if event.duration}
-                      <span class="event-duration">
-                        {formatDuration(event.duration)}
-                      </span>
+                      <span class="event-duration"
+                        >{formatDuration(event.duration)}</span
+                      >
                     {/if}
                   </div>
-                  <span class="event-time">{formatTimestamp(event.timestamp)}</span>
+                  <span class="event-time"
+                    >{formatTimestamp(event.timestamp)}</span
+                  >
                 </div>
               </div>
             {/each}
           </div>
         {/if}
-      </div>
+      </section>
     </div>
   {/if}
 </div>
 
 <style>
-  .presence-detail-page {
-    min-height: calc(100vh - var(--app-header-height) - var(--app-nav-height));
-    background: #f3f4f6;
-    padding: 1.5rem;
+  /* === Design Tokens === */
+  .detail-page {
+    --accent-primary: #8b5cf6;
+    --accent-detected: #f59e0b;
+    --accent-clear: #64748b;
+    --accent-danger: #ef4444;
+    --surface-elevated: rgba(255, 255, 255, 0.98);
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+    --border-subtle: rgba(0, 0, 0, 0.06);
   }
 
+  .detail-page {
+    position: relative;
+    min-height: 100vh;
+    background: linear-gradient(180deg, #faf5ff 0%, #f5f3ff 50%, #ede9fe 100%);
+    padding: var(--space-4);
+    overflow-x: hidden;
+  }
+
+  /* Ambient backgrounds */
+  .ambient-bg {
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(
+        ellipse at 30% 20%,
+        rgba(139, 92, 246, 0.06) 0%,
+        transparent 50%
+      ),
+      radial-gradient(
+        ellipse at 70% 80%,
+        rgba(245, 158, 11, 0.04) 0%,
+        transparent 50%
+      );
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .radar-sweep {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: 200vw;
+    height: 200vw;
+    transform: translate(-50%, -50%);
+    background: conic-gradient(
+      from 0deg,
+      transparent 0deg,
+      transparent 355deg,
+      rgba(139, 92, 246, 0) 360deg
+    );
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+  }
+
+  .radar-sweep.active {
+    opacity: 1;
+    background: conic-gradient(
+      from 0deg,
+      transparent 0deg,
+      rgba(245, 158, 11, 0.1) 20deg,
+      transparent 90deg
+    );
+    animation: radar-rotate 4s linear infinite;
+  }
+
+  @keyframes radar-rotate {
+    from {
+      transform: translate(-50%, -50%) rotate(0deg);
+    }
+    to {
+      transform: translate(-50%, -50%) rotate(360deg);
+    }
+  }
+
+  /* === Header === */
   .page-header {
-    margin-bottom: 1.5rem;
+    position: relative;
+    z-index: 10;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-6);
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
   }
 
-  .back-button {
+  .back-btn {
     display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 1rem;
-    background: white;
-    border: 1px solid #d1d5db;
-    border-radius: 8px;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-4);
+    background: var(--surface-elevated);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
     font-size: 0.875rem;
-    font-weight: 500;
-    color: #374151;
+    font-weight: 600;
+    color: var(--text-secondary);
     cursor: pointer;
-    transition: all 0.15s;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   }
 
-  .back-button:hover {
-    background: #f9fafb;
-    border-color: #9ca3af;
+  .back-btn:hover {
+    background: white;
+    color: var(--text-primary);
+    transform: translateX(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   }
 
-  .loading-state,
-  .error-state {
-    text-align: center;
-    padding: 4rem 2rem;
+  .back-btn svg {
+    width: 18px;
+    height: 18px;
   }
 
-  .spinner {
-    width: 32px;
-    height: 32px;
-    border: 3px solid rgba(59, 130, 246, 0.2);
-    border-top-color: #3b82f6;
+  .header-badges {
+    display: flex;
+    gap: var(--space-2);
+  }
+
+  /* === Loading / Error States === */
+  .loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+    gap: var(--space-4);
+  }
+
+  .loader {
+    position: relative;
+    width: 60px;
+    height: 60px;
+  }
+
+  .loader-ring {
+    position: absolute;
+    inset: 0;
+    border: 3px solid transparent;
+    border-top-color: var(--accent-primary);
     border-radius: 50%;
-    margin: 0 auto 1rem;
-    animation: spin 0.8s linear infinite;
+    animation: spin 1.2s ease-in-out infinite;
   }
 
-  .spinner-small {
-    width: 16px;
-    height: 16px;
-    border: 2px solid rgba(59, 130, 246, 0.2);
-    border-top-color: #3b82f6;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
+  .loader-ring:nth-child(2) {
+    inset: 8px;
+    border-top-color: var(--accent-detected);
+    animation-delay: 0.15s;
+  }
+
+  .loader-ring:nth-child(3) {
+    inset: 16px;
+    border-top-color: #10b981;
+    animation-delay: 0.3s;
   }
 
   @keyframes spin {
@@ -554,528 +714,619 @@
     }
   }
 
-  .content {
-    max-width: 900px;
-    margin: 0 auto;
+  .loading-state p {
+    font-size: 0.9375rem;
+    color: var(--text-muted);
+    font-weight: 500;
   }
 
-  .device-header {
+  .error-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+    gap: var(--space-4);
+    text-align: center;
+  }
+
+  .error-icon {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, #fef2f2, #fee2e2);
+    border-radius: 50%;
     display: flex;
     align-items: center;
-    gap: 1rem;
-    background: white;
-    padding: 1.5rem;
-    border-radius: 12px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    margin-bottom: 1.5rem;
+    justify-content: center;
+    color: var(--accent-danger);
+  }
+
+  .error-state p {
+    font-size: 1rem;
+    color: var(--text-secondary);
+  }
+
+  /* === Content === */
+  .content {
+    position: relative;
+    z-index: 5;
+    max-width: 800px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+  }
+
+  /* === Hero Section === */
+  .hero-section {
+    background: var(--surface-elevated);
+    border-radius: var(--radius-lg);
+    padding: var(--space-6);
+    box-shadow:
+      0 1px 3px rgba(0, 0, 0, 0.04),
+      0 4px 24px rgba(0, 0, 0, 0.04);
+    border: 1px solid var(--border-subtle);
+  }
+
+  .device-identity {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
+    padding-bottom: var(--space-5);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .device-icon-wrapper {
+    position: relative;
+    flex-shrink: 0;
   }
 
   .device-icon {
     width: 64px;
     height: 64px;
-    background: linear-gradient(135deg, #e5e7eb, #d1d5db);
+    background: linear-gradient(135deg, #a78bfa, #8b5cf6);
     border-radius: 16px;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.3s ease;
+    color: white;
+    transition: all 0.4s ease;
   }
 
   .device-icon.active {
-    background: linear-gradient(135deg, #fef3c7, #fde68a);
-    box-shadow: 0 4px 12px rgba(251, 191, 36, 0.3);
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    box-shadow: 0 4px 20px rgba(245, 158, 11, 0.4);
   }
 
-  .icon-emoji {
-    font-size: 32px;
+  .device-icon svg {
+    width: 28px;
+    height: 28px;
   }
 
-  .device-info {
+  .detection-ring {
+    position: absolute;
+    inset: -8px;
+    border: 2px solid rgba(245, 158, 11, 0.4);
+    border-radius: 24px;
+    animation: detection-pulse 1.5s ease-out infinite;
+  }
+
+  .detection-ring.delay-1 {
+    animation-delay: 0.5s;
+  }
+  .detection-ring.delay-2 {
+    animation-delay: 1s;
+  }
+
+  @keyframes detection-pulse {
+    0% {
+      transform: scale(1);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(1.4);
+      opacity: 0;
+    }
+  }
+
+  .device-meta {
     flex: 1;
+    min-width: 0;
   }
 
   .device-name {
     font-size: 1.5rem;
-    font-weight: 600;
-    color: #111827;
-    margin: 0 0 0.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0 0 var(--space-1);
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-2);
+    letter-spacing: -0.02em;
   }
 
-  .edit-name-btn {
+  .edit-btn {
     background: none;
     border: none;
     cursor: pointer;
-    opacity: 0.5;
-    transition: opacity 0.15s;
-    padding: 0.25rem;
+    padding: var(--space-1);
+    opacity: 0.4;
+    transition: opacity 0.2s;
     display: flex;
     align-items: center;
-    justify-content: center;
+    color: var(--text-secondary);
   }
 
-  .edit-name-btn:hover {
+  .edit-btn:hover {
     opacity: 1;
   }
 
-  .edit-name-btn svg {
-    width: 18px;
-    height: 18px;
-    color: #6b7280;
+  .device-id {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin: 0 0 var(--space-1);
   }
 
-  .device-id {
+  .last-seen {
     font-size: 0.8125rem;
-    color: #6b7280;
-    font-family: monospace;
+    color: var(--text-secondary);
     margin: 0;
   }
 
-  .name-edit {
+  :global(.device-name-text) {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+
+  /* === Presence Display === */
+  .presence-display {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-4);
+    padding: var(--space-6) var(--space-4);
+    background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+    border-radius: var(--radius-lg);
+    transition: all 0.4s ease;
   }
 
-  .name-input {
-    font-size: 1.25rem;
-    font-weight: 600;
-    padding: 0.375rem 0.75rem;
-    border: 2px solid #3b82f6;
-    border-radius: 6px;
-    outline: none;
-    min-width: 200px;
+  .presence-display.detected {
+    background: linear-gradient(135deg, #fffbeb, #fef3c7);
   }
 
-  .btn {
-    padding: 0.5rem 1rem;
-    border: none;
-    border-radius: 6px;
-    font-size: 0.875rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.15s;
+  .presence-visual {
+    position: relative;
   }
 
-  .btn-sm {
-    padding: 0.375rem 0.75rem;
-    font-size: 0.8125rem;
-  }
-
-  .btn-primary {
-    background: #3b82f6;
-    color: white;
-  }
-
-  .btn-primary:hover {
-    background: #2563eb;
-  }
-
-  .btn-secondary {
-    background: #e5e7eb;
-    color: #374151;
-  }
-
-  .btn-secondary:hover {
-    background: #d1d5db;
-  }
-
-  .btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  .state-section {
-    margin-bottom: 1.5rem;
-  }
-
-  .state-card {
+  .presence-circle {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
     background: white;
-    padding: 1.5rem;
-    border-radius: 12px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  }
-
-  .state-header {
-    margin-bottom: 1rem;
-  }
-
-  .state-label {
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: #6b7280;
-  }
-
-  .presence-state {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: 1rem;
-    background: #f9fafb;
-    border-radius: 10px;
-    border: 2px solid #e5e7eb;
-    transition: all 0.3s ease;
-  }
-
-  .presence-state.occupied {
-    background: #fefce8;
-    border-color: #fde047;
-  }
-
-  .presence-indicator {
-    width: 48px;
-    height: 48px;
     display: flex;
     align-items: center;
     justify-content: center;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    transition: all 0.4s ease;
   }
 
-  .presence-dot {
-    width: 24px;
-    height: 24px;
+  .presence-display.detected .presence-circle {
+    box-shadow: 0 4px 30px rgba(245, 158, 11, 0.25);
+  }
+
+  .presence-inner {
+    width: 70px;
+    height: 70px;
     border-radius: 50%;
-    background: #d1d5db;
-    transition: all 0.3s ease;
-  }
-
-  .presence-state.occupied .presence-dot {
-    background: #eab308;
-    box-shadow: 0 0 16px rgba(234, 179, 8, 0.6);
-    animation: pulse-glow 2s ease-in-out infinite;
-  }
-
-  @keyframes pulse-glow {
-    0%, 100% {
-      box-shadow: 0 0 8px rgba(234, 179, 8, 0.4);
-    }
-    50% {
-      box-shadow: 0 0 20px rgba(234, 179, 8, 0.8);
-    }
-  }
-
-  .presence-text {
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: #374151;
-  }
-
-  .presence-state.occupied .presence-text {
-    color: #854d0e;
-  }
-
-  .illumination {
-    margin-top: 1rem;
-    padding-top: 1rem;
-    border-top: 1px solid #e5e7eb;
+    background: #f1f5f9;
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center;
+    transition: all 0.4s ease;
   }
 
-  .illumination-label {
-    font-size: 0.875rem;
-    color: #6b7280;
+  .presence-display.detected .presence-inner {
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
   }
 
-  .illumination-value {
-    font-size: 1rem;
+  .presence-icon {
+    width: 32px;
+    height: 32px;
+    color: #94a3b8;
+    transition: color 0.4s ease;
+  }
+
+  .presence-display.detected .presence-icon {
+    color: white;
+  }
+
+  .ripple {
+    position: absolute;
+    inset: -10px;
+    border: 2px solid rgba(245, 158, 11, 0.4);
+    border-radius: 50%;
+    animation: ripple-expand 2s ease-out infinite;
+  }
+
+  .ripple.delay-1 {
+    animation-delay: 1s;
+  }
+
+  @keyframes ripple-expand {
+    0% {
+      transform: scale(1);
+      opacity: 0.6;
+    }
+    100% {
+      transform: scale(1.6);
+      opacity: 0;
+    }
+  }
+
+  .presence-info {
+    text-align: center;
+  }
+
+  .presence-status {
+    display: block;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: var(--space-2);
+  }
+
+  .illumination-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-3);
+    background: white;
+    border-radius: var(--radius-pill);
+    font-size: 0.8125rem;
     font-weight: 600;
-    color: #111827;
+    color: var(--text-secondary);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
   }
 
-  .stats-grid {
+  /* === Stats Section === */
+  .stats-section {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 1rem;
-    margin-bottom: 1.5rem;
+    gap: var(--space-3);
   }
 
   .stat-card {
-    background: white;
-    padding: 1.25rem;
-    border-radius: 12px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    background: var(--surface-elevated);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    border: 1px solid var(--border-subtle);
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
-    text-align: center;
+    gap: var(--space-3);
+  }
+
+  .stat-card.highlight {
+    background: linear-gradient(135deg, #faf5ff, #f5f3ff);
+    border-color: rgba(139, 92, 246, 0.2);
+  }
+
+  .stat-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: #f1f5f9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+  }
+
+  .stat-icon svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .stat-icon.time {
+    background: #ecfdf5;
+    color: #10b981;
+  }
+  .stat-icon.rate {
+    background: #f5f3ff;
+    color: #8b5cf6;
+  }
+
+  .stat-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .stat-value {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
   }
 
   .stat-label {
     font-size: 0.75rem;
-    color: #9ca3af;
-    font-weight: 500;
+    font-weight: 600;
+    color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.05em;
   }
 
-  .stat-value {
-    font-size: 1.75rem;
-    font-weight: 700;
-    color: #111827;
+  .stat-bar {
+    height: 4px;
+    background: #e2e8f0;
+    border-radius: 2px;
+    overflow: hidden;
   }
 
-  .stat-sublabel {
-    font-size: 0.75rem;
-    color: #6b7280;
+  .stat-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #8b5cf6, #a78bfa);
+    border-radius: 2px;
+    transition: width 0.6s ease;
   }
 
-  .status-section,
+  /* === History Section === */
   .history-section {
-    background: white;
-    padding: 1.5rem;
-    border-radius: 12px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    margin-bottom: 1.5rem;
+    background: var(--surface-elevated);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    border: 1px solid var(--border-subtle);
   }
 
-  .section-title {
-    font-size: 1.125rem;
-    font-weight: 600;
-    color: #111827;
-    margin: 0 0 1rem;
-  }
-
-  .status-grid {
+  .section-header {
     display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-4);
     flex-wrap: wrap;
-    gap: 1rem;
-    align-items: center;
+    gap: var(--space-3);
   }
 
-  .status-item {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  .status-item.last-seen {
-    padding: 0.5rem 0.75rem;
-    background: #f3f4f6;
-    border-radius: 8px;
-  }
-
-  .status-item .status-label {
-    font-size: 0.8125rem;
-    color: #6b7280;
-  }
-
-  .status-item .status-value {
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: #111827;
+  .section-header h2 {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
   }
 
   .toolbar {
     display: flex;
     align-items: center;
-    gap: 1rem;
-    background: #f9fafb;
-    padding: 0.75rem 1rem;
-    border-radius: 8px;
-    border: 1px solid #e5e7eb;
-    margin-bottom: 1rem;
-    flex-wrap: wrap;
+    gap: var(--space-3);
   }
 
-  .toolbar-section {
+  .btn-group {
     display: flex;
-    align-items: center;
-    gap: 0.625rem;
-  }
-
-  .section-label {
-    font-size: 0.8125rem;
-    color: #6b7280;
-    font-weight: 500;
-  }
-
-  .button-group {
-    display: flex;
-    gap: 0.375rem;
-    background: white;
-    padding: 0.25rem;
-    border-radius: 6px;
-    border: 1px solid #d1d5db;
+    background: #f1f5f9;
+    padding: 3px;
+    border-radius: var(--radius-md);
+    gap: 2px;
   }
 
   .toolbar-btn {
-    padding: 0.375rem 0.75rem;
+    padding: var(--space-1) var(--space-3);
     background: transparent;
     border: none;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     font-size: 0.8125rem;
-    font-weight: 500;
-    color: #6b7280;
+    font-weight: 600;
+    color: var(--text-muted);
     cursor: pointer;
-    transition: all 0.15s;
-    white-space: nowrap;
+    transition: all 0.15s ease;
   }
 
   .toolbar-btn:hover {
-    background: #f3f4f6;
-    color: #111827;
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.5);
   }
 
   .toolbar-btn.active {
-    background: #3b82f6;
-    color: white;
+    background: white;
+    color: var(--text-primary);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   }
 
   .loading-history {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 0.75rem;
-    padding: 2rem;
-    color: #6b7280;
+    gap: var(--space-3);
+    padding: var(--space-8);
+    color: var(--text-muted);
   }
 
-  .empty-history {
+  .mini-spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid #e2e8f0;
+    border-top-color: var(--accent-primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  .empty-state {
     text-align: center;
-    padding: 2rem;
-    color: #9ca3af;
+    padding: var(--space-8);
+    color: var(--text-muted);
   }
 
+  .empty-icon {
+    width: 48px;
+    height: 48px;
+    margin-bottom: var(--space-3);
+    opacity: 0.5;
+  }
+
+  .empty-state p {
+    margin: 0;
+    font-size: 0.9375rem;
+  }
+
+  /* === Timeline === */
   .timeline {
     display: flex;
     flex-direction: column;
-    gap: 0;
   }
 
   .timeline-item {
     display: flex;
-    gap: 1rem;
-    position: relative;
+    gap: var(--space-3);
   }
 
-  .timeline-marker {
+  .timeline-connector {
     display: flex;
     flex-direction: column;
     align-items: center;
-    width: 24px;
+    width: 20px;
     flex-shrink: 0;
   }
 
-  .marker-dot {
+  .connector-dot {
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    background: #d1d5db;
+    background: #cbd5e1;
     border: 2px solid white;
-    box-shadow: 0 0 0 2px #d1d5db;
+    box-shadow: 0 0 0 2px #e2e8f0;
+    flex-shrink: 0;
     z-index: 1;
   }
 
-  .timeline-item.occupied .marker-dot {
-    background: #eab308;
-    box-shadow: 0 0 0 2px #fde047;
+  .timeline-item.occupied .connector-dot {
+    background: #f59e0b;
+    box-shadow: 0 0 0 2px #fde68a;
   }
 
-  .marker-line {
+  .connector-line {
     flex: 1;
     width: 2px;
-    background: #e5e7eb;
-    min-height: 24px;
+    background: #e2e8f0;
+    min-height: 20px;
   }
 
-  .timeline-item:last-child .marker-line {
-    display: none;
-  }
-
-  .timeline-content {
+  .timeline-card {
     flex: 1;
-    padding-bottom: 1.25rem;
+    padding: var(--space-3);
+    background: #f8fafc;
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-3);
+    transition: all 0.2s ease;
   }
 
-  .event-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    margin-bottom: 0.25rem;
+  .timeline-item.occupied .timeline-card {
+    background: #fffbeb;
   }
 
   .event-status {
-    font-size: 0.9375rem;
-    font-weight: 600;
-    color: #374151;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    margin-bottom: var(--space-1);
   }
 
-  .timeline-item.occupied .event-status {
-    color: #854d0e;
+  .status-badge {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: var(--text-muted);
+  }
+
+  .status-badge.active {
+    color: #b45309;
   }
 
   .event-duration {
-    font-size: 0.8125rem;
-    font-weight: 500;
-    color: #6b7280;
-    background: #f3f4f6;
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: white;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
   }
 
   .event-time {
-    font-size: 0.8125rem;
-    color: #9ca3af;
+    font-size: 0.75rem;
+    color: var(--text-muted);
   }
 
+  /* === Buttons === */
+  .btn-primary {
+    padding: var(--space-3) var(--space-5);
+    background: var(--accent-primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    font-size: 0.9375rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-primary:hover {
+    background: #7c3aed;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+  }
+
+  /* === Responsive === */
   @media (max-width: 640px) {
-    .presence-detail-page {
-      padding: 1rem;
+    .detail-page {
+      padding: var(--space-3);
     }
 
-    .device-header {
+    .hero-section {
+      padding: var(--space-4);
+    }
+
+    .device-identity {
       flex-direction: column;
       text-align: center;
     }
 
     .device-name {
       justify-content: center;
+      font-size: 1.25rem;
     }
 
-    .stats-grid {
+    .stats-section {
       grid-template-columns: 1fr;
     }
 
-    .stat-value {
-      font-size: 1.5rem;
+    .stat-card {
+      flex-direction: row;
+      align-items: center;
+    }
+
+    .stat-card.highlight {
+      flex-direction: column;
+    }
+
+    .section-header {
+      flex-direction: column;
+      align-items: flex-start;
     }
 
     .toolbar {
-      flex-direction: column;
-      align-items: stretch;
+      width: 100%;
     }
 
-    .toolbar-section {
-      justify-content: space-between;
-    }
-
-    .button-group {
+    .btn-group {
       flex: 1;
     }
 
     .toolbar-btn {
       flex: 1;
       text-align: center;
-    }
-
-    .name-edit {
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-
-    .name-input {
-      flex: 1;
-      min-width: 150px;
-    }
-
-    .event-header {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 0.25rem;
     }
   }
 </style>

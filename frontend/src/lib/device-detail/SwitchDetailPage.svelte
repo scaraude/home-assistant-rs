@@ -4,11 +4,12 @@
   import { fetchAutomationRules } from "../api";
   import type { SwitchDevice, AutomationRule } from "../api";
   import type { DeviceState } from "../types/devices";
-  import { devicesMemory, deviceStateMemory, switchesMemory } from "../memory";
+  import { deviceStateMemory, switchesMemory } from "../memory";
   import { automationStore, rulesByDevice } from "../stores/automations";
   import StatusBadge from "../shared/StatusBadge.svelte";
   import AutomationRulePanel from "../automation/AutomationRulePanel.svelte";
-  import { icons } from "../icons";
+  import Icon from "../design-system/Icon.svelte";
+  import EditableDeviceName from "../devices/EditableDeviceName.svelte";
 
   interface Props {
     params: { id: string };
@@ -21,8 +22,6 @@
   let loading = $state(true);
   let error = $state<string | null>(null);
   let editingName = $state(false);
-  let editedName = $state("");
-  let savingName = $state(false);
   let isToggling = $state(false);
   let toggleError = $state<string | null>(null);
 
@@ -33,6 +32,11 @@
 
   // Get rules from store for this device
   let deviceRulesFromStore = $derived($rulesByDevice[params.id] || []);
+
+  const deviceName = $derived.by(() => {
+    const memoryDevice = $switchesMemory.byId[params.id];
+    return memoryDevice?.name ?? device?.name ?? params.id;
+  });
 
   // Sync store rules to local state
   $effect(() => {
@@ -59,9 +63,7 @@
       }
 
       device = switchDevice;
-      editedName = switchDevice.name;
 
-      // Fetch device state (battery, link quality)
       const state = await deviceStateMemory.ensureDeviceState(params.id);
       if (state) {
         deviceState = state;
@@ -118,38 +120,14 @@
   }
 
   function startEditingName() {
-    editedName = device?.name || "";
     editingName = true;
   }
 
-  function cancelEditingName() {
+  function handleNameSaved() {
     editingName = false;
-    editedName = device?.name || "";
-  }
-
-  async function saveName() {
-    if (!device || editedName.trim() === device.name) {
-      editingName = false;
-      return;
-    }
-
-    savingName = true;
-    try {
-      await devicesMemory.setDeviceName(params.id, editedName.trim());
-      device = { ...device, name: editedName.trim() };
-      editingName = false;
-    } catch (err) {
-      console.error("Failed to save name:", err);
-    } finally {
-      savingName = false;
-    }
-  }
-
-  function handleNameKeydown(event: KeyboardEvent) {
-    if (event.key === "Enter") {
-      void saveName();
-    } else if (event.key === "Escape") {
-      cancelEditingName();
+    const memoryDevice = $switchesMemory.byId[params.id];
+    if (memoryDevice) {
+      device = memoryDevice;
     }
   }
 
@@ -172,591 +150,698 @@
   }
 </script>
 
-<div class="switch-detail-page">
+<div class="detail-page">
+  <!-- Ambient background -->
+  <div class="ambient-bg"></div>
+  <div class="ambient-glow" class:active={device?.state}></div>
+
   <header class="page-header">
-    <button class="back-button" onclick={goBack} type="button">
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 24 24"
-        fill="currentColor"
-        width="20"
-        height="20"
-      >
-        <path
-          d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"
-        />
+    <button class="back-btn" onclick={goBack} type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M19 12H5M12 19l-7-7 7-7"/>
       </svg>
-      Back
+      <span>Back</span>
     </button>
+
+    <div class="header-badges">
+      {#if device?.battery_level != null || deviceState?.battery_level != null}
+        <StatusBadge
+          type="battery"
+          value={device?.battery_level ?? deviceState?.battery_level ?? 0}
+        />
+      {/if}
+      {#if device?.link_quality != null || deviceState?.link_quality != null}
+        <StatusBadge
+          type="signal"
+          value={device?.link_quality ?? deviceState?.link_quality ?? 0}
+        />
+      {/if}
+    </div>
   </header>
 
   {#if loading}
     <div class="loading-state">
-      <div class="spinner"></div>
+      <div class="loader">
+        <div class="loader-ring"></div>
+        <div class="loader-ring"></div>
+        <div class="loader-ring"></div>
+      </div>
       <p>Loading switch data...</p>
     </div>
   {:else if error}
     <div class="error-state">
+      <div class="error-icon">
+        <Icon name="error" size={48} />
+      </div>
       <p>{error}</p>
-      <button class="btn btn-primary" onclick={loadData} type="button">
+      <button class="btn-primary" onclick={loadData} type="button">
         Retry
       </button>
     </div>
   {:else if device}
     <div class="content">
-      <div class="device-header">
-        <div class="device-icon" class:on={device.state}>
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-          >
-            <path d={icons.lightbulb} />
-          </svg>
-        </div>
-        <div class="device-info">
-          {#if editingName}
-            <div class="name-edit">
-              <input
-                type="text"
-                bind:value={editedName}
-                onkeydown={handleNameKeydown}
-                class="name-input"
-                disabled={savingName}
-              />
-              <button
-                class="btn btn-sm btn-primary"
-                onclick={saveName}
-                disabled={savingName}
-                type="button"
-              >
-                {savingName ? "Saving..." : "Save"}
-              </button>
-              <button
-                class="btn btn-sm btn-secondary"
-                onclick={cancelEditingName}
-                disabled={savingName}
-                type="button"
-              >
-                Cancel
-              </button>
+      <!-- Hero Section with Giant Toggle -->
+      <section class="hero-section">
+        <div class="device-identity">
+          <div class="device-icon-wrapper">
+            <div class="device-icon" class:on={device.state}>
+              <Icon name="lightbulb" size={32} />
             </div>
-          {:else}
-            <h1 class="device-name">
-              {device.name}
-              <button
-                class="edit-name-btn"
-                onclick={startEditingName}
-                title="Edit name"
-                type="button"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                >
-                  <path
-                    d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
-                  />
-                </svg>
-              </button>
-            </h1>
-          {/if}
-          <p class="device-id">{params.id}</p>
-        </div>
-      </div>
-
-      <div class="state-section">
-        <div class="state-card">
-          <div class="state-header">
-            <span class="state-label">Current State</span>
-            <div class="state-indicator" class:on={device.state}>
-              <div class="state-dot"></div>
-              <span>{device.state ? "On" : "Off"}</span>
-            </div>
+            {#if device.state}
+              <div class="pulse-ring"></div>
+            {/if}
           </div>
 
+          <div class="device-meta">
+            <h1 class="device-name">
+              <EditableDeviceName
+                deviceId={params.id}
+                name={deviceName}
+                isEdit={editingName}
+                onSaved={handleNameSaved}
+                class="device-name-text"
+              />
+              {#if !editingName}
+                <button
+                  class="edit-btn"
+                  onclick={startEditingName}
+                  title="Edit name"
+                  type="button"
+                >
+                  <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+                    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                  </svg>
+                </button>
+              {/if}
+            </h1>
+            <p class="device-id">{params.id}</p>
+            <p class="last-seen">
+              Last seen: {formatLastSeen(device.last_seen || deviceState?.last_seen)}
+            </p>
+          </div>
+        </div>
+
+        <!-- Giant Power Control -->
+        <div class="power-control">
           <button
-            class="toggle-btn"
+            class="power-button"
             class:on={device.state}
-            class:loading={isToggling}
+            class:toggling={isToggling}
             disabled={isToggling}
             onclick={toggleSwitch}
             type="button"
+            aria-label={device.state ? "Turn off" : "Turn on"}
           >
-            {#if isToggling}
-              <div class="spinner-small"></div>
-              Switching...
-            {:else if device.state}
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-              >
-                <path d={icons.check} />
-              </svg>
-              Turn Off
-            {:else}
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-              >
-                <path d={icons.minus} />
-              </svg>
-              Turn On
-            {/if}
+            <div class="power-button-inner">
+              <div class="power-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M12 2v10M18.4 6.6a9 9 0 1 1-12.8 0"/>
+                </svg>
+              </div>
+              {#if isToggling}
+                <div class="power-spinner"></div>
+              {/if}
+            </div>
+            <div class="power-glow"></div>
           </button>
 
-          {#if toggleError}
-            <div class="toggle-error">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-              >
-                <path d={icons.error} />
-              </svg>
-              {toggleError}
+          <div class="power-status">
+            <div class="status-indicator" class:on={device.state}>
+              <div class="status-dot"></div>
+              <span class="status-text">{device.state ? "ON" : "OFF"}</span>
             </div>
-          {/if}
-        </div>
-      </div>
-
-      <div class="status-section">
-        <h2 class="section-title">Device Status</h2>
-        <div class="status-grid">
-          {#if device.battery_level != null || deviceState?.battery_level != null}
-            <div class="status-item">
-              <StatusBadge
-                type="battery"
-                value={device.battery_level ?? deviceState?.battery_level ?? 0}
-              />
-            </div>
-          {/if}
-          {#if device.link_quality != null || deviceState?.link_quality != null}
-            <div class="status-item">
-              <StatusBadge
-                type="signal"
-                value={device.link_quality ?? deviceState?.link_quality ?? 0}
-              />
-            </div>
-          {/if}
-          <div class="status-item last-seen">
-            <span class="status-label">Last seen</span>
-            <span class="status-value">
-              {formatLastSeen(device.last_seen || deviceState?.last_seen)}
-            </span>
+            <p class="status-hint">
+              {isToggling ? "Switching..." : `Tap to turn ${device.state ? "off" : "on"}`}
+            </p>
           </div>
         </div>
-      </div>
 
-      <div class="automation-section">
-        <h2 class="section-title">Automation Rules</h2>
+        {#if toggleError}
+          <div class="error-banner">
+            <Icon name="error" size={18} />
+            <span>{toggleError}</span>
+          </div>
+        {/if}
+      </section>
+
+      <!-- Automation Section -->
+      <section class="automation-section">
+        <div class="section-header">
+          <div class="section-title-group">
+            <Icon name="wrench" size={20} />
+            <h2>Automation Rules</h2>
+          </div>
+          <span class="rule-count">{deviceRules.length} rules</span>
+        </div>
+
         <AutomationRulePanel
           deviceId={params.id}
           {deviceRules}
           loading={loadingRules}
           error={rulesError}
         />
-      </div>
+      </section>
     </div>
   {/if}
 </div>
 
 <style>
-  .switch-detail-page {
-    min-height: calc(100vh - var(--app-header-height) - var(--app-nav-height));
-    background: #f3f4f6;
-    padding: 1.5rem;
+  /* === Design Tokens === */
+  .detail-page {
+    --accent-primary: #10b981;
+    --accent-on: #22c55e;
+    --accent-off: #64748b;
+    --accent-danger: #ef4444;
+    --surface-elevated: rgba(255, 255, 255, 0.98);
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+    --border-subtle: rgba(0, 0, 0, 0.06);
   }
 
+  .detail-page {
+    position: relative;
+    min-height: 100vh;
+    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 50%, #e2e8f0 100%);
+    padding: var(--space-4);
+    overflow-x: hidden;
+  }
+
+  /* Ambient backgrounds */
+  .ambient-bg {
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at 50% 0%, rgba(16, 185, 129, 0.03) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 80%, rgba(59, 130, 246, 0.03) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .ambient-glow {
+    position: fixed;
+    top: -30%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 120vw;
+    height: 60vh;
+    background: radial-gradient(ellipse, rgba(34, 197, 94, 0) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+    transition: all 0.6s ease;
+  }
+
+  .ambient-glow.active {
+    background: radial-gradient(ellipse, rgba(34, 197, 94, 0.12) 0%, transparent 70%);
+  }
+
+  /* === Header === */
   .page-header {
-    margin-bottom: 1.5rem;
+    position: relative;
+    z-index: 10;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-6);
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
   }
 
-  .back-button {
+  .back-btn {
     display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 1rem;
-    background: white;
-    border: 1px solid #d1d5db;
-    border-radius: 8px;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-4);
+    background: var(--surface-elevated);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
     font-size: 0.875rem;
-    font-weight: 500;
-    color: #374151;
+    font-weight: 600;
+    color: var(--text-secondary);
     cursor: pointer;
-    transition: all 0.15s;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   }
 
-  .back-button:hover {
-    background: #f9fafb;
-    border-color: #9ca3af;
+  .back-btn:hover {
+    background: white;
+    color: var(--text-primary);
+    transform: translateX(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   }
 
-  .loading-state,
-  .error-state {
-    text-align: center;
-    padding: 4rem 2rem;
+  .back-btn svg {
+    width: 18px;
+    height: 18px;
   }
 
-  .spinner {
-    width: 32px;
-    height: 32px;
-    border: 3px solid rgba(59, 130, 246, 0.2);
+  .header-badges {
+    display: flex;
+    gap: var(--space-2);
+  }
+
+  /* === Loading / Error States === */
+  .loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+    gap: var(--space-4);
+  }
+
+  .loader {
+    position: relative;
+    width: 60px;
+    height: 60px;
+  }
+
+  .loader-ring {
+    position: absolute;
+    inset: 0;
+    border: 3px solid transparent;
+    border-top-color: var(--accent-primary);
+    border-radius: 50%;
+    animation: spin 1.2s ease-in-out infinite;
+  }
+
+  .loader-ring:nth-child(2) {
+    inset: 8px;
     border-top-color: #3b82f6;
-    border-radius: 50%;
-    margin: 0 auto 1rem;
-    animation: spin 0.8s linear infinite;
+    animation-delay: 0.15s;
   }
 
-  .spinner-small {
-    width: 16px;
-    height: 16px;
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    border-top-color: currentColor;
-    border-radius: 50%;
-    animation: spin 0.6s linear infinite;
+  .loader-ring:nth-child(3) {
+    inset: 16px;
+    border-top-color: #f59e0b;
+    animation-delay: 0.3s;
   }
 
   @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
+    to { transform: rotate(360deg); }
   }
 
-  .content {
-    max-width: 900px;
-    margin: 0 auto;
+  .loading-state p {
+    font-size: 0.9375rem;
+    color: var(--text-muted);
+    font-weight: 500;
   }
 
-  .device-header {
+  .error-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+    gap: var(--space-4);
+    text-align: center;
+  }
+
+  .error-icon {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, #fef2f2, #fee2e2);
+    border-radius: 50%;
     display: flex;
     align-items: center;
-    gap: 1rem;
-    background: white;
-    padding: 1.5rem;
-    border-radius: 12px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    margin-bottom: 1.5rem;
+    justify-content: center;
+    color: var(--accent-danger);
+  }
+
+  .error-state p {
+    font-size: 1rem;
+    color: var(--text-secondary);
+  }
+
+  /* === Content === */
+  .content {
+    position: relative;
+    z-index: 5;
+    max-width: 600px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+  }
+
+  /* === Hero Section === */
+  .hero-section {
+    background: var(--surface-elevated);
+    border-radius: var(--radius-lg);
+    padding: var(--space-6);
+    box-shadow:
+      0 1px 3px rgba(0, 0, 0, 0.04),
+      0 4px 24px rgba(0, 0, 0, 0.04);
+    border: 1px solid var(--border-subtle);
+  }
+
+  .device-identity {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    margin-bottom: var(--space-8);
+    padding-bottom: var(--space-5);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .device-icon-wrapper {
+    position: relative;
+    flex-shrink: 0;
   }
 
   .device-icon {
     width: 64px;
     height: 64px;
-    background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+    background: linear-gradient(135deg, #64748b, #475569);
     border-radius: 16px;
     display: flex;
     align-items: center;
     justify-content: center;
     color: white;
-    transition: all 0.3s ease;
+    transition: all 0.4s ease;
   }
 
   .device-icon.on {
-    background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
-    box-shadow: 0 4px 12px rgba(251, 191, 36, 0.4);
+    background: linear-gradient(135deg, #fbbf24, #f59e0b);
+    box-shadow: 0 4px 20px rgba(251, 191, 36, 0.4);
   }
 
-  .device-icon svg {
-    width: 32px;
-    height: 32px;
+  .pulse-ring {
+    position: absolute;
+    inset: -4px;
+    border: 2px solid rgba(251, 191, 36, 0.4);
+    border-radius: 20px;
+    animation: pulse-ring 2s ease-out infinite;
   }
 
-  .device-info {
+  @keyframes pulse-ring {
+    0% { transform: scale(1); opacity: 1; }
+    100% { transform: scale(1.2); opacity: 0; }
+  }
+
+  .device-meta {
     flex: 1;
+    min-width: 0;
   }
 
   .device-name {
     font-size: 1.5rem;
-    font-weight: 600;
-    color: #111827;
-    margin: 0 0 0.25rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0 0 var(--space-1);
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-2);
+    letter-spacing: -0.02em;
   }
 
-  .edit-name-btn {
+  .edit-btn {
     background: none;
     border: none;
     cursor: pointer;
-    opacity: 0.5;
-    transition: opacity 0.15s;
-    padding: 0.25rem;
+    padding: var(--space-1);
+    opacity: 0.4;
+    transition: opacity 0.2s;
     display: flex;
     align-items: center;
-    justify-content: center;
+    color: var(--text-secondary);
   }
 
-  .edit-name-btn:hover {
+  .edit-btn:hover {
     opacity: 1;
   }
 
-  .edit-name-btn svg {
-    width: 18px;
-    height: 18px;
-    color: #6b7280;
+  .device-id {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin: 0 0 var(--space-1);
   }
 
-  .device-id {
+  .last-seen {
     font-size: 0.8125rem;
-    color: #6b7280;
-    font-family: monospace;
+    color: var(--text-secondary);
     margin: 0;
   }
 
-  .name-edit {
+  :global(.device-name-text) {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+
+  /* === Power Control === */
+  .power-control {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-5);
   }
 
-  .name-input {
-    font-size: 1.25rem;
-    font-weight: 600;
-    padding: 0.375rem 0.75rem;
-    border: 2px solid #3b82f6;
-    border-radius: 6px;
-    outline: none;
-    min-width: 200px;
-  }
-
-  .btn {
-    padding: 0.5rem 1rem;
+  .power-button {
+    position: relative;
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
     border: none;
-    border-radius: 6px;
-    font-size: 0.875rem;
-    font-weight: 500;
     cursor: pointer;
-    transition: all 0.15s;
+    transition: all 0.3s ease;
+    background: none;
+    padding: 0;
   }
 
-  .btn-sm {
-    padding: 0.375rem 0.75rem;
-    font-size: 0.8125rem;
-  }
-
-  .btn-primary {
-    background: #3b82f6;
-    color: white;
-  }
-
-  .btn-primary:hover {
-    background: #2563eb;
-  }
-
-  .btn-secondary {
-    background: #e5e7eb;
-    color: #374151;
-  }
-
-  .btn-secondary:hover {
-    background: #d1d5db;
-  }
-
-  .btn:disabled {
-    opacity: 0.6;
+  .power-button:disabled {
     cursor: not-allowed;
   }
 
-  .state-section {
-    margin-bottom: 1.5rem;
-  }
-
-  .state-card {
-    background: white;
-    padding: 1.5rem;
-    border-radius: 12px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  }
-
-  .state-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 1rem;
-  }
-
-  .state-label {
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: #6b7280;
-  }
-
-  .state-indicator {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 1rem;
-    font-weight: 600;
-    color: #6b7280;
-  }
-
-  .state-indicator.on {
-    color: #16a34a;
-  }
-
-  .state-dot {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: #d1d5db;
-    transition: all 0.3s ease;
-  }
-
-  .state-indicator.on .state-dot {
-    background: #16a34a;
-    box-shadow: 0 0 8px rgba(22, 163, 74, 0.6);
-  }
-
-  .toggle-btn {
+  .power-button-inner {
+    position: relative;
     width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: linear-gradient(145deg, #e2e8f0, #cbd5e1);
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 0.5rem;
-    padding: 1rem 1.5rem;
-    border: 2px solid #e5e7eb;
-    border-radius: 10px;
-    background: white;
-    color: #374151;
-    font-weight: 600;
-    font-size: 1rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
+    box-shadow:
+      0 4px 20px rgba(0, 0, 0, 0.1),
+      inset 0 -4px 10px rgba(0, 0, 0, 0.05),
+      inset 0 4px 10px rgba(255, 255, 255, 0.8);
+    transition: all 0.3s ease;
   }
 
-  .toggle-btn svg {
-    width: 20px;
-    height: 20px;
+  .power-button.on .power-button-inner {
+    background: linear-gradient(145deg, #22c55e, #16a34a);
+    box-shadow:
+      0 4px 30px rgba(34, 197, 94, 0.4),
+      inset 0 -4px 10px rgba(0, 0, 0, 0.1),
+      inset 0 4px 10px rgba(255, 255, 255, 0.2);
   }
 
-  .toggle-btn:hover:not(:disabled) {
-    background: #f9fafb;
-    border-color: #9ca3af;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  .power-button:hover:not(:disabled) .power-button-inner {
+    transform: scale(1.02);
   }
 
-  .toggle-btn:active:not(:disabled) {
-    transform: translateY(0);
+  .power-button:active:not(:disabled) .power-button-inner {
+    transform: scale(0.98);
   }
 
-  .toggle-btn.on {
-    background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
-    border-color: #16a34a;
+  .power-icon {
+    width: 48px;
+    height: 48px;
+    color: #64748b;
+    transition: color 0.3s ease;
+  }
+
+  .power-button.on .power-icon {
     color: white;
   }
 
-  .toggle-btn.on:hover:not(:disabled) {
-    background: linear-gradient(135deg, #15803d 0%, #166534 100%);
-    border-color: #15803d;
+  .power-icon svg {
+    width: 100%;
+    height: 100%;
   }
 
-  .toggle-btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
+  .power-glow {
+    position: absolute;
+    inset: -20px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(34, 197, 94, 0) 30%, transparent 70%);
+    pointer-events: none;
+    transition: all 0.4s ease;
+    z-index: -1;
   }
 
-  .toggle-error {
+  .power-button.on .power-glow {
+    background: radial-gradient(circle, rgba(34, 197, 94, 0.3) 30%, transparent 70%);
+    animation: glow-pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes glow-pulse {
+    0%, 100% { opacity: 0.7; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.05); }
+  }
+
+  .power-spinner {
+    position: absolute;
+    inset: 10px;
+    border: 3px solid transparent;
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  .power-status {
+    text-align: center;
+  }
+
+  .status-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-4);
+    background: #f1f5f9;
+    border-radius: var(--radius-pill);
+    margin-bottom: var(--space-2);
+  }
+
+  .status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #94a3b8;
+    transition: all 0.3s ease;
+  }
+
+  .status-indicator.on .status-dot {
+    background: #22c55e;
+    box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
+  }
+
+  .status-text {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    letter-spacing: 0.05em;
+  }
+
+  .status-indicator.on .status-text {
+    color: #16a34a;
+  }
+
+  .status-hint {
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+    margin: 0;
+  }
+
+  .error-banner {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    margin-top: 0.75rem;
-    padding: 0.75rem;
+    justify-content: center;
+    gap: var(--space-2);
+    margin-top: var(--space-4);
+    padding: var(--space-3);
     background: #fef2f2;
     border: 1px solid #fecaca;
-    border-radius: 6px;
+    border-radius: var(--radius-md);
     color: #dc2626;
     font-size: 0.875rem;
   }
 
-  .toggle-error svg {
-    width: 18px;
-    height: 18px;
-    flex-shrink: 0;
-  }
-
-  .status-section,
+  /* === Automation Section === */
   .automation-section {
-    background: white;
-    padding: 1.5rem;
-    border-radius: 12px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    margin-bottom: 1.5rem;
+    background: var(--surface-elevated);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+    box-shadow:
+      0 1px 3px rgba(0, 0, 0, 0.04),
+      0 4px 24px rgba(0, 0, 0, 0.04);
+    border: 1px solid var(--border-subtle);
   }
 
-  .section-title {
-    font-size: 1.125rem;
-    font-weight: 600;
-    color: #111827;
-    margin: 0 0 1rem;
-  }
-
-  .status-grid {
+  .section-header {
     display: flex;
-    flex-wrap: wrap;
-    gap: 1rem;
+    justify-content: space-between;
     align-items: center;
+    margin-bottom: var(--space-4);
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid var(--border-subtle);
   }
 
-  .status-item {
+  .section-title-group {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-2);
+    color: var(--text-secondary);
   }
 
-  .status-item.last-seen {
-    padding: 0.5rem 0.75rem;
-    background: #f3f4f6;
-    border-radius: 8px;
+  .section-title-group h2 {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
   }
 
-  .status-item .status-label {
+  .rule-count {
     font-size: 0.8125rem;
-    color: #6b7280;
-  }
-
-  .status-item .status-value {
-    font-size: 0.875rem;
     font-weight: 600;
-    color: #111827;
+    color: var(--text-muted);
+    background: #f1f5f9;
+    padding: var(--space-1) var(--space-3);
+    border-radius: var(--radius-pill);
   }
 
+  /* === Buttons === */
+  .btn-primary {
+    padding: var(--space-3) var(--space-5);
+    background: var(--accent-primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    font-size: 0.9375rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .btn-primary:hover {
+    background: #059669;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  }
+
+
+  /* === Responsive === */
   @media (max-width: 640px) {
-    .switch-detail-page {
-      padding: 1rem;
+    .detail-page {
+      padding: var(--space-3);
     }
 
-    .device-header {
+    .hero-section {
+      padding: var(--space-4);
+    }
+
+    .device-identity {
       flex-direction: column;
       text-align: center;
     }
 
     .device-name {
       justify-content: center;
+      font-size: 1.25rem;
     }
 
-    .name-edit {
-      flex-wrap: wrap;
-      justify-content: center;
+    .power-button {
+      width: 120px;
+      height: 120px;
     }
 
-    .name-input {
-      flex: 1;
-      min-width: 150px;
+    .power-icon {
+      width: 40px;
+      height: 40px;
     }
 
-    .state-header {
-      flex-direction: column;
-      gap: 0.75rem;
-      text-align: center;
-    }
-
-    .toggle-btn {
-      font-size: 0.9375rem;
-    }
   }
 </style>
