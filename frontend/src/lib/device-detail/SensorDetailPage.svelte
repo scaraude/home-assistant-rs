@@ -8,6 +8,7 @@
   import StatusBadge from "../shared/StatusBadge.svelte";
   import UnifiedChart from "../graphs/UnifiedChart.svelte";
   import Icon from "../design-system/Icon.svelte";
+  import Gauge from "../design-system/Gauge.svelte";
   import EditableDeviceName from "../devices/EditableDeviceName.svelte";
 
   interface Props {
@@ -252,53 +253,25 @@
 
         <!-- Large Metrics Display -->
         <div class="metrics-hero">
-          <div class="metric-gauge temperature">
-            <div class="gauge-ring">
-              <svg viewBox="0 0 120 120">
-                <circle cx="60" cy="60" r="54" class="gauge-bg" />
-                <circle
-                  cx="60"
-                  cy="60"
-                  r="54"
-                  class="gauge-fill"
-                  style="--progress: {latestReading
-                    ? Math.min((latestReading.temperature + 10) / 50, 1)
-                    : 0}"
-                />
-              </svg>
-            </div>
-            <div class="gauge-content">
-              <span class="gauge-value">
-                {latestReading ? latestReading.temperature.toFixed(1) : "--"}
-              </span>
-              <span class="gauge-unit">°C</span>
-            </div>
-            <span class="gauge-label">Temperature</span>
-          </div>
+          <Gauge
+            value={latestReading?.temperature ?? null}
+            min={-10}
+            max={40}
+            precision={1}
+            label="Temperature"
+            unit="°C"
+            tone="warm"
+          />
 
-          <div class="metric-gauge humidity">
-            <div class="gauge-ring">
-              <svg viewBox="0 0 120 120">
-                <circle cx="60" cy="60" r="54" class="gauge-bg" />
-                <circle
-                  cx="60"
-                  cy="60"
-                  r="54"
-                  class="gauge-fill"
-                  style="--progress: {latestReading
-                    ? latestReading.humidity / 100
-                    : 0}"
-                />
-              </svg>
-            </div>
-            <div class="gauge-content">
-              <span class="gauge-value">
-                {latestReading ? latestReading.humidity.toFixed(0) : "--"}
-              </span>
-              <span class="gauge-unit">%</span>
-            </div>
-            <span class="gauge-label">Humidity</span>
-          </div>
+          <Gauge
+            value={latestReading?.humidity ?? null}
+            min={0}
+            max={100}
+            precision={0}
+            label="Humidity"
+            unit="%"
+            tone="cool"
+          />
 
           {#if comfortLevel}
             <div
@@ -687,83 +660,6 @@
     align-items: center;
   }
 
-  .metric-gauge {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: var(--space-2);
-  }
-
-  .gauge-ring {
-    position: relative;
-    width: 120px;
-    height: 120px;
-  }
-
-  .gauge-ring svg {
-    width: 100%;
-    height: 100%;
-    transform: rotate(-90deg);
-  }
-
-  .gauge-bg {
-    fill: none;
-    stroke: #e2e8f0;
-    stroke-width: 8;
-  }
-
-  .gauge-fill {
-    fill: none;
-    stroke-width: 8;
-    stroke-linecap: round;
-    stroke-dasharray: 339.292;
-    stroke-dashoffset: calc(339.292 * (1 - var(--progress, 0)));
-    transition: stroke-dashoffset 1s ease-out;
-  }
-
-  .temperature .gauge-fill {
-    stroke: url(#temp-gradient);
-    stroke: #f59e0b;
-  }
-
-  .humidity .gauge-fill {
-    stroke: url(#humidity-gradient);
-    stroke: #3b82f6;
-  }
-
-  .gauge-content {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 2px;
-  }
-
-  .gauge-value {
-    font-size: 1.75rem;
-    font-weight: 800;
-    color: var(--text-primary);
-    letter-spacing: -0.03em;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .gauge-unit {
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: var(--text-muted);
-    align-self: flex-start;
-    margin-top: 8px;
-  }
-
-  .gauge-label {
-    font-size: 0.8125rem;
-    font-weight: 600;
-    color: var(--text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
   /* Comfort Indicator */
   .comfort-indicator {
     display: flex;
@@ -928,15 +824,6 @@
 
     .metrics-hero {
       grid-template-columns: repeat(2, 1fr);
-    }
-
-    .gauge-ring {
-      width: 100px;
-      height: 100px;
-    }
-
-    .gauge-value {
-      font-size: 1.5rem;
     }
 
     .section-header {

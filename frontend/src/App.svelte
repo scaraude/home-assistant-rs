@@ -269,7 +269,7 @@
     </div>
   {/if}
 
-  <div class="container" class:full-bleed={isOnNetwork || isOnEnergy}>
+  <div class="container">
     <Router {routes} />
   </div>
 </main>
@@ -429,14 +429,9 @@
   }
 
   .container {
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 2rem 1rem;
-  }
-
-  .container.full-bleed {
     max-width: none;
-    padding: 0;
+    margin: 0 auto;
+    /* padding: 2rem 1rem; */
   }
 
   .sync-indicator {
@@ -539,7 +534,7 @@
     }
 
     .container {
-      padding: var(--container-padding, 1rem);
+      /* padding: var(--container-padding, 1rem); */
       padding-bottom: 5rem;
     }
 
@@ -605,7 +600,7 @@
     }
 
     .container {
-      padding: var(--container-padding, 0.75rem);
+      /* padding: var(--container-padding, 0.75rem); */
       padding-bottom: 4.5rem;
     }
 

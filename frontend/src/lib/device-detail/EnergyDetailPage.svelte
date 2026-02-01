@@ -8,6 +8,7 @@
   import StatusBadge from "../shared/StatusBadge.svelte";
   import UnifiedChart from "../graphs/UnifiedChart.svelte";
   import EditableDeviceName from "../devices/EditableDeviceName.svelte";
+  import Gauge from "../design-system/Gauge.svelte";
 
   interface Props {
     params: { id: string };
@@ -32,10 +33,9 @@
     return reading as EnergySensorReading;
   });
 
-  // Derived power level for gauge (0-100 scale, assuming 3000W max typical)
-  const powerLevel = $derived.by(() => {
-    if (!latestReading?.power) return 0;
-    return Math.min(100, (Math.abs(latestReading.power) / 3000) * 100);
+  const powerMagnitude = $derived.by(() => {
+    if (latestReading?.power === undefined) return null;
+    return Math.abs(latestReading.power);
   });
 
   // Power flow direction
@@ -287,67 +287,18 @@
       <!-- Power Display Hero -->
       <section class="power-hero">
         <div class="power-gauge">
-          <div class="gauge-core">
-            <!-- Outer ring with gradient -->
-            <svg class="gauge-ring" viewBox="0 0 200 200">
-              <defs>
-                <linearGradient
-                  id="powerGradient"
-                  x1="0%"
-                  y1="0%"
-                  x2="100%"
-                  y2="100%"
-                >
-                  <stop offset="0%" stop-color="#06b6d4" />
-                  <stop offset="50%" stop-color="#0ea5e9" />
-                  <stop offset="100%" stop-color="#3b82f6" />
-                </linearGradient>
-                <linearGradient
-                  id="produceGradient"
-                  x1="0%"
-                  y1="0%"
-                  x2="100%"
-                  y2="100%"
-                >
-                  <stop offset="0%" stop-color="#22c55e" />
-                  <stop offset="100%" stop-color="#10b981" />
-                </linearGradient>
-              </defs>
-              <!-- Background arc -->
-              <circle
-                cx="100"
-                cy="100"
-                r="85"
-                fill="none"
-                stroke="rgba(255,255,255,0.1)"
-                stroke-width="12"
-                stroke-linecap="round"
-                stroke-dasharray="401.92"
-                stroke-dashoffset="100.48"
-                transform="rotate(135, 100, 100)"
-              />
-              <!-- Power level arc -->
-              <circle
-                cx="100"
-                cy="100"
-                r="85"
-                fill="none"
-                stroke={isProducing
-                  ? "url(#produceGradient)"
-                  : "url(#powerGradient)"}
-                stroke-width="12"
-                stroke-linecap="round"
-                stroke-dasharray="401.92"
-                stroke-dashoffset={401.92 -
-                  (powerLevel / 100) * 301.44 +
-                  100.48}
-                transform="rotate(135, 100, 100)"
-                class="power-arc"
-              />
-            </svg>
-
-            <!-- Center content -->
-            <div class="gauge-center">
+          <Gauge
+            value={powerMagnitude}
+            min={0}
+            max={3000}
+            size="lg"
+            tone={isProducing ? "good" : "info"}
+            label="Real-time Power"
+            unit={powerMagnitude === null ? "" : formatPowerUnit(powerMagnitude)}
+            format={(value) => formatPower(value)}
+            style="--gauge-size: 220px; --gauge-stroke: 12; --gauge-track: rgba(255, 255, 255, 0.12); --gauge-text: #f1f5f9; --gauge-subtle: rgba(255, 255, 255, 0.5);"
+          >
+            {#snippet center()}
               <div class="flow-indicator" class:producing={isProducing}>
                 <span class="flow-arrow">{isProducing ? "↑" : "↓"}</span>
                 <span class="flow-label"
@@ -356,15 +307,14 @@
               </div>
               <div class="power-value">
                 <span class="value-number"
-                  >{formatPower(latestReading?.power)}</span
+                  >{formatPower(powerMagnitude ?? undefined)}</span
                 >
                 <span class="value-unit"
-                  >{formatPowerUnit(latestReading?.power)}</span
+                  >{formatPowerUnit(powerMagnitude ?? undefined)}</span
                 >
               </div>
-            </div>
-          </div>
-          <div class="gauge-label">Real-time Power</div>
+            {/snippet}
+          </Gauge>
         </div>
       </section>
 
@@ -897,32 +847,11 @@
     gap: 0.75rem;
   }
 
-  .gauge-core {
-    position: relative;
-    width: 240px;
-    height: 240px;
-    display: grid;
-    place-items: center;
-  }
-
-  .gauge-ring {
-    width: 100%;
-    height: 100%;
-  }
-
-  .power-arc {
-    transition: stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-    filter: drop-shadow(0 0 12px rgba(6, 182, 212, 0.5));
-  }
-
-  .gauge-center {
-    position: absolute;
-    inset: 0;
-    display: flex;
+  .power-gauge :global(.gauge-center) {
     flex-direction: column;
     align-items: center;
-    justify-content: center;
     text-align: center;
+    gap: 0.5rem;
     padding: 0 1rem;
   }
 
@@ -999,7 +928,7 @@
     color: rgba(255, 255, 255, 0.5);
   }
 
-  .gauge-label {
+  .power-gauge :global(.gauge-label) {
     font-family: "SF Mono", "Fira Code", monospace;
     font-size: 0.6875rem;
     color: rgba(255, 255, 255, 0.35);
