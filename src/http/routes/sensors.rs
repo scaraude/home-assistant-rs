@@ -72,7 +72,11 @@ pub fn serve_readings(db: &Database, query: Option<&str>) -> Response<Full<Bytes
             debug!(device_id = %sid, start = start_ts, end = end_ts, "Querying raw readings for specific sensor");
             db.get_readings_for_sensor_range(sid, start_ts, end_ts)
         } else {
-            debug!(start = start_ts, end = end_ts, "Querying raw readings for all sensors");
+            debug!(
+                start = start_ts,
+                end = end_ts,
+                "Querying raw readings for all sensors"
+            );
             db.get_readings_range(start_ts, end_ts)
         }
     } else if let Some(sid) = device_id {

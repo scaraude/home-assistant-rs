@@ -286,7 +286,11 @@ impl Database {
     }
 
     /// Get readings for all sensors within a bounded time range
-    pub fn get_readings_range(&self, start_timestamp: i64, end_timestamp: i64) -> Result<Vec<SensorReading>> {
+    pub fn get_readings_range(
+        &self,
+        start_timestamp: i64,
+        end_timestamp: i64,
+    ) -> Result<Vec<SensorReading>> {
         debug!(
             start_timestamp = start_timestamp,
             end_timestamp = end_timestamp,
@@ -305,7 +309,10 @@ impl Database {
         )?;
 
         let mut readings = stmt
-            .query_map(params![start_timestamp, end_timestamp], Self::map_sensor_reading_row)?
+            .query_map(
+                params![start_timestamp, end_timestamp],
+                Self::map_sensor_reading_row,
+            )?
             .collect::<Result<Vec<_>>>()?;
 
         // Get presence readings
@@ -317,7 +324,10 @@ impl Database {
         )?;
 
         let mut presence_readings = stmt
-            .query_map(params![start_timestamp, end_timestamp], Self::map_presence_reading_row)?
+            .query_map(
+                params![start_timestamp, end_timestamp],
+                Self::map_presence_reading_row,
+            )?
             .collect::<Result<Vec<_>>>()?;
 
         readings.append(&mut presence_readings);
@@ -332,7 +342,10 @@ impl Database {
         )?;
 
         let mut energy_readings = stmt
-            .query_map(params![start_timestamp, end_timestamp], Self::map_energy_reading_row)?
+            .query_map(
+                params![start_timestamp, end_timestamp],
+                Self::map_energy_reading_row,
+            )?
             .collect::<Result<Vec<_>>>()?;
 
         readings.append(&mut energy_readings);
