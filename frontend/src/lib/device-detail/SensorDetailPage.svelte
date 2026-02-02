@@ -10,6 +10,7 @@
   import Icon from "../design-system/Icon.svelte";
   import Gauge from "../design-system/Gauge.svelte";
   import EditableDeviceName from "../devices/EditableDeviceName.svelte";
+  import { URI_FRONTEND } from "../shared/constant/URI";
 
   interface Props {
     params: { id: string };
