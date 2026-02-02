@@ -850,6 +850,12 @@
     gap: 0.75rem;
   }
 
+  .power-gauge :global(.gauge),
+  .power-gauge :global(.gauge-ring),
+  .power-gauge :global(.gauge-ring svg) {
+    overflow: visible;
+  }
+
   .power-gauge :global(.gauge-center) {
     flex-direction: column;
     align-items: center;
