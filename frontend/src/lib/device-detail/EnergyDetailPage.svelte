@@ -9,6 +9,7 @@
   import UnifiedChart from "../graphs/UnifiedChart.svelte";
   import EditableDeviceName from "../devices/EditableDeviceName.svelte";
   import Gauge from "../design-system/Gauge.svelte";
+  import { URI_FRONTEND } from "../shared/constant/URI";
 
   interface Props {
     params: { id: string };
@@ -122,7 +123,7 @@
   }
 
   function goBack() {
-    push("/network");
+    push(URI_FRONTEND.FLOORPLAN);
   }
 
   function formatLastSeen(date: Date | null | undefined): string {
@@ -290,21 +291,17 @@
           <Gauge
             value={powerMagnitude}
             min={0}
-            max={3000}
-            size="lg"
+            max={6000}
             tone={isProducing ? "good" : "info"}
-            label="Real-time Power"
-            unit={powerMagnitude === null ? "" : formatPowerUnit(powerMagnitude)}
+            label=""
+            size="lg"
+            unit={powerMagnitude === null
+              ? ""
+              : formatPowerUnit(powerMagnitude)}
             format={(value) => formatPower(value)}
-            style="--gauge-size: 220px; --gauge-stroke: 12; --gauge-track: rgba(255, 255, 255, 0.12); --gauge-text: #f1f5f9; --gauge-subtle: rgba(255, 255, 255, 0.5);"
+            style="--gauge-stroke: 12; --gauge-track: rgba(255, 255, 255, 0.12); --gauge-text: #f1f5f9; --gauge-subtle: rgba(255, 255, 255, 0.5);"
           >
             {#snippet center()}
-              <div class="flow-indicator" class:producing={isProducing}>
-                <span class="flow-arrow">{isProducing ? "↑" : "↓"}</span>
-                <span class="flow-label"
-                  >{isProducing ? "PRODUCING" : "CONSUMING"}</span
-                >
-              </div>
               <div class="power-value">
                 <span class="value-number"
                   >{formatPower(powerMagnitude ?? undefined)}</span
@@ -315,6 +312,12 @@
               </div>
             {/snippet}
           </Gauge>
+          <div class="flow-indicator" class:producing={isProducing}>
+            <span class="flow-arrow">{isProducing ? "↑" : "↓"}</span>
+            <span class="flow-label"
+              >{isProducing ? "PRODUCING" : "CONSUMING"}</span
+            >
+          </div>
         </div>
       </section>
 

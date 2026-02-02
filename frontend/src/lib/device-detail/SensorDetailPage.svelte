@@ -137,7 +137,7 @@
   }
 
   function goBack() {
-    push("/network");
+    push(URI_FRONTEND.FLOORPLAN);
   }
 
   function formatLastSeen(date: Date | null | undefined): string {

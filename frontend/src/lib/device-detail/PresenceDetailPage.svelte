@@ -8,6 +8,7 @@
   import StatusBadge from "../shared/StatusBadge.svelte";
   import Icon from "../design-system/Icon.svelte";
   import EditableDeviceName from "../devices/EditableDeviceName.svelte";
+  import { URI_FRONTEND } from "../shared/constant/URI";
 
   interface Props {
     params: { id: string };
@@ -160,7 +161,7 @@
   }
 
   function goBack() {
-    push("/network");
+    push(URI_FRONTEND.FLOORPLAN);
   }
 
   function formatLastSeen(date: Date | null | undefined): string {

@@ -4,7 +4,7 @@
   import SensorsView from "./routes/SensorsView.svelte";
   import LogsView from "./routes/LogsView.svelte";
   import CommanderView from "./routes/CommanderView.svelte";
-  import NetworkView from "./routes/NetworkView.svelte";
+  import FloorPlanView from "./routes/FloorPlanView.svelte";
   import ConsommationsView from "./routes/ConsommationsView.svelte";
   import SensorDetailPage from "./lib/device-detail/SensorDetailPage.svelte";
   import { setZigbeePermitJoin } from "./lib/api";
@@ -17,19 +17,20 @@
   import SwitchDetailPage from "./lib/device-detail/SwitchDetailPage.svelte";
   import EnergyDetailPage from "./lib/device-detail/EnergyDetailPage.svelte";
   import PresenceDetailPage from "./lib/device-detail/PresenceDetailPage.svelte";
+  import { URI_FRONTEND } from "./lib/shared/constant/URI";
 
   // Route definitions
   const routes = {
-    "/": SensorsView,
-    "/sensors": SensorsView,
-    "/switch/:id": SwitchDetailPage,
-    "/energy/:id": EnergyDetailPage,
-    "/presence/:id": PresenceDetailPage,
-    "/consommations": ConsommationsView,
-    "/commander": CommanderView,
-    "/network": NetworkView,
-    "/logs": LogsView,
-    "/sensor/:id": SensorDetailPage,
+    "/": FloorPlanView,
+    [URI_FRONTEND.SENSORS]: SensorsView,
+    [URI_FRONTEND.SWITCH_DETAIL(":id")]: SwitchDetailPage,
+    [URI_FRONTEND.ENERGY_DETAIL(":id")]: EnergyDetailPage,
+    [URI_FRONTEND.PRESENCE_DETAIL(":id")]: PresenceDetailPage,
+    [URI_FRONTEND.CONSOMMATIONS]: ConsommationsView,
+    [URI_FRONTEND.COMMANDER]: CommanderView,
+    [URI_FRONTEND.FLOORPLAN]: FloorPlanView,
+    [URI_FRONTEND.LOGS]: LogsView,
+    [URI_FRONTEND.SENSOR_DETAIL(":id")]: SensorDetailPage,
   };
 
   const PERMIT_JOIN_SECONDS = 180;
@@ -180,14 +181,13 @@
 
   // Track current route for active state
   let currentPath = $derived($location);
-  let isOnSensors = $derived(currentPath === "/" || currentPath === "/sensors");
-  let isOnConsommations = $derived(currentPath === "/consommations");
-  let isOnCommander = $derived(currentPath === "/commander");
-  let isOnNetwork = $derived(currentPath === "/network");
-  let isOnEnergy = $derived(currentPath.startsWith("/energy"));
-  let isOnLogs = $derived(currentPath === "/logs");
-  // let isOnSensorDetail = $derived(currentPath.startsWith("/sensor/"));
-  // let isOnSwitchDetail = $derived(currentPath.startsWith("/switch/"));
+  let isOnFloorPlan = $derived(
+    currentPath === "/" || currentPath === URI_FRONTEND.FLOORPLAN,
+  );
+  let isOnSensors = $derived(currentPath === URI_FRONTEND.SENSORS);
+  let isOnConsommations = $derived(currentPath === URI_FRONTEND.CONSOMMATIONS);
+  let isOnCommander = $derived(currentPath === URI_FRONTEND.COMMANDER);
+  let isOnLogs = $derived(currentPath === URI_FRONTEND.LOGS);
   let permitJoinActive = $derived(permitJoinSecondsRemaining !== null);
   let permitJoinLabel = $derived(
     permitJoinSecondsRemaining === null
@@ -199,33 +199,57 @@
 <main>
   <header>
     <div class="header-content">
-      <div class="logo">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-        >
-          <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
-        </svg>
-      </div>
-      <h1>Home Automation</h1>
+      <button
+        onclick={() => (window.location.href = "/#/")}
+        class="home-button"
+        aria-label="Go to Home"
+      >
+        <div class="logo">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+          >
+            <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
+          </svg>
+        </div>
+        <h1>Home Automation</h1>
+      </button>
 
       <nav class="nav-buttons">
-        <a href="#/" class="nav-button" class:active={isOnSensors}> Sensors </a>
         <a
-          href="#/consommations"
+          href={"/#" + URI_FRONTEND.SENSORS}
+          class="nav-button"
+          class:active={isOnSensors}
+        >
+          Sensors
+        </a>
+        <a
+          href={"/#" + URI_FRONTEND.CONSOMMATIONS}
           class="nav-button"
           class:active={isOnConsommations}
         >
           Consommations
         </a>
-        <a href="#/commander" class="nav-button" class:active={isOnCommander}>
+        <a
+          href={"/#" + URI_FRONTEND.COMMANDER}
+          class="nav-button"
+          class:active={isOnCommander}
+        >
           Commander
         </a>
-        <a href="#/network" class="nav-button" class:active={isOnNetwork}>
-          Network
+        <a
+          href={"/#" + URI_FRONTEND.FLOORPLAN}
+          class="nav-button"
+          class:active={isOnFloorPlan}
+        >
+          Floor Plan
         </a>
-        <a href="#/logs" class="nav-button" class:active={isOnLogs}>
+        <a
+          href={"/#" + URI_FRONTEND.LOGS}
+          class="nav-button"
+          class:active={isOnLogs}
+        >
           System Logs
         </a>
         <button
@@ -403,6 +427,17 @@
   .permit-join-button.active .permit-join-label {
     opacity: 1;
     max-width: 10rem;
+  }
+
+  .home-button {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: transparent;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    text-decoration: none;
   }
 
   .logo {

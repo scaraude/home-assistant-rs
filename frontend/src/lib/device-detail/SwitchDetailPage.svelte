@@ -10,6 +10,7 @@
   import AutomationRulePanel from "../automation/AutomationRulePanel.svelte";
   import Icon from "../design-system/Icon.svelte";
   import EditableDeviceName from "../devices/EditableDeviceName.svelte";
+  import { URI_FRONTEND } from "../shared/constant/URI";
 
   interface Props {
     params: { id: string };
@@ -132,7 +133,7 @@
   }
 
   function goBack() {
-    push("/network");
+    push(URI_FRONTEND.FLOORPLAN);
   }
 
   function formatLastSeen(date: Date | null | undefined): string {
@@ -157,8 +158,13 @@
 
   <header class="page-header">
     <button class="back-btn" onclick={goBack} type="button">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M19 12H5M12 19l-7-7 7-7"/>
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+      >
+        <path d="M19 12H5M12 19l-7-7 7-7" />
       </svg>
       <span>Back</span>
     </button>
@@ -228,15 +234,24 @@
                   title="Edit name"
                   type="button"
                 >
-                  <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
-                    <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    width="16"
+                    height="16"
+                  >
+                    <path
+                      d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
+                    />
                   </svg>
                 </button>
               {/if}
             </h1>
             <p class="device-id">{params.id}</p>
             <p class="last-seen">
-              Last seen: {formatLastSeen(device.last_seen || deviceState?.last_seen)}
+              Last seen: {formatLastSeen(
+                device.last_seen || deviceState?.last_seen,
+              )}
             </p>
           </div>
         </div>
@@ -254,8 +269,13 @@
           >
             <div class="power-button-inner">
               <div class="power-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                  <path d="M12 2v10M18.4 6.6a9 9 0 1 1-12.8 0"/>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                >
+                  <path d="M12 2v10M18.4 6.6a9 9 0 1 1-12.8 0" />
                 </svg>
               </div>
               {#if isToggling}
@@ -271,7 +291,9 @@
               <span class="status-text">{device.state ? "ON" : "OFF"}</span>
             </div>
             <p class="status-hint">
-              {isToggling ? "Switching..." : `Tap to turn ${device.state ? "off" : "on"}`}
+              {isToggling
+                ? "Switching..."
+                : `Tap to turn ${device.state ? "off" : "on"}`}
             </p>
           </div>
         </div>
@@ -331,9 +353,16 @@
   .ambient-bg {
     position: fixed;
     inset: 0;
-    background:
-      radial-gradient(ellipse at 50% 0%, rgba(16, 185, 129, 0.03) 0%, transparent 50%),
-      radial-gradient(ellipse at 80% 80%, rgba(59, 130, 246, 0.03) 0%, transparent 50%);
+    background: radial-gradient(
+        ellipse at 50% 0%,
+        rgba(16, 185, 129, 0.03) 0%,
+        transparent 50%
+      ),
+      radial-gradient(
+        ellipse at 80% 80%,
+        rgba(59, 130, 246, 0.03) 0%,
+        transparent 50%
+      );
     pointer-events: none;
     z-index: 0;
   }
@@ -345,14 +374,22 @@
     transform: translateX(-50%);
     width: 120vw;
     height: 60vh;
-    background: radial-gradient(ellipse, rgba(34, 197, 94, 0) 0%, transparent 70%);
+    background: radial-gradient(
+      ellipse,
+      rgba(34, 197, 94, 0) 0%,
+      transparent 70%
+    );
     pointer-events: none;
     z-index: 0;
     transition: all 0.6s ease;
   }
 
   .ambient-glow.active {
-    background: radial-gradient(ellipse, rgba(34, 197, 94, 0.12) 0%, transparent 70%);
+    background: radial-gradient(
+      ellipse,
+      rgba(34, 197, 94, 0.12) 0%,
+      transparent 70%
+    );
   }
 
   /* === Header === */
@@ -439,7 +476,9 @@
   }
 
   @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .loading-state p {
@@ -536,8 +575,14 @@
   }
 
   @keyframes pulse-ring {
-    0% { transform: scale(1); opacity: 1; }
-    100% { transform: scale(1.2); opacity: 0; }
+    0% {
+      transform: scale(1);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(1.2);
+      opacity: 0;
+    }
   }
 
   .device-meta {
@@ -667,20 +712,35 @@
     position: absolute;
     inset: -20px;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(34, 197, 94, 0) 30%, transparent 70%);
+    background: radial-gradient(
+      circle,
+      rgba(34, 197, 94, 0) 30%,
+      transparent 70%
+    );
     pointer-events: none;
     transition: all 0.4s ease;
     z-index: -1;
   }
 
   .power-button.on .power-glow {
-    background: radial-gradient(circle, rgba(34, 197, 94, 0.3) 30%, transparent 70%);
+    background: radial-gradient(
+      circle,
+      rgba(34, 197, 94, 0.3) 30%,
+      transparent 70%
+    );
     animation: glow-pulse 2s ease-in-out infinite;
   }
 
   @keyframes glow-pulse {
-    0%, 100% { opacity: 0.7; transform: scale(1); }
-    50% { opacity: 1; transform: scale(1.05); }
+    0%,
+    100% {
+      opacity: 0.7;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.05);
+    }
   }
 
   .power-spinner {
@@ -812,7 +872,6 @@
     box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
   }
 
-
   /* === Responsive === */
   @media (max-width: 640px) {
     .detail-page {
@@ -842,6 +901,5 @@
       width: 40px;
       height: 40px;
     }
-
   }
 </style>

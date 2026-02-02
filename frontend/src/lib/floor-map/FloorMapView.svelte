@@ -25,6 +25,7 @@
   import type { SensorReading } from "../api";
   import FloorMapDeviceNode from "./FloorMapDeviceNode.svelte";
   import SVGBackgroundNode from "./SVGBackgroundNode.svelte";
+  import { URI_FRONTEND } from "../shared/constant/URI";
 
   type FloorMapDeviceNodeData = {
     kind: "device";
@@ -175,7 +176,9 @@
 
   const latestReadingByDevice = $derived.by(() => {
     const map = new SvelteMap<string, SensorReading>();
-    for (const [deviceId, reading] of Object.entries($sensorsMemory.latestByDevice)) {
+    for (const [deviceId, reading] of Object.entries(
+      $sensorsMemory.latestByDevice,
+    )) {
       if (reading) {
         map.set(deviceId, reading);
       }
@@ -281,15 +284,15 @@
     const sensorCap = device.capabilities.find((cap) => cap.type === "sensor");
     if (sensorCap?.type === "sensor") {
       if (sensorCap.sensor_type === "temp_humidity") {
-        push(`/sensor/${deviceId}`);
+        push(URI_FRONTEND.SENSOR_DETAIL(deviceId));
         return;
       }
       if (sensorCap.sensor_type === "energy_meter") {
-        push(`/energy/${deviceId}`);
+        push(URI_FRONTEND.ENERGY_DETAIL(deviceId));
         return;
       }
       if (sensorCap.sensor_type === "presence") {
-        push(`/presence/${deviceId}`);
+        push(URI_FRONTEND.PRESENCE_DETAIL(deviceId));
         return;
       }
     }
@@ -299,7 +302,7 @@
       (cap) => cap.type === "commander",
     );
     if (switchCap?.type === "commander") {
-      push(`/switch/${deviceId}`);
+      push(URI_FRONTEND.SWITCH_DETAIL(deviceId));
     }
   }
 
