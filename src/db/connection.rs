@@ -117,6 +117,17 @@ impl Database {
             }
         };
 
+        // Apply SQLite performance optimizations
+        info!("Applying SQLite performance pragmas");
+        if let Err(e) = conn.execute_batch(
+            "PRAGMA journal_mode=WAL;
+             PRAGMA synchronous=NORMAL;",
+        ) {
+            error!(error = %e, "Failed to apply SQLite pragmas");
+            return Err(e);
+        }
+        info!("SQLite pragmas applied successfully");
+
         let db = Self {
             conn: Mutex::new(conn),
         };
