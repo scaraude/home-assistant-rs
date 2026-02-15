@@ -42,6 +42,62 @@ pub fn serve_readings(db: &Database, query: Option<&str>) -> Response<Full<Bytes
     // Parse query parameters for device_id, hours, since, start/end, and bucket
     let params = QueryParams::new(query);
     let device_id = params.get("device_id");
+    let latest_only = params
+        .get("latest")
+        .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+
+    if latest_only {
+        info!(
+            device_id = ?device_id,
+            "Querying latest reading(s) only"
+        );
+
+        let device_ids = if let Some(sensor_id) = device_id {
+            vec![sensor_id.to_string()]
+        } else {
+            match db.get_all_sensor_devices() {
+                Ok(sensors) => sensors.into_iter().map(|sensor| sensor.device_id).collect(),
+                Err(e) => {
+                    error!(error = %e, "Database error while fetching sensors for latest readings");
+                    return internal_error_response("Database error");
+                }
+            }
+        };
+
+        match db.get_latest_readings_batch(&device_ids) {
+            Ok(batch) => {
+                let mut readings: Vec<_> = batch.into_values().collect();
+                readings.sort_by(|a, b| a.device_id().cmp(b.device_id()));
+
+                let latest_timestamp = readings
+                    .iter()
+                    .map(|r| r.timestamp().timestamp())
+                    .max()
+                    .unwrap_or_else(|| chrono::Utc::now().timestamp());
+
+                let json = match serialize_to_json(&readings, "latest sensor readings") {
+                    Ok(json) => json,
+                    Err(response) => return *response,
+                };
+
+                info!(
+                    reading_count = readings.len(),
+                    response_size = json.len(),
+                    device_id = ?device_id,
+                    latest_ts = latest_timestamp,
+                    "Successfully serialized latest readings to JSON"
+                );
+
+                return json_response_with_timestamp(json, latest_timestamp);
+            }
+            Err(e) => {
+                error!(error = %e, device_id = ?device_id, "Database error while fetching latest readings");
+                return internal_error_response("Database error");
+            }
+        }
+    }
+
     let since_param = params.get_optional_i64("since");
     let start_param = params.get_optional_i64("start");
     let end_param = params.get_optional_i64("end");

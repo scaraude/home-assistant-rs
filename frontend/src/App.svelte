@@ -218,6 +218,13 @@
 
       <nav class="nav-buttons">
         <a
+          href={"/#" + URI_FRONTEND.FLOORPLAN}
+          class="nav-button"
+          class:active={isOnFloorPlan}
+        >
+          Floor Plan
+        </a>
+        <a
           href={"/#" + URI_FRONTEND.SENSORS}
           class="nav-button"
           class:active={isOnSensors}
@@ -237,13 +244,6 @@
           class:active={isOnCommander}
         >
           Commander
-        </a>
-        <a
-          href={"/#" + URI_FRONTEND.FLOORPLAN}
-          class="nav-button"
-          class:active={isOnFloorPlan}
-        >
-          Floor Plan
         </a>
         <a
           href={"/#" + URI_FRONTEND.LOGS}

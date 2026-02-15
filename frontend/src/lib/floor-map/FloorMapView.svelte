@@ -75,6 +75,7 @@
       loadTopology(),
       loadFloorPlan(),
       floorMapStore.initialize(),
+      loadLatestSensorReadings(),
     ]);
   });
 
@@ -112,6 +113,14 @@
         error instanceof Error ? error.message : "Failed to load floor plan";
     } finally {
       floorPlanLoading = false;
+    }
+  }
+
+  async function loadLatestSensorReadings() {
+    try {
+      await sensorsMemory.refreshLatestReadings();
+    } catch (error) {
+      console.error("Failed to refresh latest sensor readings:", error);
     }
   }
 

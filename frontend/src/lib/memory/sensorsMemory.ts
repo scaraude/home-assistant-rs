@@ -1,6 +1,11 @@
 import { writable } from 'svelte/store';
 import type { DeviceInfo, SensorReading } from '../api';
-import { fetchAggregatedReadings, fetchReadings, fetchSensors } from '../api';
+import {
+  fetchAggregatedReadings,
+  fetchLatestReadings,
+  fetchReadings,
+  fetchSensors,
+} from '../api';
 import { dateToUnixSeconds, unixSecondsToDate } from '../utils/time';
 import { addRange, coversRange, getMissingRanges, mergeRanges, type Range } from './rangeSet';
 import { bulkPut, getAll, put } from './indexedDb';
@@ -50,6 +55,7 @@ const { subscribe, update } = writable<SensorsMemoryState>(initialState);
 
 const inflightAggregations = new Set<string>();
 const inflightRaw = new Set<string>();
+let inflightLatestRefresh: Promise<void> | null = null;
 const pendingSeriesPersist = new Map<string, ReturnType<typeof setTimeout>>();
 
 function toPersistedReading(reading: SensorReading): PersistedSensorReading {
@@ -434,6 +440,35 @@ async function ensureAggregatedSeries(
   await Promise.all(requests);
 }
 
+async function refreshLatestReadings(): Promise<void> {
+  if (inflightLatestRefresh) {
+    await inflightLatestRefresh;
+    return;
+  }
+
+  inflightLatestRefresh = (async () => {
+    await ensureDevices();
+    const latestReadings = await fetchLatestReadings();
+
+    for (const reading of latestReadings) {
+      const ts = dateToUnixSeconds(reading.timestamp);
+      mergeSeriesReadings(
+        reading.device_id,
+        RAW_BUCKET,
+        [reading],
+        { start: ts, end: ts },
+        ts,
+      );
+    }
+  })();
+
+  try {
+    await inflightLatestRefresh;
+  } finally {
+    inflightLatestRefresh = null;
+  }
+}
+
 function mergeIncomingReading(reading: SensorReading) {
   mergeSeriesReadings(
     reading.device_id,
@@ -507,6 +542,7 @@ export const sensorsMemory = {
   ensureDevices,
   ensureRecentReadings,
   ensureAggregatedSeries,
+  refreshLatestReadings,
   mergeIncomingReading,
   applySensorName,
   applySensorColor,

@@ -92,6 +92,26 @@ export async function fetchReadings(
 }
 
 /**
+ * Fetch latest reading(s) only.
+ * @param sensorId - Optional sensor ID filter
+ */
+export async function fetchLatestReadings(sensorId?: string): Promise<SensorReading[]> {
+  const params = new URLSearchParams();
+  params.append('latest', '1');
+  if (sensorId) {
+    params.append('device_id', sensorId);
+  }
+
+  const response = await fetch(`/api/readings?${params.toString()}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch latest readings: ${response.statusText}`);
+  }
+
+  const readings = (await response.json()) as SensorReadingResponse[];
+  return readings.map(parseSensorReading);
+}
+
+/**
  * Fetch aggregated sensor readings for a specific device and time range
  * @param sensorId - Sensor device ID (required)
  * @param start - Range start time
