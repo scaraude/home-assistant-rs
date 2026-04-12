@@ -1,49 +1,41 @@
 # Rust
-/target/
-# Cargo.lock - Keep it for binary projects to ensure reproducible builds
+target/
+**/*.rs.bk
+Cargo.lock
 
-# Database
-*.db
-*.db-shm
-*.db-wal
+# Environment
+.env
+*.conf
+!*.conf.example
+!configs/templates/*
+
+# Keys & Secrets
+*_KEY*
+*_TOKEN*
+*_SECRET*
+
+# Audio assets
+*.mp3
+*.wav
+vosk-model*/
+codebook/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+
+# Node/Frontend
+node_modules/
+frontend/dist/
 
 # IDE
 .vscode/
 .idea/
 *.swp
-*.swo
 *~
 
 # OS
 .DS_Store
 Thumbs.db
-
-# Docker & Deployment
-*.tar.gz
-home-automation-rs
-deploy/
-
-# Deployment artifacts
-.env.deploy
-/configs/*
-!/configs/templates/
-/systemd/
-/backups/
-
-# Frontend build output
-/static/
-
-# Service runtime data (config files are tracked, runtime data is not)
-services/*/data/
-services/*/log/
-
-.env
-
-# Claude context
-.claude
-CLAUDE.md
-AGENTS.md
-
-system_monitor_back*
-
-dev-docs/
