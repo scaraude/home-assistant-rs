@@ -27,6 +27,16 @@ thiserror = "2"
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 
+# === AdaWorldAPI Ecosystem (sibling repos, path deps) ===
+# ndarray fork: HPC, SIMD, Fingerprint, CAM-PQ, BLAS backends
+ada-ndarray = { path = "../ndarray", default-features = false, features = ["std"], package = "ndarray" }
+# lance-graph-contract: zero-dep trait crate (ThinkingStyle, NARS, MUL types)
+lance-graph-contract = { path = "../lance-graph/crates/lance-graph-contract" }
+# bgz17: palette semiring codec (zero deps, 121 tests)
+bgz17 = { path = "../lance-graph/crates/bgz17" }
+# ada-rs: cognitive substrate, persona layer (presence, feel, self-model)
+ada = { path = "../ada-rs", default-features = false, features = ["simd"], package = "ada-rs" }
+
 [profile.release]
 opt-level = "z"
 lto = true

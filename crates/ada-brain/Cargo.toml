@@ -9,8 +9,12 @@ description = "Local AI brain via bgz17 codebook inference — runs on Pi 4"
 serde.workspace = true
 serde_json.workspace = true
 anyhow.workspace = true
-# lance-graph = { git = "https://github.com/AdaWorldAPI/lance-graph" }
-# ndarray = { git = "https://github.com/AdaWorldAPI/ndarray" }
+tracing.workspace = true
+
+# AdaWorldAPI ecosystem
+ada-ndarray.workspace = true           # HPC arrays, SIMD dispatch
+lance-graph-contract.workspace = true  # ThinkingStyle, NARS types (zero deps)
+bgz17.workspace = true                 # Palette semiring codec (zero deps)
 
 [features]
 default = ["scalar"]

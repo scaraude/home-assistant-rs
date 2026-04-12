@@ -1,2 +1,5 @@
 [target.aarch64-unknown-linux-musl]
 linker = "aarch64-linux-musl-gcc"
+
+[net]
+git-fetch-with-cli = true
