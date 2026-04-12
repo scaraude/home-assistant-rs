@@ -1,0 +1,21 @@
+[package]
+name = "ada-brain"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "Local AI brain via bgz17 codebook inference — runs on Pi 4"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+# lance-graph = { git = "https://github.com/AdaWorldAPI/lance-graph" }
+# ndarray = { git = "https://github.com/AdaWorldAPI/ndarray" }
+
+[features]
+default = ["scalar"]
+scalar = []           # Works everywhere
+neon = []             # ARM64 NEON (Pi 4, 500-5K tok/s)
+avx2 = []             # x86 AVX2 (3K-10K tok/s)
+avx512 = []           # x86 AVX-512 (10K-50K tok/s)
+amx = []              # Sapphire Rapids AMX (380K tok/s)

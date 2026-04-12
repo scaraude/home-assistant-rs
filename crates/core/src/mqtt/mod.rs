@@ -1,0 +1,14 @@
+// Core MQTT modules
+mod client;
+mod dedup_filter;
+mod device_discovery;
+mod event_loop;
+mod handlers;
+pub mod topic;
+
+// Tests
+#[cfg(test)]
+mod tests;
+
+// Re-export the main MQTT client and factory function
+pub use client::MqttClient;
