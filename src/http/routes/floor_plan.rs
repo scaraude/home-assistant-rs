@@ -117,6 +117,16 @@ pub async fn upload_floor_plan(
         return bad_request_response("Invalid SVG content. Must be a valid SVG document.");
     }
 
+    // Reject SVGs carrying active content (scripts / event handlers / embedded
+    // documents). The frontend also renders the plan via <img> (scripting
+    // disabled), so this is defense-in-depth at the upload boundary. See #30.
+    if !is_safe_svg(&upload.svg_content) {
+        warn!("Rejected floor plan upload containing active/executable SVG content");
+        return bad_request_response(
+            "SVG contains disallowed active content (scripts, event handlers, or embedded documents).",
+        );
+    }
+
     // Create floor plan model
     let floor_plan = FloorPlan::new(upload.svg_content);
 
@@ -175,6 +185,65 @@ fn is_valid_svg(content: &str) -> bool {
     has_closing
 }
 
+/// Reject SVGs carrying active/executable content. Defense-in-depth: the
+/// frontend renders the plan via `<img>` (which disables SVG scripting), but we
+/// also refuse obviously-malicious payloads at the upload boundary. See issue
+/// #30 (stored XSS via SVG upload).
+fn is_safe_svg(content: &str) -> bool {
+    let lower = content.to_ascii_lowercase();
+
+    const BANNED: &[&str] = &[
+        "<script",
+        "javascript:",
+        "<foreignobject",
+        "<iframe",
+        "<embed",
+        "<object",
+    ];
+    if BANNED.iter().any(|pat| lower.contains(pat)) {
+        return false;
+    }
+
+    !has_inline_event_handler(&lower)
+}
+
+/// Detect inline event-handler attributes such as `onload=`, `onclick=`, or
+/// `onbegin=` (SMIL), allowing whitespace before the `=`. Operates on an
+/// already-lowercased string.
+fn has_inline_event_handler(lower: &str) -> bool {
+    let bytes = lower.as_bytes();
+    for i in 0..bytes.len().saturating_sub(2) {
+        if bytes[i] != b'o' || bytes[i + 1] != b'n' {
+            continue;
+        }
+        // Must begin an attribute: preceded by a tag/attribute boundary.
+        let prev = if i == 0 { b' ' } else { bytes[i - 1] };
+        if !matches!(
+            prev,
+            b' ' | b'\t' | b'\n' | b'\r' | b'"' | b'\'' | b'<' | b'/'
+        ) {
+            continue;
+        }
+        // Consume the handler name (letters after "on").
+        let mut j = i + 2;
+        while j < bytes.len() && bytes[j].is_ascii_alphabetic() {
+            j += 1;
+        }
+        if j == i + 2 {
+            continue; // nothing after "on"
+        }
+        // Skip whitespace, then require '='.
+        let mut k = j;
+        while k < bytes.len() && matches!(bytes[k], b' ' | b'\t' | b'\n' | b'\r') {
+            k += 1;
+        }
+        if k < bytes.len() && bytes[k] == b'=' {
+            return true;
+        }
+    }
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -206,5 +275,28 @@ mod tests {
         assert!(!is_valid_svg("not svg"));
         assert!(!is_valid_svg("<div></div>"));
         assert!(!is_valid_svg("<svg")); // no closing
+    }
+
+    #[test]
+    fn test_is_safe_svg_accepts_benign() {
+        assert!(is_safe_svg("<svg xmlns=\"http://www.w3.org/2000/svg\"><rect/></svg>"));
+        assert!(is_safe_svg(
+            "<svg><image href=\"data:image/png;base64,AAAA\"/></svg>"
+        ));
+        // "on" appearing in normal text/ids must not trip the handler detector.
+        assert!(is_safe_svg("<svg><text id=\"onion\">bacon</text></svg>"));
+    }
+
+    #[test]
+    fn test_is_safe_svg_rejects_active_content() {
+        assert!(!is_safe_svg("<svg><script>alert(1)</script></svg>"));
+        assert!(!is_safe_svg("<svg onload=\"alert(1)\"></svg>"));
+        assert!(!is_safe_svg("<svg onload = 'x'></svg>")); // whitespace before =
+        assert!(!is_safe_svg("<svg><rect onclick=\"x\"/></svg>"));
+        assert!(!is_safe_svg("<svg><a href=\"javascript:alert(1)\">x</a></svg>"));
+        assert!(!is_safe_svg("<svg><foreignObject><body/></foreignObject></svg>"));
+        assert!(!is_safe_svg(
+            "<svg><animate attributeName=\"x\" onbegin=\"alert(1)\"/></svg>"
+        ));
     }
 }

@@ -36,15 +36,25 @@
       height: (heightMatch ? parseInt(heightMatch[1]) : (data.height ?? 600)) * scale,
     };
   });
+
+  // Render the (user-uploaded) floor plan as an <img> data URI rather than
+  // inlining it with {@html}. An SVG loaded through <img> has scripting
+  // disabled by the browser, so an uploaded SVG containing <script> or on*
+  // event handlers cannot execute — this closes the stored-XSS vector (#30).
+  const svgDataUri = $derived(
+    data.svgContent
+      ? `data:image/svg+xml;utf8,${encodeURIComponent(data.svgContent)}`
+      : null,
+  );
 </script>
 
 <div
   class="svg-background-node"
   style="width: {svgDimensions.width}px; height: {svgDimensions.height}px;"
 >
-  {#if data.svgContent}
+  {#if svgDataUri}
     <div class="svg-container">
-      {@html data.svgContent}
+      <img class="svg-img" src={svgDataUri} alt="Floor plan" draggable="false" />
     </div>
   {:else}
     <div class="placeholder">
@@ -79,7 +89,7 @@
     opacity: 0.85;
   }
 
-  .svg-container :global(svg) {
+  .svg-img {
     width: 100%;
     height: 100%;
     display: block;
