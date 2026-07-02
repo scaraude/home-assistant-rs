@@ -11,7 +11,11 @@ use tracing::{debug, error, info, warn};
 const MAX_SVG_SIZE: usize = 5 * 1024 * 1024;
 
 /// GET /api/floor-plan - Get the floor plan SVG
-pub fn serve_floor_plan(db: &Arc<Database>) -> Response<Full<Bytes>> {
+///
+/// Returns a weak `ETag` derived from the upload time and SVG length so the
+/// client (which also caches the SVG in IndexedDB) can revalidate with
+/// `If-None-Match` and get a `304` instead of re-downloading ~2.5 MB.
+pub fn serve_floor_plan(db: &Arc<Database>, if_none_match: Option<&str>) -> Response<Full<Bytes>> {
     debug!("Getting floor plan from database");
 
     match db.get_floor_plan() {
@@ -21,6 +25,18 @@ pub fn serve_floor_plan(db: &Arc<Database>) -> Response<Full<Bytes>> {
                 uploaded_at = %floor_plan.uploaded_at,
                 "Retrieved floor plan from database"
             );
+
+            let etag = format!(
+                "W/\"{}-{}\"",
+                floor_plan.uploaded_at.timestamp(),
+                floor_plan.svg_content.len()
+            );
+
+            // If the client already holds this exact version, skip the payload.
+            if if_none_match.is_some_and(|value| value.split(',').any(|tag| tag.trim() == etag)) {
+                debug!(%etag, "Floor plan unchanged; returning 304");
+                return not_modified_response(&etag);
+            }
 
             let json = match serialize_to_json(&floor_plan, "floor plan") {
                 Ok(json) => json,
@@ -32,7 +48,7 @@ pub fn serve_floor_plan(db: &Arc<Database>) -> Response<Full<Bytes>> {
                 "Successfully serialized floor plan to JSON"
             );
 
-            json_response(json)
+            json_response_with_etag(json, &etag)
         }
         Ok(None) => {
             debug!("No floor plan found in database");

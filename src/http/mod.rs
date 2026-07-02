@@ -1,3 +1,4 @@
+mod compression;
 mod query;
 mod responses;
 mod routes;
@@ -141,6 +142,13 @@ async fn handle_request(
     let path = req.uri().path().to_string();
     let method = req.method().clone();
     let query = req.uri().query().map(|s| s.to_string());
+    // Capture conditional/negotiation headers before `req` is consumed by a handler.
+    let accept_encoding = compression::accept_encoding_header(&req);
+    let if_none_match = req
+        .headers()
+        .get(hyper::header::IF_NONE_MATCH)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_owned);
 
     let start = std::time::Instant::now();
 
@@ -262,7 +270,7 @@ async fn handle_request(
         }),
         ("GET", "/api/floor-plan") => Ok({
             debug!("Serving floor plan");
-            routes::serve_floor_plan(&db)
+            routes::serve_floor_plan(&db, if_none_match.as_deref())
         }),
         ("POST", "/api/floor-plan") => Ok({
             debug!("Uploading floor plan");
@@ -284,6 +292,7 @@ async fn handle_request(
     };
 
     let response = response_result?;
+    let response = compression::maybe_compress(accept_encoding.as_deref(), response).await;
     let elapsed = start.elapsed();
     let status = response.status();
 

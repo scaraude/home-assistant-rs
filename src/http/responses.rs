@@ -17,6 +17,30 @@ pub fn json_response(json: String) -> Response<Full<Bytes>> {
         .expect("Failed to build JSON response - this should never happen with valid headers")
 }
 
+/// Create a JSON response carrying a validator (`ETag`) so clients can
+/// revalidate cheaply. `no-cache` forces the browser to send `If-None-Match`
+/// on every request, letting the server answer `304 Not Modified` when the
+/// payload is unchanged instead of re-sending it.
+pub fn json_response_with_etag(json: String, etag: &str) -> Response<Full<Bytes>> {
+    Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", "application/json")
+        .header("ETag", etag)
+        .header("Cache-Control", "no-cache")
+        .body(Full::new(Bytes::from(json)))
+        .expect("Failed to build JSON response with ETag")
+}
+
+/// Create a `304 Not Modified` response echoing the matched `ETag`.
+pub fn not_modified_response(etag: &str) -> Response<Full<Bytes>> {
+    Response::builder()
+        .status(StatusCode::NOT_MODIFIED)
+        .header("ETag", etag)
+        .header("Cache-Control", "no-cache")
+        .body(Full::new(Bytes::new()))
+        .expect("Failed to build 304 Not Modified response")
+}
+
 /// Serialize payload to JSON or return an internal error response
 pub fn serialize_to_json<T: Serialize>(
     data: &T,
