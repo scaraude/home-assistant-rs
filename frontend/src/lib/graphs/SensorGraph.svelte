@@ -16,6 +16,7 @@
   } from "chart.js";
   import "chartjs-adapter-date-fns";
   import type { SensorReading } from "../api";
+  import { formatDateTime, timeToken, hourCycle } from "../utils/time";
 
   // Register Chart.js components
   Chart.register(
@@ -170,7 +171,7 @@
               title: (items) => {
                 if (items.length > 0 && items[0].parsed.x !== null) {
                   const date = new Date(items[0].parsed.x);
-                  return date.toLocaleString();
+                  return formatDateTime(date);
                 }
                 return "";
               },
@@ -189,7 +190,7 @@
             time: {
               tooltipFormat: "MMM d, HH:mm",
               displayFormats: {
-                hour: "HH:mm",
+                hour: timeToken(),
                 day: "MMM d",
               },
             },
@@ -215,7 +216,15 @@
               },
             },
             grid: {
-              color: "rgba(0, 0, 0, 0.05)",
+              // Emphasize the 0°C freezing line on the temperature axis (#2).
+              color: (ctx: any) =>
+                ctx.tick?.value === 0 && !isPresenceSensor && selectedMetric !== "humidity"
+                  ? "rgba(37, 99, 235, 0.65)"
+                  : "rgba(0, 0, 0, 0.05)",
+              lineWidth: (ctx: any) =>
+                ctx.tick?.value === 0 && !isPresenceSensor && selectedMetric !== "humidity"
+                  ? 2
+                  : 1,
             },
             ticks: {
               font: {
@@ -301,6 +310,18 @@
   $effect(() => {
     if (chart && (readings || selectedMetric !== undefined)) {
       updateChart();
+    }
+  });
+
+  // Refresh axis labels when the clock-format preference changes (#16).
+  $effect(() => {
+    void $hourCycle; // reactive dependency
+    if (chart) {
+      const xAxis = chart.options.scales?.x as any;
+      if (xAxis?.time) {
+        xAxis.time.displayFormats = { hour: timeToken(), day: "MMM d" };
+        chart.update("none");
+      }
     }
   });
 </script>

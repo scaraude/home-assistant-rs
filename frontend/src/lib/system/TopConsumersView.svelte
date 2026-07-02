@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { TopConsumerEntry } from "../api";
+  import { formatDateTime } from "../utils/time";
   import ProcessHistoryGraph from "./ProcessHistoryGraph.svelte";
 
   let {
@@ -61,7 +62,7 @@
     <div class="header">
       <h3>Top {type === 'cpu' ? 'CPU' : 'RAM'} Consumers</h3>
       <div class="last-updated">
-        Last updated: {new Date(latestEntries[0].timestamp).toLocaleString()}
+        Last updated: {formatDateTime(new Date(latestEntries[0].timestamp))}
       </div>
     </div>
 

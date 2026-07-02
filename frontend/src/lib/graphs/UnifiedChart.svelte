@@ -19,6 +19,7 @@
   import { TIME_RANGE_HOURS } from "../stores/graphConfig";
   import { sensorsMemory } from "../memory";
   import { coversRange } from "../memory/rangeSet";
+  import { chartTimeFormats, formatDateTime, hourCycle } from "../utils/time";
 
   // Register Chart.js components
   Chart.register(
@@ -295,33 +296,7 @@
     }
   });
 
-  function getTimeDisplayFormats(range: string) {
-    switch (range) {
-      case "24h":
-        return { minute: "HH:mm", hour: "HH:mm", day: "HH:mm" };
-      case "1w":
-        return { minute: "HH:mm", day: "MMM dd", hour: "HH:mm" };
-      case "1m":
-        return {
-          minute: "HH:mm",
-          hour: "HH:mm",
-          day: "MMM dd",
-          week: "MMM dd",
-        };
-      case "1y":
-        return {
-          minute: "HH:mm",
-          hour: "HH:mm",
-          day: "MMM dd",
-          month: "MMM yyyy",
-          week: "MMM yyyy",
-        };
-      default:
-        return { hour: "HH:mm", day: "MMM dd" };
-    }
-  }
-
-  function createChart() {
+    function createChart() {
     if (!canvas) return;
 
     const ctx = canvas.getContext("2d");
@@ -350,7 +325,7 @@
               title: (items) => {
                 if (items.length > 0 && items[0].parsed.x !== null) {
                   const date = new Date(items[0].parsed.x);
-                  return date.toLocaleString();
+                  return formatDateTime(date);
                 }
                 return "";
               },
@@ -384,7 +359,7 @@
             type: "time",
             time: {
               tooltipFormat: "PPpp",
-              displayFormats: getTimeDisplayFormats(timeRange),
+              displayFormats: chartTimeFormats(timeRange),
             },
             grid: {
               display: false,
@@ -409,7 +384,16 @@
               font: { size: 12 },
             },
             grid: {
-              color: "rgba(0, 0, 0, 0.05)",
+              // Emphasize the 0 line — notably the 0°C freezing mark on the
+              // temperature axis (#2). Kept subtle for power/humidity axes.
+              color: (ctx: any) =>
+                ctx.tick?.value === 0 && metricType !== "power" && metric !== "humidity"
+                  ? "rgba(37, 99, 235, 0.65)"
+                  : "rgba(0, 0, 0, 0.05)",
+              lineWidth: (ctx: any) =>
+                ctx.tick?.value === 0 && metricType !== "power" && metric !== "humidity"
+                  ? 2
+                  : 1,
             },
             ticks: {
               font: { size: 11 },
@@ -459,7 +443,7 @@
     // Update time display formats
     const xAxis = chart.options.scales?.x as any;
     if (xAxis?.time) {
-      xAxis.time.displayFormats = getTimeDisplayFormats(timeRange);
+      xAxis.time.displayFormats = chartTimeFormats(timeRange);
     }
 
     chart.update("none");
@@ -500,6 +484,19 @@
       createChart();
     } else {
       updateChart();
+    }
+  });
+
+  // Refresh axis labels when the clock-format preference changes (#16).
+  // (Tooltips call formatDateTime() live, so they update on their own.)
+  $effect(() => {
+    void $hourCycle; // reactive dependency
+    if (chart) {
+      const xAxis = chart.options.scales?.x as any;
+      if (xAxis?.time) {
+        xAxis.time.displayFormats = chartTimeFormats(timeRange);
+        chart.update("none");
+      }
     }
   });
 </script>

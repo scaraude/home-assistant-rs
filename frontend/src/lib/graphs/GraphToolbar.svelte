@@ -1,6 +1,7 @@
 <script lang="ts">
   import { graphConfig } from "../stores/graphConfig";
   import type { GraphState } from "../stores/graphConfig";
+  import { hourCycle, useHour12 } from "../utils/time";
 
   let {
     metricType = "temperature"
@@ -10,6 +11,9 @@
 
   const currentMetric = $derived($graphConfig.metric);
   const currentTimeRange = $derived($graphConfig.timeRange);
+  const clock12 = $derived(
+    $hourCycle === "24h" ? false : $hourCycle === "12h" ? true : useHour12(),
+  );
 
   function setMetric(metric: GraphState['metric']) {
     graphConfig.setMetric(metric);
@@ -82,6 +86,28 @@
         onclick={() => setTimeRange('1y')}
       >
         1y
+      </button>
+    </div>
+  </div>
+
+  <div class="toolbar-divider"></div>
+
+  <div class="toolbar-section">
+    <span class="section-label">Clock:</span>
+    <div class="button-group">
+      <button
+        class="toolbar-btn"
+        class:active={!clock12}
+        onclick={() => hourCycle.set('24h')}
+      >
+        24h
+      </button>
+      <button
+        class="toolbar-btn"
+        class:active={clock12}
+        onclick={() => hourCycle.set('12h')}
+      >
+        12h
       </button>
     </div>
   </div>

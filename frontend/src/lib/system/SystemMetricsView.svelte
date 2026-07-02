@@ -14,6 +14,7 @@
   import zoomPlugin from 'chartjs-plugin-zoom';
   import 'chartjs-adapter-date-fns';
   import type { StorageBreakdown, SystemMonitorEntry } from "../api";
+  import { formatDateTime } from "../utils/time";
   import StorageBreakdownChart from "./StorageBreakdownChart.svelte";
 
   Chart.register(
@@ -117,7 +118,7 @@
             callbacks: {
               title: (items) => {
                 if (items.length > 0 && items[0].parsed.x !== null) {
-                  return new Date(items[0].parsed.x).toLocaleString();
+                  return formatDateTime(new Date(items[0].parsed.x));
                 }
                 return '';
               },
