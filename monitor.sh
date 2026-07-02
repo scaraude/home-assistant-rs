@@ -33,8 +33,10 @@ while true; do
     # Get timestamp
     TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
 
-    # Get CPU usage (average over 1 second)
-    CPU_USAGE=$(top -bn2 -d 1 | grep "Cpu(s)" | tail -n1 | awk '{print $2}' | cut -d'%' -f1)
+    # Get CPU usage (average over 1 second).
+    # Total busy % = 100 - idle. The previous version logged only the user% field
+    # ($2), which understated real usage (it ignored system/iowait time).
+    CPU_USAGE=$(top -bn2 -d 1 | grep -i "Cpu(s)" | tail -n1 | awk -F'id' '{n=split($1,a," "); printf "%.1f", 100-a[n]}')
 
     # Get RAM info
     RAM_INFO=$(free -m | grep Mem)
@@ -72,9 +74,18 @@ while true; do
         fi
     done
 
-    # Get top 10 CPU consumers
+    # Get top 10 CPU consumers.
+    # Exclude kernel threads ([...]) and this script own measurement tools
+    # (ps/top/awk/sed/grep/...), which are transient and otherwise pollute the
+    # ranking as fake "top consumers".
     RANK=0
-    ps aux --sort=-%cpu | head -n 11 | tail -n 10 | while read -r line; do
+    ps aux --sort=-%cpu | awk 'NR>1 {
+        cmd=""; for (i=11; i<=NF; i++) cmd = cmd $i " ";
+        if (cmd ~ /^\[/) next;
+        if (cmd ~ /(ps aux|top -bn|--sort=-%)/) next;
+        if ($11 ~ /(\/|^)(awk|sed|grep|cut|sort|head|tail)$/) next;
+        print;
+    }' | head -n 10 | while read -r line; do
         PROC_USER=$(echo $line | awk '{print $1}')
         PROC_PID=$(echo $line | awk '{print $2}')
         PROC_CPU=$(echo $line | awk '{print $3}')
@@ -90,9 +101,15 @@ while true; do
         echo "$TIMESTAMP,$RANK,$PROC_CMD,$PROC_PID,$PROC_CPU,$PROC_RAM_MB" >> "$TOP_CPU_CONSUMERS_LOG"
     done
 
-    # Get top 10 RAM consumers
+    # Get top 10 RAM consumers (same artifact/kernel-thread filtering as CPU).
     RANK=0
-    ps aux --sort=-%mem | head -n 11 | tail -n 10 | while read -r line; do
+    ps aux --sort=-%mem | awk 'NR>1 {
+        cmd=""; for (i=11; i<=NF; i++) cmd = cmd $i " ";
+        if (cmd ~ /^\[/) next;
+        if (cmd ~ /(ps aux|top -bn|--sort=-%)/) next;
+        if ($11 ~ /(\/|^)(awk|sed|grep|cut|sort|head|tail)$/) next;
+        print;
+    }' | head -n 10 | while read -r line; do
         PROC_USER=$(echo $line | awk '{print $1}')
         PROC_PID=$(echo $line | awk '{print $2}')
         PROC_CPU=$(echo $line | awk '{print $3}')
