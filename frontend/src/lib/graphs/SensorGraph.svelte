@@ -219,7 +219,7 @@
               // Emphasize the 0°C freezing line on the temperature axis (#2).
               color: (ctx: any) =>
                 ctx.tick?.value === 0 && !isPresenceSensor && selectedMetric !== "humidity"
-                  ? "rgba(37, 99, 235, 0.65)"
+                  ? "rgba(0, 0, 0, 0.8)"
                   : "rgba(0, 0, 0, 0.05)",
               lineWidth: (ctx: any) =>
                 ctx.tick?.value === 0 && !isPresenceSensor && selectedMetric !== "humidity"
