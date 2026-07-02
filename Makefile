@@ -29,7 +29,7 @@ help: ## Show this help message
 	@echo "$(COLOR_BLUE)Available targets:$(COLOR_RESET)"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(COLOR_GREEN)%-20s$(COLOR_RESET) %s\n", $$1, $$2}'
 
-# Load environment variables if .env.deploy exists
+# Load deployment config — .env.deploy is the single source of truth.
 -include .env.deploy
 
 # =============================================================================
@@ -43,18 +43,26 @@ check-ssh: ## Verify SSH connection to Raspberry Pi
 # =============================================================================
 # Build Targets
 # =============================================================================
-setup-cross-compile: ## Install Rust cross-compilation tools
-	@echo "$(COLOR_BLUE)Setting up Rust cross-compilation for $(RUST_TARGET)...$(COLOR_RESET)"
+setup-cross-compile: ## Install the native musl cross toolchain (no Docker)
+	@echo "$(COLOR_BLUE)Setting up native cross-compilation for $(RUST_TARGET)...$(COLOR_RESET)"
 	rustup target add $(RUST_TARGET)
-	@if ! command -v cross &> /dev/null; then \
-		echo "Installing cross-rs for easier cross-compilation..."; \
-		cargo install cross --git https://github.com/cross-rs/cross; \
+	@if ! command -v aarch64-linux-musl-gcc >/dev/null 2>&1; then \
+		echo "Installing aarch64 musl toolchain via Homebrew..."; \
+		brew tap messense/macos-cross-toolchains; \
+		brew trust messense/macos-cross-toolchains; \
+		brew install aarch64-unknown-linux-musl; \
 	fi
 	@echo "$(COLOR_GREEN)✓ Cross-compilation setup complete$(COLOR_RESET)"
 
-build: ## Build the Rust binary for Raspberry Pi
+check-target: ## Fail early if RUST_TARGET is not defined in .env.deploy
+	@if [ -z "$(RUST_TARGET)" ]; then \
+		echo "$(COLOR_YELLOW)✗ RUST_TARGET is not set. Define it in .env.deploy (see .env.deploy.example).$(COLOR_RESET)"; \
+		exit 1; \
+	fi
+
+build: check-target ## Build the Rust binary for Raspberry Pi (native musl, no Docker)
 	@echo "$(COLOR_BLUE)Building $(BINARY_NAME) for $(RUST_TARGET)...$(COLOR_RESET)"
-	cross build --release --target=$(RUST_TARGET)
+	cargo build --release --target=$(RUST_TARGET)
 	@ls -lh target/$(RUST_TARGET)/release/$(BINARY_NAME)
 	@echo "$(COLOR_GREEN)✓ Build complete$(COLOR_RESET)"
 
@@ -215,6 +223,8 @@ deploy-full: ## Full deployment (build, transfer, configure, and start services)
 	$(MAKE) start
 	@echo "$(COLOR_BOLD)$(COLOR_GREEN)✓ Full deployment complete!$(COLOR_RESET)"
 	$(MAKE) status
+	@echo "$(COLOR_BLUE)Reclaiming disk: cleaning local build artifacts...$(COLOR_RESET)"
+	$(MAKE) clean
 
 deploy-back:
 	@echo "$(COLOR_BLUE)Stopping services...$(COLOR_RESET)"
@@ -226,7 +236,10 @@ deploy-back:
 deploy-front: check-ssh transfer-frontend restart-home-automation ## Quick deploy frontend only
 	@echo "$(COLOR_GREEN)✓ Frontend quick deployment complete$(COLOR_RESET)"
 
-deploy-both: check-ssh deploy-back deploy-front ## Quick deploy binary and frontend
+deploy-both: check-ssh deploy-back deploy-front ## Quick deploy binary + frontend, then clean local build artifacts
+	@echo "$(COLOR_BLUE)Reclaiming disk: cleaning local build artifacts...$(COLOR_RESET)"
+	$(MAKE) clean
+	@echo "$(COLOR_GREEN)✓ Deploy + clean complete$(COLOR_RESET)"
 
 # =============================================================================
 # Service Management
@@ -340,7 +353,9 @@ restore: check-ssh ## Restore from backup (usage: make restore BACKUP_FILE=backu
 clean: ## Clean local build artifacts
 	@echo "$(COLOR_BLUE)Cleaning local build artifacts...$(COLOR_RESET)"
 	cargo clean
-	rm -rf systemd/ configs/
+	rm -rf systemd/
+	@# Remove only generated config files at the top of configs/, never the tracked templates/ subdir.
+	@find configs -maxdepth 1 -type f -delete 2>/dev/null || true
 	@echo "$(COLOR_GREEN)✓ Clean complete$(COLOR_RESET)"
 
 clean-pi: check-ssh ## Remove all deployed files from Raspberry Pi (WARNING: destructive)
