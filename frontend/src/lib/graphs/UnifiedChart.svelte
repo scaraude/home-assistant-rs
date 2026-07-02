@@ -388,7 +388,7 @@
               // temperature axis (#2). Kept subtle for power/humidity axes.
               color: (ctx: any) =>
                 ctx.tick?.value === 0 && metricType !== "power" && metric !== "humidity"
-                  ? "rgba(37, 99, 235, 0.65)"
+                  ? "rgba(0, 0, 0, 0.8)"
                   : "rgba(0, 0, 0, 0.05)",
               lineWidth: (ctx: any) =>
                 ctx.tick?.value === 0 && metricType !== "power" && metric !== "humidity"
