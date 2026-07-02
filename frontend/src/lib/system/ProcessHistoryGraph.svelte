@@ -13,6 +13,7 @@
   } from 'chart.js';
   import 'chartjs-adapter-date-fns';
   import { fetchProcessHistory, type ProcessMonitorEntry } from "../api";
+  import { formatDateTime } from "../utils/time";
 
   Chart.register(
     LineController,
@@ -167,7 +168,7 @@
             callbacks: {
               title: (items) => {
                 if (items.length > 0 && items[0].parsed.x !== null) {
-                  return new Date(items[0].parsed.x).toLocaleString();
+                  return formatDateTime(new Date(items[0].parsed.x));
                 }
                 return '';
               },

@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { ProcessMonitorEntry } from "../api";
+  import { formatDateTime } from "../utils/time";
   import ProcessHistoryGraph from "./ProcessHistoryGraph.svelte";
 
   let {
@@ -84,7 +85,7 @@
                   {entry.status}
                 </span>
               </td>
-              <td class="timestamp">{new Date(entry.timestamp).toLocaleString()}</td>
+              <td class="timestamp">{formatDateTime(new Date(entry.timestamp))}</td>
             </tr>
             {#if isExpanded}
               <tr class="expanded-row">

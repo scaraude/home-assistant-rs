@@ -5,6 +5,7 @@
   import type { PresenceSensorReading } from "../api/sensors";
   import type { DeviceInfo, DeviceState } from "../types/devices";
   import { TIME_RANGE_HOURS } from "../stores/graphConfig";
+  import { formatTime } from "../utils/time";
   import StatusBadge from "../shared/StatusBadge.svelte";
   import Icon from "../design-system/Icon.svelte";
   import EditableDeviceName from "../devices/EditableDeviceName.svelte";
@@ -198,10 +199,7 @@
     yesterday.setDate(yesterday.getDate() - 1);
     const isYesterday = date.toDateString() === yesterday.toDateString();
 
-    const timeStr = date.toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    const timeStr = formatTime(date);
 
     if (isToday) return `Today ${timeStr}`;
     if (isYesterday) return `Yesterday ${timeStr}`;

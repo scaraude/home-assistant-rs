@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { SwitchDevice, AutomationRule } from "../api";
+  import { formatDateTime } from "../utils/time";
   import { fetchAutomationRules } from "../api";
   import { formatDistanceToNow } from "date-fns";
   import StatusBadge from "../shared/StatusBadge.svelte";
@@ -107,7 +108,7 @@
       <div class="device-id">{shortId}</div>
       <div
         class="last-update"
-        title={device.last_seen ? device.last_seen.toLocaleString() : "Never"}
+        title={device.last_seen ? formatDateTime(device.last_seen) : "Never"}
       >
         {displayTimeAgo}
       </div>
