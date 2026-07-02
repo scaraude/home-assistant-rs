@@ -13,7 +13,7 @@ use events::bus::EventBus;
 use http::HttpServer;
 use mqtt::MqttClient;
 use services::{
-    AutomationService, DbWriterService, LogWatcherService, StateManagerService,
+    AutomationService, DbWriterService, LogWatcherService, RetentionService, StateManagerService,
     WebSocketBroadcaster,
 };
 use state::{DeviceStateStore, SwitchStateStore};
@@ -133,6 +133,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         log_watcher.run().await;
     });
     info!("LogWatcherService task spawned");
+
+    // Spawn retention service to downsample historical readings (keeps the DB
+    // small enough to fit the SQLite page cache on limited RAM).
+    let retention = RetentionService::new(db.clone());
+    tokio::spawn(async move {
+        retention.run().await;
+    });
+    info!("RetentionService task spawned");
 
     // Wrap MQTT client in Arc<Mutex> for sharing with HTTP server
     let mqtt_client = Arc::new(Mutex::new(mqtt_client));

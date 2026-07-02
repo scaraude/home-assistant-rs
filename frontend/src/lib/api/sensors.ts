@@ -1,6 +1,9 @@
 import type { DeviceInfo } from './devices';
 import { dateToUnixSeconds, parseUnixSeconds, unixSecondsToDate } from '../utils/time';
 
+/// Target number of points per series when auto-bucketing a time range.
+const TARGET_POINTS = 500;
+
 export interface TempHumiditySensorReading {
   type: 'temp_humidity';
   device_id: string;
@@ -69,13 +72,22 @@ export async function fetchSensors(): Promise<DeviceInfo[]> {
  */
 export async function fetchReadings(
   sensorId?: string,
-  hours: number = 24
+  hours: number = 24,
+  bucketSeconds?: number
 ): Promise<{ readings: SensorReading[]; latestTimestamp: Date | null }> {
   const params = new URLSearchParams();
   if (sensorId) {
     params.append('device_id', sensorId);
   }
   params.append('hours', hours.toString());
+
+  // Always server-side aggregate so the payload stays bounded (~500 points)
+  // instead of pulling every raw sample — a high-frequency energy meter can
+  // otherwise return tens of thousands of rows for a 24h window. Callers that
+  // truly need raw data can pass bucketSeconds = 1.
+  const bucket =
+    bucketSeconds ?? Math.max(60, Math.floor((hours * 3600) / TARGET_POINTS));
+  params.append('bucket', bucket.toString());
 
   const response = await fetch(`/api/readings?${params.toString()}`);
   if (!response.ok) {

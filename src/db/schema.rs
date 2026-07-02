@@ -112,6 +112,12 @@ impl Database {
             }
         }
 
+        // Timestamp-only index for cross-device range scans and retention sweeps.
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_temperature_ts ON temperature_readings(timestamp)",
+            [],
+        )?;
+
         Ok(())
     }
 
@@ -275,6 +281,14 @@ impl Database {
                 return Err(e);
             }
         }
+
+        // Index on timestamp alone for cross-device range/aggregation scans and
+        // retention sweeps (the composite index above cannot seek a time range
+        // when no device_id is given).
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_energy_ts ON energy_readings(timestamp)",
+            [],
+        )?;
 
         Ok(())
     }
