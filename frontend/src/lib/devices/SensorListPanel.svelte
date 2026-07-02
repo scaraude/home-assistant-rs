@@ -1,6 +1,5 @@
 <script lang="ts">
   import CompactSensorCard from "./CompactSensorCard.svelte";
-  import PresenceCard from "./PresenceCard.svelte";
   import { graphConfig } from "../stores/graphConfig";
   import type { SensorReading } from "../api";
   import type { DeviceInfo } from "../api/devices";
@@ -16,13 +15,19 @@
       (cap) => cap.type === "sensor" && cap.sensor_type === "energy_meter"
     );
 
+  // Exclude binary on/off (presence) sensors from this page (issue #13)
+  const isBinarySensor = (device: DeviceInfo) =>
+    device.capabilities.some(
+      (cap) => cap.type === "sensor" && cap.sensor_type === "presence"
+    );
+
   const deviceMap = $derived(new Map(devices.map(d => [d.device_id, d])));
 
   // Only show non-energy-meter sensors
   const sensors = $derived(
     allSensors.filter(s => {
       const device = deviceMap.get(s.deviceId);
-      return device && !isEnergyMeter(device);
+      return device && !isEnergyMeter(device) && !isBinarySensor(device);
     })
   );
 
@@ -31,12 +36,6 @@
   // Get latest reading for each sensor
   function getLatestReading(deviceId: string): SensorReading | null {
     return latestByDevice[deviceId] ?? null;
-  }
-
-  // Check if sensor is a presence sensor
-  function isPresenceSensor(deviceId: string): boolean {
-    const reading = getLatestReading(deviceId);
-    return reading?.type === 'presence';
   }
 
   // Check if any sensors are selected
@@ -125,19 +124,11 @@
     <div class="sensor-grid">
       {#each sensors as sensor (sensor.deviceId)}
         {@const reading = getLatestReading(sensor.deviceId)}
-        {#if isPresenceSensor(sensor.deviceId)}
-          <PresenceCard
-            {sensor}
-            {editMode}
-            latestReading={reading?.type === 'presence' ? reading : null}
-          />
-        {:else}
-          <CompactSensorCard
-            {sensor}
-            {editMode}
-            latestReading={reading}
-          />
-        {/if}
+        <CompactSensorCard
+          {sensor}
+          {editMode}
+          latestReading={reading}
+        />
       {/each}
     </div>
   {/if}

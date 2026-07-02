@@ -236,7 +236,7 @@
           class="nav-button"
           class:active={isOnConsommations}
         >
-          Consommations
+          Energy
         </a>
         <a
           href={"/#" + URI_FRONTEND.COMMANDER}

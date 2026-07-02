@@ -17,10 +17,16 @@
       (cap) => cap.type === "sensor" && cap.sensor_type === "energy_meter"
     );
 
+  // Filter: exclude binary on/off (presence) sensors from this page (#13)
+  const isBinarySensor = (device: DeviceInfo) =>
+    device.capabilities.some(
+      (cap) => cap.type === "sensor" && cap.sensor_type === "presence"
+    );
+
   // Initialize graphConfig with the correct sensors for this view
   function initializeGraphConfig(devices: DeviceInfo[]) {
     const sensorDevices = devices
-      .filter((d) => !isEnergyMeter(d))
+      .filter((d) => !isEnergyMeter(d) && !isBinarySensor(d))
       .map((s) => ({ deviceId: s.device_id, color: s.color }));
     graphConfig.initializeSensors(sensorDevices);
   }
