@@ -6,6 +6,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "dev": "vite",
+    "dev:mock": "VITE_MOCK=1 vite",
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.app.json"
@@ -14,12 +15,14 @@
     "@sveltejs/vite-plugin-svelte": "^6.2.1",
     "@tsconfig/svelte": "^5.0.6",
     "@types/node": "^24.10.1",
+    "@types/ws": "^8.5.13",
     "svelte": "^5.43.8",
     "svelte-check": "^4.3.4",
     "terser": "^5.44.1",
     "typescript": "~5.9.3",
     "vite": "^7.2.4",
-    "vite-plugin-checker": "^0.12.0"
+    "vite-plugin-checker": "^0.12.0",
+    "ws": "^8.18.0"
   },
   "dependencies": {
     "@xyflow/svelte": "^1.5.0",
