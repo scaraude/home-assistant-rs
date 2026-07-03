@@ -37,6 +37,27 @@
     return selectedKeys.has(seriesKey(deviceId, metric));
   }
 
+  function allSelected(list: { device_id: string }[], metric: ExplorerMetric) {
+    return list.length > 0 && list.every((d) => isSelected(d.device_id, metric));
+  }
+
+  function toggleAll(
+    list: { device_id: string; color: string | null }[],
+    metric: ExplorerMetric,
+    event: MouseEvent,
+  ) {
+    // Don't let the click bubble to the header (which expands/collapses).
+    event.stopPropagation();
+    if (allSelected(list, metric)) {
+      explorerConfig.clearCategory(metric);
+    } else {
+      explorerConfig.selectCategory(
+        metric,
+        list.map((d) => ({ deviceId: d.device_id, color: d.color })),
+      );
+    }
+  }
+
   function latestLabel(deviceId: string, metric: ExplorerMetric): string | null {
     const reading = latestByDevice[deviceId] as SensorReading | null | undefined;
     if (!reading) return null;
@@ -55,22 +76,43 @@
     {@const isOpen = open.has(cat.id)}
     {@const list = devicesForCategory(devices, cat.id)}
     <section class="section" class:open={isOpen} class:first={i === 0}>
-      <button
-        class="head"
-        aria-expanded={isOpen}
-        onclick={() => toggleSection(cat.id)}
-      >
-        <svg class="icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
-          <path d={cat.iconPath} />
-        </svg>
-        <span class="title">{cat.label}</span>
-        {#if countByCategory[cat.id]}
-          <span class="badge">{countByCategory[cat.id]}</span>
+      <div class="head">
+        <button
+          class="head-toggle"
+          aria-expanded={isOpen}
+          onclick={() => toggleSection(cat.id)}
+        >
+          <svg class="icon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+            <path d={cat.iconPath} />
+          </svg>
+          <span class="title">{cat.label}</span>
+          {#if countByCategory[cat.id]}
+            <span class="badge">{countByCategory[cat.id]}</span>
+          {/if}
+        </button>
+        {#if list.length > 0}
+          <button
+            class="select-all"
+            class:on={allSelected(list, cat.id)}
+            onclick={(e) => toggleAll(list, cat.id, e)}
+            title={allSelected(list, cat.id)
+              ? "Tout désélectionner"
+              : "Tout sélectionner"}
+          >
+            {allSelected(list, cat.id) ? "Aucun" : "Tout"}
+          </button>
         {/if}
-        <svg class="chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-      </button>
+        <button
+          class="chev-btn"
+          aria-label={isOpen ? "Replier" : "Déplier"}
+          aria-expanded={isOpen}
+          onclick={() => toggleSection(cat.id)}
+        >
+          <svg class="chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
+      </div>
 
       {#if isOpen}
         <div class="body" transition:slide={{ duration: 180 }}>
@@ -128,9 +170,15 @@
   .head {
     display: flex;
     align-items: center;
+  }
+
+  .head-toggle {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
     gap: 0.625rem;
-    width: 100%;
-    padding: 0.875rem 1rem;
+    padding: 0.875rem 0.5rem 0.875rem 1rem;
     background: transparent;
     border: none;
     cursor: pointer;
@@ -141,12 +189,46 @@
     transition: color 0.15s;
   }
 
-  .head:hover {
+  .head-toggle:hover {
     color: #101828;
   }
 
-  .section.open .head {
+  .section.open .head-toggle {
     color: #101828;
+  }
+
+  .select-all {
+    flex-shrink: 0;
+    padding: 0.2rem 0.55rem;
+    border: 1px solid #e4e7ec;
+    background: #fff;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #667085;
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+
+  .select-all:hover {
+    border-color: #b2ccff;
+    color: #1d4ed8;
+  }
+
+  .select-all.on {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+    color: #1d4ed8;
+  }
+
+  .chev-btn {
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    padding: 0.875rem 1rem 0.875rem 0.5rem;
+    background: transparent;
+    border: none;
+    cursor: pointer;
   }
 
   .icon {

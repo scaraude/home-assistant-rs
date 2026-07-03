@@ -87,6 +87,43 @@ function createExplorerConfig() {
       });
     },
 
+    /** Add every given (device, metric) series that isn't already selected. */
+    selectCategory(
+      metric: ExplorerMetric,
+      entries: { deviceId: string; color?: string | null }[],
+    ) {
+      update((state) => {
+        let series = state.series;
+        for (const entry of entries) {
+          const key = seriesKey(entry.deviceId, metric);
+          if (series.some((s) => seriesKey(s.deviceId, s.metric) === key)) continue;
+          series = [
+            ...series,
+            {
+              deviceId: entry.deviceId,
+              metric,
+              color: nextColor({ ...state, series }, entry.color),
+            },
+          ];
+        }
+        const next = { ...state, series };
+        persist(next);
+        return next;
+      });
+    },
+
+    /** Remove every selected series of a metric (a whole category). */
+    clearCategory(metric: ExplorerMetric) {
+      update((state) => {
+        const next = {
+          ...state,
+          series: state.series.filter((s) => s.metric !== metric),
+        };
+        persist(next);
+        return next;
+      });
+    },
+
     removeSeries(deviceId: string, metric: ExplorerMetric) {
       update((state) => {
         const key = seriesKey(deviceId, metric);

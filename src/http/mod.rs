@@ -176,6 +176,10 @@ async fn handle_request(
             debug!(query = ?query, "Serving readings");
             routes::serve_readings(&db, query.as_deref())
         }),
+        ("GET", "/api/energy/summary") => Ok({
+            debug!(query = ?query, "Serving energy summary");
+            routes::serve_energy_summary(&db, query.as_deref())
+        }),
         ("GET", "/api/devices/switches") => Ok({
             debug!("Serving switches list");
             routes::serve_switches_list(&db, &switch_state, &device_state)

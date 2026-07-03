@@ -344,6 +344,39 @@ pub enum SensorReading {
     },
 }
 
+/// One time-bucket of energy consumption/production.
+///
+/// Because the meter exposes `energy`/`produced_energy` as *cumulative* lifetime
+/// counters, the per-bucket figures here are **deltas** (difference of the
+/// counter across the bucket), not raw counter values.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct EnergyBucket {
+    /// Bucket start, unix seconds (aligned to `bucket_seconds`).
+    pub timestamp: i64,
+    /// kWh consumed during the bucket.
+    pub consumed: f64,
+    /// kWh produced during the bucket.
+    pub produced: f64,
+}
+
+/// Aggregated cumulative-energy summary for a period, used by the energy
+/// dashboard (hero total + per-bucket histogram + peak power).
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct EnergySummary {
+    pub start: i64,
+    pub end: i64,
+    pub bucket_seconds: i64,
+    /// Total kWh consumed over the period (== sum of `buckets[].consumed`).
+    pub total_consumed: f64,
+    /// Total kWh produced over the period (== sum of `buckets[].produced`).
+    pub total_produced: f64,
+    /// Peak instantaneous power seen over the period (W); highest single sample.
+    pub peak_power: f64,
+    /// Timestamp (unix seconds) of the peak-power sample, if any data exists.
+    pub peak_power_timestamp: Option<i64>,
+    pub buckets: Vec<EnergyBucket>,
+}
+
 impl SensorReading {
     /// Create a sensor reading from MQTT message
     pub fn from_mqtt(

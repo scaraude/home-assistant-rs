@@ -189,3 +189,49 @@ pub fn serve_readings(db: &Database, query: Option<&str>) -> Response<Full<Bytes
         }
     }
 }
+
+/// Serve a cumulative-energy summary (`GET /api/energy/summary`).
+///
+/// Unlike `/api/readings`, which averages the raw counter (meaningless for a
+/// monotonic meter), this returns per-bucket **deltas** plus the period totals
+/// and peak power — the data the energy dashboard needs. Query params:
+/// `device_id` (optional, aggregate over all meters when absent), `start`,
+/// `end` (unix seconds), `bucket` (bucket size in seconds).
+pub fn serve_energy_summary(db: &Database, query: Option<&str>) -> Response<Full<Bytes>> {
+    let params = QueryParams::new(query);
+    let device_id = params.get("device_id");
+
+    let end_ts = params
+        .get_optional_i64("end")
+        .unwrap_or_else(|| chrono::Utc::now().timestamp());
+    let start_ts = params.get_optional_i64("start").unwrap_or_else(|| {
+        let hours = params.get_i64("hours", 24);
+        end_ts - (hours * 3600)
+    });
+
+    if start_ts >= end_ts {
+        return bad_request_response("`start` must be before `end`");
+    }
+
+    // Default to daily buckets when unspecified.
+    let bucket_seconds = params.get_optional_i64("bucket").unwrap_or(86_400).max(1);
+
+    info!(
+        device_id = ?device_id,
+        start = start_ts,
+        end = end_ts,
+        bucket_seconds,
+        "Serving energy summary"
+    );
+
+    match db.get_energy_summary(device_id, start_ts, end_ts, bucket_seconds) {
+        Ok(summary) => match serialize_to_json(&summary, "energy summary") {
+            Ok(json) => json_response(json),
+            Err(response) => *response,
+        },
+        Err(e) => {
+            error!(error = %e, device_id = ?device_id, "Database error while computing energy summary");
+            internal_error_response("Database error")
+        }
+    }
+}

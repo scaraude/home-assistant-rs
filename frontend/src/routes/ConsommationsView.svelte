@@ -1,85 +1,11 @@
 <script lang="ts">
-  import UnifiedGraphPanel from "../lib/graphs/UnifiedGraphPanel.svelte";
-  import EnergyListPanel from "../lib/devices/EnergyListPanel.svelte";
-  import PageState from "../lib/shared/PageState.svelte";
-  import type { DeviceInfo } from "../lib/api/devices";
-  import { deviceStateMemory, sensorsMemory } from "../lib/memory";
-  import { graphConfig } from "../lib/stores/graphConfig";
-  import { onMount } from "svelte";
-
-  let loading = $state(true);
-  let error = $state<string | null>(null);
-  let initialized = $state(false);
-
-  // Filter: only energy meters for this view
-  const isEnergyMeter = (device: DeviceInfo) =>
-    device.capabilities.some(
-      (cap) => cap.type === "sensor" && cap.sensor_type === "energy_meter"
-    );
-
-  // Initialize graphConfig with only energy meters
-  function initializeGraphConfig(devices: DeviceInfo[]) {
-    const energyMeters = devices
-      .filter(isEnergyMeter)
-      .map((s) => ({ deviceId: s.device_id, color: s.color }));
-    graphConfig.initializeSensors(energyMeters);
-  }
-
-  async function loadData(force = false) {
-    const sensorState = $sensorsMemory;
-
-    if (!force && sensorState.devicesLoaded) {
-      initializeGraphConfig(sensorState.devices);
-      if (!initialized) {
-        graphConfig.hideAll();
-        initialized = true;
-      }
-      loading = false;
-      return;
-    }
-
-    loading = true;
-    error = null;
-
-    try {
-      const sensors = await sensorsMemory.ensureDevices(force);
-
-      // Always initialize graphConfig for this view
-      initializeGraphConfig(sensors);
-      if (!initialized) {
-        graphConfig.hideAll();
-        initialized = true;
-      }
-      void deviceStateMemory.ensureDeviceStates(force).catch((err) => {
-        console.error("Failed to fetch device states:", err);
-      });
-    } catch (err) {
-      error = err instanceof Error ? err.message : "Failed to load energy data";
-    } finally {
-      loading = false;
-    }
-  }
-
-  function retryLoad() {
-    void loadData(true);
-  }
-
-  onMount(() => {
-    void loadData();
-  });
+  import EnergyDashboard from "../lib/devices/EnergyDashboard.svelte";
 </script>
 
 <div class="consommations-view">
-  <PageState {loading} {error} loadingText="Loading energy meters..." onRetry={retryLoad}>
-    <div class="unified-layout">
-      <div class="graph-section">
-        <UnifiedGraphPanel metricType="power" />
-      </div>
-      <div class="meters-section">
-        <EnergyListPanel />
-      </div>
-    </div>
-  </PageState>
+  <div class="board">
+    <EnergyDashboard />
+  </div>
 </div>
 
 <style>
@@ -88,31 +14,21 @@
     height: 100%;
   }
 
-  .unified-layout {
-    display: flex;
-    flex-direction: column;
-    gap: 2rem;
-    height: 100%;
-  }
-
-  .graph-section {
-    flex: 0 0 auto;
-  }
-
-  .meters-section {
-    flex: 1;
-    min-height: 0;
+  /* The gray "board" matches the sensor explorer: content sits on it as white
+     panels with a tight gutter, so the energy page reads as part of the site. */
+  .board {
+    padding: 1.25rem;
+    background: #eef1f5;
+    border-radius: 18px;
+    margin: 1.25rem;
+    min-height: calc(100vh - var(--app-header-height, 88px) - 2.5rem);
   }
 
   @media (max-width: 768px) {
-    .unified-layout {
-      gap: var(--section-gap, 1.5rem);
-    }
-  }
-
-  @media (max-width: 480px) {
-    .unified-layout {
-      gap: var(--section-gap, 1rem);
+    .board {
+      padding: 0.75rem;
+      margin: 0.75rem;
+      border-radius: 14px;
     }
   }
 </style>

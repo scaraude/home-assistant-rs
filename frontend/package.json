@@ -8,6 +8,8 @@
     "dev": "vite",
     "dev:mock": "VITE_MOCK=1 vite",
     "build": "vite build",
+    "build:demo": "VITE_MOCK_BUILD=1 vite build",
+    "preview:demo": "VITE_MOCK_BUILD=1 vite preview",
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.app.json"
   },
