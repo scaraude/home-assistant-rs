@@ -57,15 +57,17 @@ impl Database {
         // Insert conditions
         for condition in &rule.conditions {
             conn.execute(
-                "INSERT INTO automation_conditions (id, rule_id, device_id, field, operator, value)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                "INSERT INTO automation_conditions (id, rule_id, device_id, field, operator, value, target_device_id, target_field)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
                 params![
                     condition.id,
                     rule.id,
                     condition.device_id,
                     condition.field.to_db_string(),
                     condition.operator.to_db_string(),
-                    condition.value
+                    condition.value,
+                    condition.target_device_id,
+                    condition.target_field.as_ref().map(|f| f.to_db_string()),
                 ],
             )?;
         }
@@ -156,7 +158,7 @@ impl Database {
 
             // Get conditions for this rule
             let mut cond_stmt = conn.prepare(
-                "SELECT id, device_id, field, operator, value
+                "SELECT id, device_id, field, operator, value, target_device_id, target_field
                  FROM automation_conditions
                  WHERE rule_id = ?1",
             )?;
@@ -165,6 +167,14 @@ impl Database {
                 .query_map(params![id], |row| {
                     let field_str: String = row.get(2)?;
                     let operator_str: String = row.get(3)?;
+                    let target_field_str: Option<String> = row.get(6)?;
+                    let target_field = match target_field_str {
+                        Some(s) => Some(
+                            SensorField::from_db_string(&s)
+                                .ok_or_else(|| invalid_column_error(6, "target_field"))?,
+                        ),
+                        None => None,
+                    };
 
                     Ok(AutomationCondition {
                         id: row.get(0)?,
@@ -174,6 +184,8 @@ impl Database {
                         operator: ComparisonOperator::from_db_string(&operator_str)
                             .ok_or_else(|| invalid_column_error(3, "operator"))?,
                         value: row.get(4)?,
+                        target_device_id: row.get(5)?,
+                        target_field,
                     })
                 })?
                 .collect::<Result<Vec<_>>>()?;
@@ -304,15 +316,17 @@ impl Database {
         // Insert new conditions
         for condition in &rule.conditions {
             conn.execute(
-                "INSERT INTO automation_conditions (id, rule_id, device_id, field, operator, value)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                "INSERT INTO automation_conditions (id, rule_id, device_id, field, operator, value, target_device_id, target_field)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
                 params![
                     condition.id,
                     rule.id,
                     condition.device_id,
                     condition.field.to_db_string(),
                     condition.operator.to_db_string(),
-                    condition.value
+                    condition.value,
+                    condition.target_device_id,
+                    condition.target_field.as_ref().map(|f| f.to_db_string()),
                 ],
             )?;
         }

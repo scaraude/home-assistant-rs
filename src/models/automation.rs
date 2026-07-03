@@ -82,8 +82,19 @@ pub struct AutomationCondition {
     /// Comparison operator
     pub operator: ComparisonOperator,
 
-    /// Value to compare against
+    /// Constant value to compare against (used when no variable target is set)
     pub value: f64,
+
+    /// Optional "variable" target: another device to read the comparison value
+    /// from. When set together with `target_field`, the condition compares
+    /// `device_id.field` against `target_device_id.target_field` instead of the
+    /// constant `value`. (Issue #7 — variables in rules.)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_device_id: Option<String>,
+
+    /// Which field to read on `target_device_id` (see `target_device_id`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_field: Option<SensorField>,
 }
 
 impl AutomationCondition {
@@ -99,6 +110,31 @@ impl AutomationCondition {
             field,
             operator,
             value,
+            target_device_id: None,
+            target_field: None,
+        }
+    }
+
+    /// The variable target (device + field) if this condition compares against
+    /// another sensor rather than a constant.
+    pub fn variable_target(&self) -> Option<(&str, &SensorField)> {
+        match (&self.target_device_id, &self.target_field) {
+            (Some(device_id), Some(field)) => Some((device_id.as_str(), field)),
+            _ => None,
+        }
+    }
+}
+
+impl From<CreateConditionRequest> for AutomationCondition {
+    fn from(c: CreateConditionRequest) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            device_id: c.device_id,
+            field: c.field,
+            operator: c.operator,
+            value: c.value,
+            target_device_id: c.target_device_id,
+            target_field: c.target_field,
         }
     }
 }
@@ -255,7 +291,16 @@ pub struct CreateConditionRequest {
     pub device_id: String,
     pub field: SensorField,
     pub operator: ComparisonOperator,
+    /// Constant comparison value. Ignored (and may be omitted) when a variable
+    /// target is provided.
+    #[serde(default)]
     pub value: f64,
+    /// Optional variable target device (see `AutomationCondition`).
+    #[serde(default)]
+    pub target_device_id: Option<String>,
+    /// Optional variable target field.
+    #[serde(default)]
+    pub target_field: Option<SensorField>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -388,6 +433,45 @@ mod tests {
         }
 
         assert_eq!(LogicalOperator::from_db_string("invalid"), None);
+    }
+
+    #[test]
+    fn test_condition_variable_target() {
+        // Constant condition: no variable target.
+        let constant = AutomationCondition::new(
+            "sensor1".into(),
+            SensorField::Temperature,
+            ComparisonOperator::GreaterThan,
+            20.0,
+        );
+        assert!(constant.variable_target().is_none());
+
+        // Variable condition built from a request.
+        let cond: AutomationCondition = CreateConditionRequest {
+            device_id: "living_room".into(),
+            field: SensorField::Temperature,
+            operator: ComparisonOperator::GreaterThan,
+            value: 0.0,
+            target_device_id: Some("bedroom".into()),
+            target_field: Some(SensorField::Temperature),
+        }
+        .into();
+
+        match cond.variable_target() {
+            Some((device_id, field)) => {
+                assert_eq!(device_id, "bedroom");
+                assert_eq!(field, &SensorField::Temperature);
+            }
+            None => panic!("expected a variable target"),
+        }
+
+        // A target device id without a target field is not a variable target.
+        let partial = AutomationCondition {
+            target_device_id: Some("bedroom".into()),
+            target_field: None,
+            ..constant.clone()
+        };
+        assert!(partial.variable_target().is_none());
     }
 
     #[test]

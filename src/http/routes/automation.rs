@@ -42,80 +42,91 @@ pub fn serve_automation_rule(db: &Database, rule_id: &str) -> Response<Full<Byte
     }
 }
 
-/// Validate that automation conditions use fields compatible with their device types
+/// Validate that a single (device, field) pair is compatible with the device's
+/// sensor capabilities.
+fn validate_device_field(
+    db: &Database,
+    device_id: &str,
+    field: &crate::models::SensorField,
+) -> Result<(), String> {
+    // Get device from database
+    let device = db
+        .get_device(device_id)
+        .map_err(|e| format!("Database error: {}", e))?
+        .ok_or_else(|| format!("Device '{}' not found", device_id))?;
+
+    // Convert SensorField to string for comparison
+    let field_str = match field {
+        crate::models::SensorField::Temperature => "temperature",
+        crate::models::SensorField::Humidity => "humidity",
+        crate::models::SensorField::Battery => "battery",
+        crate::models::SensorField::LinkQuality => "link_quality",
+        crate::models::SensorField::Presence => "presence",
+        crate::models::SensorField::Illumination => "illumination",
+    };
+
+    let mut valid = false;
+    let mut valid_fields = Vec::new();
+
+    for capability in &device.capabilities {
+        if let DeviceCapability::Sensor { sensor_type } = capability {
+            match sensor_type {
+                SensorType::TempHumidity => {
+                    valid_fields.extend(["temperature", "humidity", "battery", "link_quality"]);
+                    if matches!(
+                        field_str,
+                        "temperature" | "humidity" | "battery" | "link_quality"
+                    ) {
+                        valid = true;
+                    }
+                }
+                SensorType::Presence => {
+                    valid_fields.extend(["presence", "illumination", "battery", "link_quality"]);
+                    if matches!(
+                        field_str,
+                        "presence" | "illumination" | "battery" | "link_quality"
+                    ) {
+                        valid = true;
+                    }
+                }
+                SensorType::EnergyMeter => {
+                    valid_fields.extend(["battery", "link_quality"]);
+                    if matches!(field_str, "battery" | "link_quality") {
+                        valid = true;
+                    }
+                }
+            }
+        }
+    }
+
+    if valid_fields.is_empty() {
+        return Err(format!("Device '{}' is not a sensor", device_id));
+    }
+    valid_fields.sort_unstable();
+    valid_fields.dedup();
+
+    if !valid {
+        return Err(format!(
+            "Field '{}' is not valid for device '{}'. Valid fields: {}",
+            field_str,
+            device_id,
+            valid_fields.join(", ")
+        ));
+    }
+
+    Ok(())
+}
+
+/// Validate that automation conditions use fields compatible with their device
+/// types — including any variable target (#7).
 fn validate_condition_fields(
     db: &Database,
     conditions: &[AutomationCondition],
 ) -> Result<(), String> {
     for condition in conditions {
-        // Get device from database
-        let device = db
-            .get_device(&condition.device_id)
-            .map_err(|e| format!("Database error: {}", e))?
-            .ok_or_else(|| format!("Device '{}' not found", condition.device_id))?;
-
-        // Convert SensorField to string for comparison
-        let field_str = match condition.field {
-            crate::models::SensorField::Temperature => "temperature",
-            crate::models::SensorField::Humidity => "humidity",
-            crate::models::SensorField::Battery => "battery",
-            crate::models::SensorField::LinkQuality => "link_quality",
-            crate::models::SensorField::Presence => "presence",
-            crate::models::SensorField::Illumination => "illumination",
-        };
-
-        let mut valid = false;
-        let mut valid_fields = Vec::new();
-
-        for capability in &device.capabilities {
-            if let DeviceCapability::Sensor { sensor_type } = capability {
-                match sensor_type {
-                    SensorType::TempHumidity => {
-                        valid_fields.extend(["temperature", "humidity", "battery", "link_quality"]);
-                        if matches!(
-                            field_str,
-                            "temperature" | "humidity" | "battery" | "link_quality"
-                        ) {
-                            valid = true;
-                        }
-                    }
-                    SensorType::Presence => {
-                        valid_fields.extend([
-                            "presence",
-                            "illumination",
-                            "battery",
-                            "link_quality",
-                        ]);
-                        if matches!(
-                            field_str,
-                            "presence" | "illumination" | "battery" | "link_quality"
-                        ) {
-                            valid = true;
-                        }
-                    }
-                    SensorType::EnergyMeter => {
-                        valid_fields.extend(["battery", "link_quality"]);
-                        if matches!(field_str, "battery" | "link_quality") {
-                            valid = true;
-                        }
-                    }
-                }
-            }
-        }
-
-        if valid_fields.is_empty() {
-            return Err(format!("Device '{}' is not a sensor", condition.device_id));
-        }
-        valid_fields.sort_unstable();
-        valid_fields.dedup();
-
-        if !valid {
-            return Err(format!(
-                "Field '{}' is not valid for device '{}'. Valid fields: {}",
-                field_str,
-                condition.device_id,
-                valid_fields.join(", ")
-            ));
+        validate_device_field(db, &condition.device_id, &condition.field)?;
+        if let Some((target_device_id, target_field)) = condition.variable_target() {
+            validate_device_field(db, target_device_id, target_field)?;
         }
     }
 
@@ -161,7 +172,7 @@ pub async fn create_automation_rule(
     let conditions: Vec<AutomationCondition> = request
         .conditions
         .into_iter()
-        .map(|c| AutomationCondition::new(c.device_id, c.field, c.operator, c.value))
+        .map(AutomationCondition::from)
         .collect();
 
     // Validate that condition fields are compatible with device types
@@ -272,7 +283,7 @@ pub async fn update_automation_rule(
         }
         let new_conditions: Vec<AutomationCondition> = conditions
             .into_iter()
-            .map(|c| AutomationCondition::new(c.device_id, c.field, c.operator, c.value))
+            .map(AutomationCondition::from)
             .collect();
 
         // Validate that condition fields are compatible with device types
