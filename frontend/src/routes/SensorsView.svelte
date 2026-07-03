@@ -1,66 +1,24 @@
 <script lang="ts">
-  import UnifiedGraphPanel from "../lib/graphs/UnifiedGraphPanel.svelte";
-  import SensorListPanel from "../lib/devices/SensorListPanel.svelte";
-  import PageState from "../lib/shared/PageState.svelte";
-  import type { DeviceInfo } from "../lib/api/devices";
-  import { deviceStateMemory, sensorsMemory } from "../lib/memory";
-  import { graphConfig } from "../lib/stores/graphConfig";
   import { onMount } from "svelte";
+  import SensorExplorer from "../lib/explorer/SensorExplorer.svelte";
+  import PageState from "../lib/shared/PageState.svelte";
+  import { sensorsMemory } from "../lib/memory";
 
   let loading = $state(true);
   let error = $state<string | null>(null);
-  let initialized = $state(false);
-
-  // Filter: exclude energy meters (they belong in ConsommationsView)
-  const isEnergyMeter = (device: DeviceInfo) =>
-    device.capabilities.some(
-      (cap) => cap.type === "sensor" && cap.sensor_type === "energy_meter"
-    );
-
-  // Filter: exclude binary on/off (presence) sensors from this page (#13)
-  const isBinarySensor = (device: DeviceInfo) =>
-    device.capabilities.some(
-      (cap) => cap.type === "sensor" && cap.sensor_type === "presence"
-    );
-
-  // Initialize graphConfig with the correct sensors for this view
-  function initializeGraphConfig(devices: DeviceInfo[]) {
-    const sensorDevices = devices
-      .filter((d) => !isEnergyMeter(d) && !isBinarySensor(d))
-      .map((s) => ({ deviceId: s.device_id, color: s.color }));
-    graphConfig.initializeSensors(sensorDevices);
-  }
 
   async function loadData(force = false) {
-    const sensorState = $sensorsMemory;
-
-    if (!force && sensorState.devicesLoaded) {
-      initializeGraphConfig(sensorState.devices);
-      if (!initialized) {
-        graphConfig.hideAll();
-        initialized = true;
-      }
+    const state = $sensorsMemory;
+    if (!force && state.devicesLoaded) {
       loading = false;
       return;
     }
-
     loading = true;
     error = null;
-
     try {
-      const sensors = await sensorsMemory.ensureDevices(force);
-
-      // Always initialize graphConfig for this view
-      initializeGraphConfig(sensors);
-      if (!initialized) {
-        graphConfig.hideAll();
-        initialized = true;
-      }
-      void deviceStateMemory.ensureDeviceStates(force).catch((err) => {
-        console.error("Failed to fetch device states:", err);
-      });
+      await sensorsMemory.ensureDevices(force);
     } catch (err) {
-      error = err instanceof Error ? err.message : "Failed to load sensor data";
+      error = err instanceof Error ? err.message : "Échec du chargement des capteurs";
     } finally {
       loading = false;
     }
@@ -76,15 +34,8 @@
 </script>
 
 <div class="sensor-view">
-  <PageState {loading} {error} loadingText="Loading sensors..." onRetry={retryLoad}>
-    <div class="unified-layout">
-      <div class="graph-section">
-        <UnifiedGraphPanel />
-      </div>
-      <div class="sensors-section">
-        <SensorListPanel />
-      </div>
-    </div>
+  <PageState {loading} {error} loadingText="Chargement des capteurs…" onRetry={retryLoad}>
+    <SensorExplorer />
   </PageState>
 </div>
 
@@ -92,33 +43,5 @@
   .sensor-view {
     width: 100%;
     height: 100%;
-  }
-
-  .unified-layout {
-    display: flex;
-    flex-direction: column;
-    gap: 2rem;
-    height: 100%;
-  }
-
-  .graph-section {
-    flex: 0 0 auto;
-  }
-
-  .sensors-section {
-    flex: 1;
-    min-height: 0;
-  }
-
-  @media (max-width: 768px) {
-    .unified-layout {
-      gap: var(--section-gap, 1.5rem);
-    }
-  }
-
-  @media (max-width: 480px) {
-    .unified-layout {
-      gap: var(--section-gap, 1rem);
-    }
   }
 </style>
