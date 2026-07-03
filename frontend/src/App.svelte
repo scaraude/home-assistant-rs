@@ -200,7 +200,7 @@
   <header>
     <div class="header-content">
       <button
-        onclick={() => (window.location.href = "/#/")}
+        onclick={() => (window.location.hash = "#/")}
         class="home-button"
         aria-label="Go to Home"
       >
@@ -218,35 +218,35 @@
 
       <nav class="nav-buttons">
         <a
-          href={"/#" + URI_FRONTEND.FLOORPLAN}
+          href={"#" + URI_FRONTEND.FLOORPLAN}
           class="nav-button"
           class:active={isOnFloorPlan}
         >
           Floor Plan
         </a>
         <a
-          href={"/#" + URI_FRONTEND.SENSORS}
+          href={"#" + URI_FRONTEND.SENSORS}
           class="nav-button"
           class:active={isOnSensors}
         >
           Sensors
         </a>
         <a
-          href={"/#" + URI_FRONTEND.CONSOMMATIONS}
+          href={"#" + URI_FRONTEND.CONSOMMATIONS}
           class="nav-button"
           class:active={isOnConsommations}
         >
           Energy
         </a>
         <a
-          href={"/#" + URI_FRONTEND.COMMANDER}
+          href={"#" + URI_FRONTEND.COMMANDER}
           class="nav-button"
           class:active={isOnCommander}
         >
           Commander
         </a>
         <a
-          href={"/#" + URI_FRONTEND.LOGS}
+          href={"#" + URI_FRONTEND.LOGS}
           class="nav-button"
           class:active={isOnLogs}
         >
