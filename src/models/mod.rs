@@ -13,5 +13,6 @@ pub use device::{
     NetworkEdge, NetworkTopology, PowerSource, SensorType,
 };
 pub use mqtt::{
-    DeviceMqttMessage, SensorReading, SwitchCommand, SwitchCommandMessage, SwitchState,
+    DeviceMqttMessage, EnergyBucket, EnergySummary, SensorReading, SwitchCommand,
+    SwitchCommandMessage, SwitchState,
 };

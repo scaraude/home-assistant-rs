@@ -2029,4 +2029,87 @@ mod tests {
         let retrieved = db.get_floor_plan().unwrap().unwrap();
         assert_eq!(retrieved.svg_content, large_svg);
     }
+
+    // ==================== Energy Summary (delta) Tests ====================
+
+    /// Insert an energy reading with an explicit unix timestamp and counters.
+    fn insert_energy_at(db: &Database, device_id: &str, ts: i64, power: f32, energy: f32) {
+        let reading = SensorReading::EnergyMeter {
+            device_id: device_id.to_string(),
+            power,
+            energy,
+            produced_energy: 0.0,
+            voltage: 230.0,
+            current: 6.5,
+            ac_frequency: 50.0,
+            power_factor: 0.98,
+            timestamp: chrono::DateTime::from_timestamp(ts, 0).unwrap(),
+        };
+        db.insert_reading(&reading).unwrap();
+    }
+
+    #[test]
+    fn test_energy_summary_deltas_and_totals() {
+        let (db, _temp_dir) = create_test_db();
+        insert_test_device(&db, "em1", SensorType::EnergyMeter);
+
+        // Anchor strictly before the range: counter at 100 kWh.
+        insert_energy_at(&db, "em1", 3599, 800.0, 100.0);
+        // Bucket [3600, 7200): last sample counter = 102.
+        insert_energy_at(&db, "em1", 3600, 1000.0, 100.0);
+        insert_energy_at(&db, "em1", 7100, 1200.0, 102.0);
+        // Bucket [7200, 10800): last sample counter = 105, and the peak power.
+        insert_energy_at(&db, "em1", 7200, 1500.0, 102.0);
+        insert_energy_at(&db, "em1", 10000, 1400.0, 105.0);
+        // Bucket [10800, 14400): flat counter (no consumption).
+        insert_energy_at(&db, "em1", 10800, 300.0, 105.0);
+        insert_energy_at(&db, "em1", 14000, 300.0, 105.0);
+
+        let summary = db
+            .get_energy_summary(Some("em1"), 3600, 14400, 3600)
+            .unwrap();
+
+        assert_eq!(summary.buckets.len(), 3);
+        // Deltas: anchor 100 -> 102 -> 105 -> 105.
+        assert!((summary.buckets[0].consumed - 2.0).abs() < 1e-6);
+        assert!((summary.buckets[1].consumed - 3.0).abs() < 1e-6);
+        assert!((summary.buckets[2].consumed - 0.0).abs() < 1e-6);
+        assert_eq!(summary.buckets[0].timestamp, 3600);
+        assert_eq!(summary.buckets[1].timestamp, 7200);
+        assert_eq!(summary.buckets[2].timestamp, 10800);
+
+        // Total == counter delta across the range (105 - 100).
+        assert!((summary.total_consumed - 5.0).abs() < 1e-6);
+        assert!((summary.total_produced - 0.0).abs() < 1e-6);
+
+        // Peak power sample and its timestamp.
+        assert!((summary.peak_power - 1500.0).abs() < 1e-6);
+        assert_eq!(summary.peak_power_timestamp, Some(7200));
+
+        // Aggregating over all meters (no filter) matches the single meter here.
+        let all = db.get_energy_summary(None, 3600, 14400, 3600).unwrap();
+        assert!((all.total_consumed - 5.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_energy_summary_no_anchor_seeds_from_first_bucket() {
+        let (db, _temp_dir) = create_test_db();
+        insert_test_device(&db, "em2", SensorType::EnergyMeter);
+
+        // No reading before `start`, so bucket 0 has no baseline and reports 0;
+        // subsequent buckets diff normally.
+        insert_energy_at(&db, "em2", 3600, 500.0, 50.0);
+        insert_energy_at(&db, "em2", 7200, 500.0, 54.0);
+        insert_energy_at(&db, "em2", 10800, 500.0, 60.0);
+
+        let summary = db
+            .get_energy_summary(Some("em2"), 3600, 14400, 3600)
+            .unwrap();
+
+        assert_eq!(summary.buckets.len(), 3);
+        assert!((summary.buckets[0].consumed - 0.0).abs() < 1e-6);
+        assert!((summary.buckets[1].consumed - 4.0).abs() < 1e-6);
+        assert!((summary.buckets[2].consumed - 6.0).abs() < 1e-6);
+        assert!((summary.total_consumed - 10.0).abs() < 1e-6);
+    }
 }

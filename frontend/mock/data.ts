@@ -354,3 +354,65 @@ export function deviceInfo(dev: MockDevice) {
     color: dev.color,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Switches: commandable on/off devices for the Commander tab. Unlike sensors,
+// these carry mutable state (see mock/core.ts), so the demo can actually turn
+// them on and off with live feedback over the WebSocket.
+// ---------------------------------------------------------------------------
+
+export interface MockSwitch {
+  id: string;
+  name: string;
+  color: string | null;
+  /** Mains-powered switches report link quality but no battery. */
+  link_quality: number;
+  battery_level: number | null;
+  /** Initial on/off state at startup. */
+  initial_state: boolean;
+  _seed: number;
+}
+
+/** Catalogue of fake switches, one per room, mirroring the sensor rooms. */
+export const MOCK_SWITCHES: MockSwitch[] = [
+  {
+    id: '0xmock000000000s1',
+    name: 'Lampe salon',
+    color: '#f59e0b',
+    link_quality: 186,
+    battery_level: null,
+    initial_state: true,
+    _seed: 101,
+  },
+  {
+    id: '0xmock000000000s2',
+    name: 'Lampe chambre',
+    color: '#8b5cf6',
+    link_quality: 152,
+    battery_level: null,
+    initial_state: false,
+    _seed: 102,
+  },
+  {
+    id: '0xmock000000000s3',
+    name: 'Prise cuisine',
+    color: '#10b981',
+    link_quality: 204,
+    battery_level: null,
+    initial_state: false,
+    _seed: 103,
+  },
+  {
+    id: '0xmock000000000s4',
+    name: 'Guirlande terrasse',
+    color: '#ec4899',
+    link_quality: 118,
+    battery_level: null,
+    initial_state: true,
+    _seed: 104,
+  },
+];
+
+export function findSwitch(id: string): MockSwitch | undefined {
+  return MOCK_SWITCHES.find((s) => s.id === id);
+}
