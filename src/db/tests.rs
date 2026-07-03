@@ -772,6 +772,8 @@ mod tests {
                 field: SensorField::Temperature,
                 operator: ComparisonOperator::GreaterThan,
                 value: 25.0,
+                target_device_id: None,
+                target_field: None,
             }],
             actions: vec![AutomationAction {
                 id: "action1".to_string(),
@@ -868,6 +870,8 @@ mod tests {
             field: SensorField::Humidity,
             operator: ComparisonOperator::LessThan,
             value: 30.0,
+            target_device_id: None,
+            target_field: None,
         });
 
         db.update_automation_rule(&rule).unwrap();
@@ -894,6 +898,8 @@ mod tests {
                 field: SensorField::Temperature,
                 operator: ComparisonOperator::GreaterThan,
                 value: 25.0,
+                target_device_id: None,
+                target_field: None,
             }],
             actions: vec![AutomationAction {
                 id: "action1".to_string(),
@@ -1298,6 +1304,8 @@ mod tests {
                     field: SensorField::Temperature,
                     operator: ComparisonOperator::GreaterThan,
                     value: 25.0,
+                    target_device_id: None,
+                    target_field: None,
                 },
                 AutomationCondition {
                     id: "cond2".to_string(),
@@ -1305,6 +1313,8 @@ mod tests {
                     field: SensorField::Humidity,
                     operator: ComparisonOperator::LessThan,
                     value: 40.0,
+                    target_device_id: None,
+                    target_field: None,
                 },
             ],
             actions: vec![

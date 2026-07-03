@@ -50,6 +50,9 @@
     field: AutomationConditionField;
     operator: ComparisonOperator;
     value: number;
+    // Variable target (#7): when set, compare against another sensor's field.
+    target_device_id?: string;
+    target_field?: AutomationConditionField;
   }
 
   let conditionIdCounter = $state(rule?.conditions.length ?? 0);
@@ -60,6 +63,8 @@
       field: c.field,
       operator: c.operator,
       value: c.value,
+      target_device_id: c.target_device_id,
+      target_field: c.target_field,
     })) || []
   );
 
@@ -190,6 +195,21 @@
 
   function removeCondition(id: number) {
     conditions = conditions.filter((c) => c.id !== id);
+  }
+
+  // Switch a condition between comparing to a constant value or another sensor (#7)
+  function setConditionMode(condition: ConditionForm, mode: "value" | "sensor") {
+    if (mode === "sensor") {
+      const deviceId =
+        condition.target_device_id ?? (availableSensors[0]?.device_id || "");
+      condition.target_device_id = deviceId;
+      const fields = deviceId ? getFieldsForDevice(deviceId) : [];
+      condition.target_field =
+        condition.target_field ?? (fields[0]?.value ?? condition.field);
+    } else {
+      condition.target_device_id = undefined;
+      condition.target_field = undefined;
+    }
   }
 
   function addAction() {
@@ -577,42 +597,90 @@
                   </div>
 
                   <div class="input-group">
-                    <label for="condition-value-{condition.id}">Value</label>
-
-                    {#if condition.field === 'illumination'}
-                      <!-- Special dropdown for illumination: "Dim" (0) or "Bright" (1) -->
-                      <select
-                        id="condition-value-{condition.id}"
-                        bind:value={condition.value}
-                        required
-                      >
-                        <option value={0}>Dim</option>
-                        <option value={1}>Bright</option>
-                      </select>
-                    {:else if condition.field === 'presence'}
-                      <!-- Special dropdown for presence: "Not Occupied" (0) or "Occupied" (1) -->
-                      <select
-                        id="condition-value-{condition.id}"
-                        bind:value={condition.value}
-                        required
-                      >
-                        <option value={0}>Not Occupied</option>
-                        <option value={1}>Occupied</option>
-                      </select>
-                    {:else}
-                      <!-- Regular numeric input for temperature, humidity, battery, link_quality -->
-                      <input
-                        id="condition-value-{condition.id}"
-                        type="number"
-                        step={condition.field === 'temperature' ||
-                        condition.field === 'humidity'
-                          ? '0.1'
-                          : '1'}
-                        bind:value={condition.value}
-                        required
-                      />
-                    {/if}
+                    <label for="condition-compare-{condition.id}">Compare to</label>
+                    <select
+                      id="condition-compare-{condition.id}"
+                      value={condition.target_device_id !== undefined ? 'sensor' : 'value'}
+                      onchange={(e) =>
+                        setConditionMode(
+                          condition,
+                          e.currentTarget.value as 'value' | 'sensor',
+                        )}
+                    >
+                      <option value="value">Value</option>
+                      <option value="sensor">Sensor</option>
+                    </select>
                   </div>
+
+                  {#if condition.target_device_id !== undefined}
+                    <!-- Variable target: compare against another sensor's field (#7) -->
+                    <div class="input-group">
+                      <label for="condition-target-sensor-{condition.id}">Target sensor</label>
+                      <select
+                        id="condition-target-sensor-{condition.id}"
+                        bind:value={condition.target_device_id}
+                        required
+                      >
+                        <option value="">Select sensor...</option>
+                        {#each availableSensors as sensor (sensor.device_id)}
+                          <option value={sensor.device_id}>
+                            {sensor.name || sensor.device_id}
+                          </option>
+                        {/each}
+                      </select>
+                    </div>
+
+                    <div class="input-group">
+                      <label for="condition-target-field-{condition.id}">Target field</label>
+                      <select
+                        id="condition-target-field-{condition.id}"
+                        bind:value={condition.target_field}
+                        required
+                      >
+                        {#each getFieldsForDevice(condition.target_device_id) as field (field.value)}
+                          <option value={field.value}>{field.label}</option>
+                        {/each}
+                      </select>
+                    </div>
+                  {:else}
+                    <div class="input-group">
+                      <label for="condition-value-{condition.id}">Value</label>
+
+                      {#if condition.field === 'illumination'}
+                        <!-- Special dropdown for illumination: "Dim" (0) or "Bright" (1) -->
+                        <select
+                          id="condition-value-{condition.id}"
+                          bind:value={condition.value}
+                          required
+                        >
+                          <option value={0}>Dim</option>
+                          <option value={1}>Bright</option>
+                        </select>
+                      {:else if condition.field === 'presence'}
+                        <!-- Special dropdown for presence: "Not Occupied" (0) or "Occupied" (1) -->
+                        <select
+                          id="condition-value-{condition.id}"
+                          bind:value={condition.value}
+                          required
+                        >
+                          <option value={0}>Not Occupied</option>
+                          <option value={1}>Occupied</option>
+                        </select>
+                      {:else}
+                        <!-- Regular numeric input for temperature, humidity, battery, link_quality -->
+                        <input
+                          id="condition-value-{condition.id}"
+                          type="number"
+                          step={condition.field === 'temperature' ||
+                          condition.field === 'humidity'
+                            ? '0.1'
+                            : '1'}
+                          bind:value={condition.value}
+                          required
+                        />
+                      {/if}
+                    </div>
+                  {/if}
                 </div>
 
                 <button

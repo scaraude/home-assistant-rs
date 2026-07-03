@@ -753,6 +753,12 @@ impl Database {
             [],
         )?;
 
+        // Variable-target columns (issue #7): when set, the condition compares
+        // against another device's field instead of the constant `value`.
+        // Nullable, so pre-existing conditions remain constant comparisons.
+        self.add_column_if_missing(conn, "automation_conditions", "target_device_id", "TEXT")?;
+        self.add_column_if_missing(conn, "automation_conditions", "target_field", "TEXT")?;
+
         // Create automation_actions table
         debug!("Creating automation_actions table if not exists");
         conn.execute(

@@ -19,6 +19,9 @@ export interface AutomationCondition {
   field: AutomationConditionField;
   operator: ComparisonOperator;
   value: number;
+  /** When set (with target_field), compare against this device's field instead of `value` (#7). */
+  target_device_id?: string;
+  target_field?: AutomationConditionField;
 }
 
 export interface AutomationAction {
@@ -65,7 +68,9 @@ export interface CreateAutomationRuleRequest {
     device_id: string;
     field: AutomationConditionField;
     operator: ComparisonOperator;
-    value: number;
+    value?: number;
+    target_device_id?: string;
+    target_field?: AutomationConditionField;
   }>;
   actions: Array<{
     device_id: string;
@@ -83,7 +88,9 @@ export interface UpdateAutomationRuleRequest {
     device_id: string;
     field: AutomationConditionField;
     operator: ComparisonOperator;
-    value: number;
+    value?: number;
+    target_device_id?: string;
+    target_field?: AutomationConditionField;
   }>;
   actions?: Array<{
     device_id: string;

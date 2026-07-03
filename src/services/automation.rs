@@ -282,21 +282,19 @@ impl AutomationService {
             return false;
         }
 
-        // Collect all device IDs that require sensor readings from the database
-        let sensor_device_ids: Vec<String> = rule
-            .conditions
-            .iter()
-            .filter(|c| {
-                matches!(
-                    c.field,
-                    SensorField::Temperature
-                        | SensorField::Humidity
-                        | SensorField::Presence
-                        | SensorField::Illumination
-                )
-            })
-            .map(|c| c.device_id.clone())
-            .collect();
+        // Collect all device IDs that require sensor readings from the database —
+        // both each condition's own field and any variable target's field (#7).
+        let mut sensor_device_ids: Vec<String> = Vec::new();
+        for c in &rule.conditions {
+            if Self::is_reading_field(&c.field) {
+                sensor_device_ids.push(c.device_id.clone());
+            }
+            if let Some((target_device_id, target_field)) = c.variable_target() {
+                if Self::is_reading_field(target_field) {
+                    sensor_device_ids.push(target_device_id.to_string());
+                }
+            }
+        }
 
         // Batch query all sensor readings in a single database transaction
         let readings_cache = if !sensor_device_ids.is_empty() {
@@ -337,79 +335,103 @@ impl AutomationService {
         }
     }
 
+    /// Whether a field's value comes from the sensor readings cache (vs
+    /// device_state). Used to decide which device IDs to batch-fetch.
+    fn is_reading_field(field: &SensorField) -> bool {
+        matches!(
+            field,
+            SensorField::Temperature
+                | SensorField::Humidity
+                | SensorField::Presence
+                | SensorField::Illumination
+        )
+    }
+
+    /// Resolve the current numeric value of `field` for `device_id`, or `None`
+    /// if unavailable. Reading-based fields come from `readings_cache`; battery
+    /// and link quality come from the live device-state store.
+    fn resolve_field_value(
+        &self,
+        device_id: &str,
+        field: &SensorField,
+        readings_cache: &std::collections::HashMap<String, SensorReading>,
+    ) -> Option<f64> {
+        match field {
+            SensorField::Temperature => readings_cache.get(device_id).and_then(|reading| {
+                if let SensorReading::TempHumidity { temperature, .. } = reading {
+                    Some(*temperature as f64)
+                } else {
+                    None
+                }
+            }),
+            SensorField::Humidity => readings_cache.get(device_id).and_then(|reading| {
+                if let SensorReading::TempHumidity { humidity, .. } = reading {
+                    Some(*humidity as f64)
+                } else {
+                    None
+                }
+            }),
+            SensorField::Presence => readings_cache.get(device_id).and_then(|reading| {
+                if let SensorReading::Presence { occupied, .. } = reading {
+                    Some(if *occupied { 1.0 } else { 0.0 })
+                } else {
+                    None
+                }
+            }),
+            SensorField::Illumination => readings_cache.get(device_id).and_then(|reading| {
+                if let SensorReading::Presence { illumination, .. } = reading {
+                    illumination.as_ref().map(|ill| match ill.as_str() {
+                        "bright" => 1.0,
+                        "dim" => 0.0,
+                        _ => 0.0, // default to dim for unknown values
+                    })
+                } else {
+                    None
+                }
+            }),
+            SensorField::Battery => self.device_state.get_battery(device_id).map(|b| b as f64),
+            SensorField::LinkQuality => self
+                .device_state
+                .get_link_quality(device_id)
+                .map(|lq| lq as f64),
+        }
+    }
+
     fn evaluate_condition_with_cache(
         &self,
         condition: &AutomationCondition,
         readings_cache: &std::collections::HashMap<String, SensorReading>,
     ) -> bool {
-        let field_value = match condition.field {
-            SensorField::Temperature => {
-                readings_cache
-                    .get(&condition.device_id)
-                    .and_then(|reading| {
-                        if let SensorReading::TempHumidity { temperature, .. } = reading {
-                            Some(*temperature as f64)
-                        } else {
-                            None
-                        }
-                    })
-            }
-            SensorField::Humidity => readings_cache
-                .get(&condition.device_id)
-                .and_then(|reading| {
-                    if let SensorReading::TempHumidity { humidity, .. } = reading {
-                        Some(*humidity as f64)
-                    } else {
-                        None
-                    }
-                }),
-            SensorField::Presence => readings_cache
-                .get(&condition.device_id)
-                .and_then(|reading| {
-                    if let SensorReading::Presence { occupied, .. } = reading {
-                        Some(if *occupied { 1.0 } else { 0.0 })
-                    } else {
-                        None
-                    }
-                }),
-            SensorField::Illumination => {
-                readings_cache
-                    .get(&condition.device_id)
-                    .and_then(|reading| {
-                        if let SensorReading::Presence { illumination, .. } = reading {
-                            illumination.as_ref().map(|ill| match ill.as_str() {
-                                "bright" => 1.0,
-                                "dim" => 0.0,
-                                _ => 0.0, // default to dim for unknown values
-                            })
-                        } else {
-                            None
-                        }
-                    })
-            }
-            SensorField::Battery => self
-                .device_state
-                .get_battery(&condition.device_id)
-                .map(|b| b as f64),
-            SensorField::LinkQuality => self
-                .device_state
-                .get_link_quality(&condition.device_id)
-                .map(|lq| lq as f64),
+        let Some(left) =
+            self.resolve_field_value(&condition.device_id, &condition.field, readings_cache)
+        else {
+            debug!(
+                device_id = %condition.device_id,
+                field = ?condition.field,
+                "Automation condition field value unavailable"
+            );
+            return false;
         };
 
-        let value = match field_value {
-            Some(value) => value,
-            None => {
-                debug!(
-                    device_id = %condition.device_id,
-                    field = ?condition.field,
-                    "Automation condition field value unavailable"
-                );
-                return false;
+        // Right-hand side: another sensor's field (variable, #7) or the constant.
+        let right = match condition.variable_target() {
+            Some((target_device_id, target_field)) => {
+                match self.resolve_field_value(target_device_id, target_field, readings_cache) {
+                    Some(value) => value,
+                    None => {
+                        debug!(
+                            target_device_id = %target_device_id,
+                            target_field = ?target_field,
+                            "Automation condition variable target unavailable"
+                        );
+                        return false;
+                    }
+                }
             }
+            None => condition.value,
         };
 
-        condition.operator.evaluate(value, condition.value)
+        condition.operator.evaluate(left, right)
     }
 
     async fn execute_actions(&self, rule: &AutomationRule) -> Result<(), String> {
