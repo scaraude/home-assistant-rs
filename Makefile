@@ -1,5 +1,6 @@
 .PHONY: help build build-frontend build-front deploy deploy-back deploy-frontend deploy-both deploy-full deploy-config \
-	install-deps setup-services start stop restart status logs clean backup restore
+	install-deps setup-services start stop restart status logs clean backup restore \
+	setup-tailscale tailscale-status
 
 # =============================================================================
 # Configuration - Set these in .env.deploy (see .env.deploy.example)
@@ -402,6 +403,28 @@ test-connection: check-ssh ## Test MQTT connection on Raspberry Pi
 		mosquitto_pub -h localhost -t test/hello -m 'Hello from Makefile' && \
 		wait"
 	@echo "$(COLOR_GREEN)✓ MQTT test complete$(COLOR_RESET)"
+
+# =============================================================================
+# Remote Access (Tailscale)
+# =============================================================================
+setup-tailscale: check-ssh ## Install Tailscale on the Pi and bring it up (prints an auth URL on first run)
+	@echo "$(COLOR_BLUE)Setting up Tailscale on Raspberry Pi...$(COLOR_RESET)"
+	ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "\
+		if command -v tailscale >/dev/null 2>&1; then \
+			echo 'Tailscale already installed, skipping install'; \
+		else \
+			curl -fsSL https://tailscale.com/install.sh | sh; \
+		fi && \
+		sudo tailscale up"
+	@echo "$(COLOR_GREEN)✓ Tailscale is up$(COLOR_RESET)"
+	@echo "$(COLOR_YELLOW)Tip: disable key expiry for this machine at https://login.tailscale.com/admin/machines$(COLOR_RESET)"
+
+tailscale-status: check-ssh ## Show Tailscale status on the Pi
+	@echo "$(COLOR_BLUE)Tailscale Status:$(COLOR_RESET)"
+	@ssh -i $(SSH_KEY) $(PI_USER)@$(PI_IP) "\
+		systemctl is-enabled tailscaled && \
+		systemctl is-active tailscaled && \
+		tailscale status"
 
 # =============================================================================
 # Hotspot Management
