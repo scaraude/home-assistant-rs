@@ -6,26 +6,32 @@
 //! generic `AVG`-based aggregation in [`super::sensor`] is meaningless for a
 //! counter). This module computes those deltas per time bucket.
 //!
-//! Method, per device:
-//! 1. Take the **last** counter sample in each bucket (window `ROW_NUMBER`).
-//! 2. Take an **anchor** — the last counter sample strictly before the range.
-//! 3. Difference consecutive bucket values (anchor → bucket 0 → bucket 1 → …),
-//!    clamping negatives to zero so a counter reset can't produce a bogus
-//!    negative bucket.
+//! ## Why boundary lookups (not GROUP BY / window functions)
 //!
-//! Because the buckets telescope, the reported `total_consumed` is exactly the
-//! sum of the per-bucket deltas — the histogram and the hero total always agree.
-
-use std::collections::BTreeMap;
+//! Because the counter only grows, a bucket's consumption is just
+//! `value(end) − value(start)`, where `value(t)` is the counter reading nearest
+//! before `t`. So instead of scanning/sorting every raw sample in the range
+//! (a week of 4-second samples is ~150k rows), we do one **index-backed point
+//! lookup per bucket boundary**: `… WHERE device_id=? AND timestamp < t ORDER BY
+//! timestamp DESC LIMIT 1`. A month is ~31 lookups per device, each O(log n).
+//!
+//! This matters on the Raspberry Pi Zero: the earlier `ROW_NUMBER()`/`GROUP BY`
+//! version sorted the whole range in a temp B-tree that spilled to the SD card
+//! and took several seconds; the boundary lookups are effectively instant.
+//!
+//! Consecutive boundaries share a lookup, so the deltas telescope and
+//! `total_consumed` equals the sum of the buckets — histogram and hero agree.
 
 use crate::models::{EnergyBucket, EnergySummary};
-use rusqlite::{Result, ToSql};
+use rusqlite::{Result, ToSql, params};
 use tracing::{debug, info, warn};
 
 use super::super::connection::{Database, MutexExt};
 
-/// (bucket_ts, energy_counter, produced_counter) for a single device.
-type BucketRow = (i64, f64, f64);
+/// Cap on the number of buckets a single summary will compute, so a pathological
+/// `bucket` value (e.g. 1 second over a year) can't turn into millions of point
+/// lookups. Normal callers ask for ~24–31 buckets; this only trips on abuse.
+const MAX_BUCKETS: i64 = 1500;
 
 impl Database {
     /// Compute a cumulative-energy summary for a period.
@@ -40,7 +46,13 @@ impl Database {
         end_timestamp: i64,
         bucket_seconds: i64,
     ) -> Result<EnergySummary> {
-        let bucket = bucket_seconds.max(1);
+        // Clamp the bucket up if the range would produce too many buckets.
+        let span = (end_timestamp - start_timestamp).max(1);
+        let mut bucket = bucket_seconds.max(1);
+        if span / bucket > MAX_BUCKETS {
+            bucket = span / MAX_BUCKETS + 1;
+        }
+
         debug!(
             device_id = ?device_id,
             start = start_timestamp,
@@ -50,152 +62,109 @@ impl Database {
         );
         let started = std::time::Instant::now();
 
-        // Owned copy so borrows in the dynamic param vectors outlive each query.
-        let dev = device_id.map(str::to_string);
-
         let conn = self.conn.lock_or_recover();
 
-        // --- 1. Last counter value per (device, bucket) within the range ------
-        let bucket_filter = if dev.is_some() {
-            " AND device_id = ?4"
-        } else {
-            ""
+        // --- devices in scope -------------------------------------------------
+        let devices: Vec<String> = match device_id {
+            Some(d) => vec![d.to_string()],
+            None => {
+                // Covering scan of (device_id, timestamp) index → distinct meters.
+                let mut stmt =
+                    conn.prepare("SELECT DISTINCT device_id FROM energy_readings")?;
+                stmt.query_map([], |row| row.get::<_, String>(0))?
+                    .collect::<Result<Vec<_>>>()?
+            }
         };
-        // Buckets are aligned to `start` (not the epoch) so the caller controls
-        // the boundaries — the frontend passes local midnight / 1st-of-month, and
-        // the bars line up with local days regardless of timezone.
-        let bucket_sql = format!(
-            "SELECT device_id, bucket_ts, energy, produced_energy
-             FROM (
-                 SELECT device_id,
-                        ((timestamp - ?2) / ?1) * ?1 + ?2 AS bucket_ts,
-                        energy, produced_energy,
-                        ROW_NUMBER() OVER (
-                            PARTITION BY device_id, ((timestamp - ?2) / ?1) * ?1 + ?2
-                            ORDER BY timestamp DESC, rowid DESC
-                        ) AS rn
-                 FROM energy_readings
-                 WHERE timestamp >= ?2 AND timestamp <= ?3{bucket_filter}
-             )
-             WHERE rn = 1
-             ORDER BY device_id, bucket_ts"
-        );
-        let mut bucket_params: Vec<&dyn ToSql> =
-            vec![&bucket, &start_timestamp, &end_timestamp];
-        if let Some(ref d) = dev {
-            bucket_params.push(d);
+
+        // --- bucket boundaries ------------------------------------------------
+        // `points[i]` is the start of bucket i; the extra final point (end+1)
+        // is the upper bound of the last bucket, inclusive of a sample at `end`.
+        let mut points: Vec<i64> = Vec::new();
+        let mut b = start_timestamp;
+        while b < end_timestamp {
+            points.push(b);
+            b += bucket;
+        }
+        points.push(end_timestamp + 1);
+        let n_buckets = points.len().saturating_sub(1);
+
+        // --- per-boundary counter value, per device --------------------------
+        // Index-backed (device_id, timestamp DESC): one row per lookup.
+        let mut value_stmt = conn.prepare(
+            "SELECT energy, produced_energy
+             FROM energy_readings
+             WHERE device_id = ?1 AND timestamp < ?2
+             ORDER BY timestamp DESC
+             LIMIT 1",
+        )?;
+
+        let mut consumed = vec![0.0_f64; n_buckets];
+        let mut produced = vec![0.0_f64; n_buckets];
+
+        for device in &devices {
+            // Cumulative counter value at each boundary (None before first data).
+            let mut cum: Vec<Option<(f64, f64)>> = Vec::with_capacity(points.len());
+            for &p in &points {
+                let v = value_stmt
+                    .query_row(params![device, p], |row| {
+                        Ok((row.get::<_, f64>(0)?, row.get::<_, f64>(1)?))
+                    })
+                    .ok();
+                cum.push(v);
+            }
+            for i in 0..n_buckets {
+                if let (Some((e0, p0)), Some((e1, p1))) = (cum[i], cum[i + 1]) {
+                    // Clamp ≥0 so a counter reset can't produce a negative bucket.
+                    consumed[i] += (e1 - e0).max(0.0);
+                    produced[i] += (p1 - p0).max(0.0);
+                }
+                // A `None` endpoint means no data yet → contribute nothing.
+            }
         }
 
-        let mut stmt = conn.prepare(&bucket_sql)?;
-        let rows = stmt
-            .query_map(bucket_params.as_slice(), |row| {
-                let device: String = row.get(0)?;
-                Ok((device, (row.get::<_, i64>(1)?, row.get::<_, f64>(2)?, row.get::<_, f64>(3)?)))
-            })?
-            .collect::<Result<Vec<(String, BucketRow)>>>()?;
-
-        // --- 2. Anchor: last counter value strictly before `start` -----------
-        let anchor_filter = if dev.is_some() {
-            " AND device_id = ?2"
-        } else {
-            ""
-        };
-        let anchor_sql = format!(
-            "SELECT device_id, energy, produced_energy
-             FROM (
-                 SELECT device_id, energy, produced_energy,
-                        ROW_NUMBER() OVER (
-                            PARTITION BY device_id
-                            ORDER BY timestamp DESC, rowid DESC
-                        ) AS rn
-                 FROM energy_readings
-                 WHERE timestamp < ?1{anchor_filter}
-             )
-             WHERE rn = 1"
-        );
-        let mut anchor_params: Vec<&dyn ToSql> = vec![&start_timestamp];
-        if let Some(ref d) = dev {
-            anchor_params.push(d);
-        }
-        let mut stmt = conn.prepare(&anchor_sql)?;
-        let anchors: std::collections::HashMap<String, (f64, f64)> = stmt
-            .query_map(anchor_params.as_slice(), |row| {
-                Ok((row.get::<_, String>(0)?, (row.get::<_, f64>(1)?, row.get::<_, f64>(2)?)))
-            })?
-            .collect::<Result<_>>()?;
-
-        // --- 3. Peak instantaneous power over the range ----------------------
-        let peak_filter = if dev.is_some() {
+        // --- peak instantaneous power over the range -------------------------
+        // SQLite returns the bare `timestamp` from the row holding MAX(power),
+        // so this is a single streaming scan — no sort, no window, no subquery.
+        let peak_filter = if device_id.is_some() {
             " AND device_id = ?3"
         } else {
             ""
         };
         let peak_sql = format!(
-            "SELECT timestamp, power
+            "SELECT timestamp, MAX(power)
              FROM energy_readings
-             WHERE timestamp >= ?1 AND timestamp <= ?2{peak_filter}
-             ORDER BY power DESC, timestamp ASC
-             LIMIT 1"
+             WHERE timestamp >= ?1 AND timestamp <= ?2{peak_filter}"
         );
         let mut peak_params: Vec<&dyn ToSql> = vec![&start_timestamp, &end_timestamp];
+        let dev = device_id.map(str::to_string);
         if let Some(ref d) = dev {
             peak_params.push(d);
         }
-        let mut stmt = conn.prepare(&peak_sql)?;
-        let peak: Option<(i64, f64)> = stmt
+        let mut peak_stmt = conn.prepare(&peak_sql)?;
+        let peak: Option<(i64, f64)> = peak_stmt
             .query_row(peak_params.as_slice(), |row| {
-                Ok((row.get::<_, i64>(0)?, row.get::<_, f64>(1)?))
-            })
-            .ok();
-
-        drop(stmt);
-
-        // --- 4. Difference consecutive counter values, per device ------------
-        // Rows are ordered by (device_id, bucket_ts); walk each device's run and
-        // accumulate deltas into a shared per-bucket map so multiple meters sum.
-        let mut agg: BTreeMap<i64, (f64, f64)> = BTreeMap::new();
-        let mut cur_device: Option<&str> = None;
-        let mut prev_energy: Option<f64> = None;
-        let mut prev_produced: Option<f64> = None;
-
-        for (device, (bucket_ts, energy, produced)) in &rows {
-            if cur_device != Some(device.as_str()) {
-                // New device run: seed from its anchor (None if no prior data).
-                cur_device = Some(device.as_str());
-                match anchors.get(device) {
-                    Some((e, p)) => {
-                        prev_energy = Some(*e);
-                        prev_produced = Some(*p);
-                    }
-                    None => {
-                        prev_energy = None;
-                        prev_produced = None;
-                    }
+                // MAX(power) is NULL when the range is empty → no peak.
+                match row.get::<_, Option<f64>>(1)? {
+                    Some(power) => Ok(Some((row.get::<_, i64>(0)?, power))),
+                    None => Ok(None),
                 }
-            }
+            })
+            .unwrap_or(None);
 
-            let entry = agg.entry(*bucket_ts).or_insert((0.0, 0.0));
-            if let Some(pe) = prev_energy {
-                entry.0 += (energy - pe).max(0.0);
-            }
-            if let Some(pp) = prev_produced {
-                entry.1 += (produced - pp).max(0.0);
-            }
-            prev_energy = Some(*energy);
-            prev_produced = Some(*produced);
-        }
+        drop(value_stmt);
+        drop(peak_stmt);
 
-        let buckets: Vec<EnergyBucket> = agg
-            .into_iter()
-            .map(|(timestamp, (consumed, produced))| EnergyBucket {
-                timestamp,
-                consumed,
-                produced,
+        // --- assemble ---------------------------------------------------------
+        let buckets: Vec<EnergyBucket> = (0..n_buckets)
+            .map(|i| EnergyBucket {
+                timestamp: points[i],
+                consumed: consumed[i],
+                produced: produced[i],
             })
             .collect();
 
-        let total_consumed = buckets.iter().map(|b| b.consumed).sum();
-        let total_produced = buckets.iter().map(|b| b.produced).sum();
+        let total_consumed = consumed.iter().sum();
+        let total_produced = produced.iter().sum();
 
         let summary = EnergySummary {
             start: start_timestamp,
@@ -211,9 +180,9 @@ impl Database {
         let elapsed = started.elapsed();
         info!(
             device_id = ?device_id,
+            device_count = devices.len(),
             bucket_count = summary.buckets.len(),
             total_consumed = summary.total_consumed,
-            total_produced = summary.total_produced,
             duration_ms = elapsed.as_millis(),
             "Computed energy summary"
         );
