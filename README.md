@@ -62,6 +62,8 @@ Inside the backend, every MQTT message becomes a typed `SystemEvent` on a broadc
 
 **Prerequisites:** Rust 1.83+, Node.js 18+, a Raspberry Pi with systemd, a Zigbee USB dongle. The binary is cross-compiled to static musl (`aarch64-unknown-linux-musl`) with a native toolchain — no Docker; `make setup-cross-compile` installs it (Homebrew on macOS).
 
+> 💡 Can't (or don't want to) install the native toolchain? [`cross`](https://github.com/cross-rs/cross) works as a Docker-based drop-in: `cargo install cross`, then `cross build --release --target aarch64-unknown-linux-musl`.
+
 ```bash
 git clone https://github.com/scaraude/home-automation-rs
 cd home-automation-rs
