@@ -63,6 +63,43 @@ Indexes: composite `(device_id, timestamp DESC)` for per-device queries, plus
 timestamp-only `idx_energy_ts` / `idx_temperature_ts` for cross-device range and
 retention scans (see `src/db/schema.rs`).
 
+### Never sort/window the raw energy series on the Pi
+
+`GET /api/energy/summary` (the energy dashboard's cumulative totals) returns
+per-bucket consumption. The **wrong** way — and how it first shipped — was a
+`ROW_NUMBER() OVER (PARTITION BY device_id, bucket …)` window (or a `GROUP BY`
+with a computed bucket) to pick the last counter value per bucket. Both force
+SQLite to **materialise and sort the whole range**. The recent 7 days are raw at
+~4 s cadence (~150k rows/meter), so on the Pi Zero that sort **spills to a temp
+file on the SD card** → the endpoint took **3–15 s**. A second window query for
+the pre-range "anchor" scanned the *entire* prior history for one row.
+
+The **right** way exploits the fact that `energy` / `produced_energy` are
+**monotonic counters**: a bucket's consumption is just
+`value(end) − value(start)`, where `value(t)` is the reading nearest before `t`.
+So do **one index-backed point lookup per bucket boundary** instead of an
+aggregate over every sample:
+
+```sql
+SELECT energy, produced_energy FROM energy_readings
+WHERE device_id = ? AND timestamp < ?   -- boundary
+ORDER BY timestamp DESC LIMIT 1;          -- rides idx_energy_time, O(log n)
+```
+
+A month is ~31 lookups per meter (each sub-millisecond); consecutive boundaries
+share a lookup so the deltas telescope and the total equals the sum of the
+buckets. Peak power uses SQLite's bare-column aggregate trick
+(`SELECT timestamp, MAX(power) …`) to get the peak row's timestamp in a **single
+streaming scan** — no sort, no subquery. See
+`src/db/queries/energy.rs::get_energy_summary` (guarded by `MAX_BUCKETS` so a
+pathological `bucket` value can't explode the lookup count).
+
+**Rule of thumb:** on this hardware, never run `ORDER BY` / window functions /
+`GROUP BY`-on-a-computed-key over the raw `energy_readings` range. Prefer
+index-backed `ORDER BY timestamp DESC LIMIT 1` point lookups, and exploit the
+counter's monotonicity, so the query is `O(buckets · log n)` instead of
+`O(rows · log rows)` with an SD-card sort spill.
+
 ## 3. Retention rollup (keeps the DB small)
 
 Policy: **keep raw data for the last 7 days; downsample everything older, in all
@@ -109,5 +146,6 @@ The deadband keep logic there **mirrors** `retention.rs` — keep them in sync.
   `/home/ludovic` (they grow unbounded — `home-automation-rs.log` and
   `zigbee2mqtt.log` reached multiple GB). `top_cpu_consumers.log` /
   `top_ram_consumers.log` are **not read** by the app.
-- **Deploy**: cross-compiled to `aarch64` via `cross` (Docker); `make
-  deploy-both` builds + transfers binary and frontend and restarts the service.
+- **Deploy**: cross-compiled to `aarch64-unknown-linux-musl` with a native
+  toolchain (no Docker — `make setup-cross-compile`); `make deploy-both` builds +
+  transfers binary and frontend and restarts the service.
