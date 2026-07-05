@@ -163,6 +163,7 @@ generate-configs: ## Generate configuration files for deployment
 		-e 's|{{DATA_DIR}}|$(DATA_DIR)|g' \
 		configs/templates/zigbee2mqtt-config.yaml > configs/zigbee2mqtt-config.yaml
 	@sed -e 's|{{DATA_DIR}}|$(DATA_DIR)|g' \
+		-e 's|{{DISCORD_WEBHOOK_URL}}|$(DISCORD_WEBHOOK_URL)|g' \
 		configs/templates/pi.env > configs/pi.env
 	@echo "$(COLOR_GREEN)✓ Configuration files generated in configs/$(COLOR_RESET)"
 

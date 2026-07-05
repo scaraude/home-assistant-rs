@@ -2,7 +2,8 @@ mqtt:
   server: mqtt://localhost:1883
 serial:
   port: {{ZIGBEE_DEVICE}}
-frontend: false
+frontend:
+  enabled: false
 availability:
   enabled: true
 advanced:
@@ -13,3 +14,4 @@ advanced:
   network_key: {{Z2M_NETWORK_KEY}}
   channel: {{Z2M_CHANNEL}}
 data_path: {{DATA_DIR}}/zigbee2mqtt
+version: 4
