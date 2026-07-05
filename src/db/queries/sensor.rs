@@ -174,7 +174,9 @@ impl Database {
                  COALESCE(d.name, sensors.device_id) as name,
                  d.capabilities,
                  d.available_fields,
-                 d.color
+                 d.color,
+                 ds.availability,
+                 ds.availability_changed_at
              FROM (
                  SELECT DISTINCT device_id FROM temperature_readings
                  UNION
@@ -183,6 +185,7 @@ impl Database {
                  SELECT DISTINCT device_id FROM energy_readings
              ) sensors
              INNER JOIN devices d ON sensors.device_id = d.id
+             LEFT JOIN device_state ds ON ds.device_id = d.id
              ORDER BY name",
         )?;
 
@@ -201,6 +204,8 @@ impl Database {
                     capabilities,
                     available_fields,
                     color: row.get(4)?,
+                    availability: row.get(5)?,
+                    availability_changed_at: row.get(6)?,
                 })
             })?
             .collect::<Result<Vec<_>>>()?;

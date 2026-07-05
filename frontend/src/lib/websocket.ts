@@ -59,6 +59,15 @@ export type LogEntriesEvent = {
   timestamp: Date;
 };
 
+export type DeviceAvailabilityEvent = {
+  event: 'device_availability';
+  device_id: string;
+  device_name: string;
+  online: boolean;
+  was_online: boolean | null;
+  timestamp: Date;
+};
+
 export type SystemEvent =
   | SensorReadingEvent
   | SwitchStateEvent
@@ -66,7 +75,8 @@ export type SystemEvent =
   | DeviceDiscoveredEvent
   | AutomationTriggeredEvent
   | AutomationExecutedEvent
-  | LogEntriesEvent;
+  | LogEntriesEvent
+  | DeviceAvailabilityEvent;
 
 type SensorReadingEventPayload = Omit<SensorReadingEvent, "reading" | "timestamp"> & {
   reading: SensorReadingResponse;
@@ -79,6 +89,7 @@ type DeviceDiscoveredEventPayload = Omit<DeviceDiscoveredEvent, "timestamp"> & {
 type AutomationTriggeredEventPayload = Omit<AutomationTriggeredEvent, "timestamp"> & { timestamp: number };
 type AutomationExecutedEventPayload = Omit<AutomationExecutedEvent, "timestamp"> & { timestamp: number };
 type LogEntriesEventPayload = Omit<LogEntriesEvent, "timestamp"> & { timestamp: number };
+type DeviceAvailabilityEventPayload = Omit<DeviceAvailabilityEvent, "timestamp"> & { timestamp: number };
 
 type SystemEventPayload =
   | SensorReadingEventPayload
@@ -87,7 +98,8 @@ type SystemEventPayload =
   | DeviceDiscoveredEventPayload
   | AutomationTriggeredEventPayload
   | AutomationExecutedEventPayload
-  | LogEntriesEventPayload;
+  | LogEntriesEventPayload
+  | DeviceAvailabilityEventPayload;
 
 function parseSystemEvent(event: SystemEventPayload): SystemEvent {
   switch (event.event) {
@@ -103,6 +115,7 @@ function parseSystemEvent(event: SystemEventPayload): SystemEvent {
     case "automation_triggered":
     case "automation_executed":
     case "log_entries":
+    case "device_availability":
       return {
         ...event,
         timestamp: unixSecondsToDate(event.timestamp),

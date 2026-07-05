@@ -13,8 +13,8 @@ use events::bus::EventBus;
 use http::HttpServer;
 use mqtt::MqttClient;
 use services::{
-    AutomationService, DbWriterService, LogWatcherService, RetentionService, StateManagerService,
-    WebSocketBroadcaster,
+    AutomationService, DbWriterService, LogWatcherService, NotifierService, RetentionService,
+    StateManagerService, WebSocketBroadcaster,
 };
 use state::{DeviceStateStore, SwitchStateStore};
 use std::sync::Arc;
@@ -133,6 +133,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         log_watcher.run().await;
     });
     info!("LogWatcherService task spawned");
+
+    // Spawn notifier service: pushes device availability alerts to a Discord
+    // webhook, with a SQLite-backed queue for offline periods.
+    let notifier = NotifierService::new(db.clone(), event_bus.subscribe());
+    tokio::spawn(async move {
+        notifier.run().await;
+    });
+    info!("NotifierService task spawned");
 
     // Spawn retention service to downsample historical readings (keeps the DB
     // small enough to fit the SQLite page cache on limited RAM).

@@ -35,6 +35,9 @@ impl Database {
         // Create floor_plan table for floor map SVG
         self.create_floor_plan_table(&conn)?;
 
+        // Create pending_notifications table (offline notification queue)
+        self.create_pending_notifications_table(&conn)?;
+
         // Repair foreign keys if a previous migration renamed devices
         self.repair_device_foreign_keys(&conn)?;
 
@@ -315,6 +318,13 @@ impl Database {
         }
 
         self.ensure_device_state_columns(conn)?;
+        self.add_column_if_missing(conn, "device_state", "availability", "TEXT")?;
+        self.add_column_if_missing(
+            conn,
+            "device_state",
+            "availability_changed_at",
+            "INTEGER",
+        )?;
 
         // Index for efficient last_seen queries
         debug!("Creating index idx_device_state_last_seen if not exists");
@@ -866,6 +876,30 @@ impl Database {
             Ok(_) => debug!("Floor plan table created/verified"),
             Err(e) => {
                 error!(error = %e, "Failed to create floor_plan table");
+                return Err(e);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Create pending_notifications table: queue for outbound alerts that
+    /// could not be delivered (e.g. no internet connectivity on the Pi).
+    fn create_pending_notifications_table(&self, conn: &rusqlite::Connection) -> Result<()> {
+        debug!("Creating pending_notifications table if not exists");
+        match conn.execute(
+            "CREATE TABLE IF NOT EXISTS pending_notifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                message TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                attempts INTEGER NOT NULL DEFAULT 0,
+                last_attempt_at INTEGER
+            )",
+            [],
+        ) {
+            Ok(_) => debug!("Pending notifications table created/verified"),
+            Err(e) => {
+                error!(error = %e, "Failed to create pending_notifications table");
                 return Err(e);
             }
         }

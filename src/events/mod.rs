@@ -38,6 +38,16 @@ pub enum SystemEvent {
         #[serde(with = "chrono::serde::ts_seconds")]
         timestamp: DateTime<Utc>,
     },
+    /// Zigbee availability transition reported by Zigbee2MQTT.
+    DeviceAvailability {
+        device_id: String,
+        device_name: String,
+        online: bool,
+        /// Previous known state (None when the device had no recorded state).
+        was_online: Option<bool>,
+        #[serde(with = "chrono::serde::ts_seconds")]
+        timestamp: DateTime<Utc>,
+    },
     AutomationTriggered {
         rule_id: String,
         actions: Vec<AutomationAction>,
@@ -88,6 +98,7 @@ impl SystemEvent {
             SystemEvent::SwitchState { .. } => "switch_state",
             SystemEvent::DeviceState { .. } => "device_state",
             SystemEvent::DeviceDiscovered { .. } => "device_discovered",
+            SystemEvent::DeviceAvailability { .. } => "device_availability",
             SystemEvent::AutomationTriggered { .. } => "automation_triggered",
             SystemEvent::AutomationExecuted { .. } => "automation_executed",
             SystemEvent::AutomationRuleDeleted { .. } => "automation_rule_deleted",

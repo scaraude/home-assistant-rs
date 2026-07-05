@@ -195,6 +195,13 @@ pub struct DeviceInfo {
 
     /// UI color for graphs and charts (hex format, e.g., "#3b82f6")
     pub color: Option<String>,
+
+    /// Zigbee availability reported by Zigbee2MQTT ("online"/"offline"),
+    /// None when never reported.
+    pub availability: Option<String>,
+
+    /// Unix timestamp of the last availability transition.
+    pub availability_changed_at: Option<i64>,
 }
 
 /// Dynamic device state (ephemeral, not persisted to DB)

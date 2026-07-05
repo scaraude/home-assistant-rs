@@ -1,5 +1,6 @@
 <script lang="ts">
   import ColorPickerModal from "../shared/ColorPickerModal.svelte";
+  import Badge from "../design-system/Badge.svelte";
   import Card from "../design-system/Card.svelte";
   import EditableDeviceName from "./EditableDeviceName.svelte";
   import StatusBadge from "../shared/StatusBadge.svelte";
@@ -27,6 +28,15 @@
 
   let deviceName = $derived(deviceInfo?.name || sensor.deviceId);
   let deviceState = $derived($deviceStateMemory.byId[sensor.deviceId] || null);
+
+  let isOffline = $derived(deviceInfo?.availability === "offline");
+  let offlineSince = $derived(
+    isOffline && deviceInfo?.availability_changed_at
+      ? formatDistanceToNow(new Date(deviceInfo.availability_changed_at * 1000), {
+          addSuffix: true,
+        })
+      : null,
+  );
 
   let timeAgo = $derived(
     latestReading
@@ -73,12 +83,21 @@
   tabindex="0"
   aria-pressed={sensor.visible}
 >
-  {#if deviceState && (deviceState.battery_level != null || deviceState.link_quality != null)}
+  {#if isOffline || (deviceState && (deviceState.battery_level != null || deviceState.link_quality != null))}
     <div class="corner-badges">
-      {#if deviceState.battery_level != null}
+      {#if isOffline}
+        <Badge
+          variant="low"
+          size="mini"
+          title={offlineSince ? `Offline since ${offlineSince}` : "Offline"}
+        >
+          Offline
+        </Badge>
+      {/if}
+      {#if deviceState?.battery_level != null}
         <StatusBadge type="battery" value={deviceState.battery_level} mini />
       {/if}
-      {#if deviceState.link_quality != null}
+      {#if deviceState?.link_quality != null}
         <StatusBadge type="signal" value={deviceState.link_quality} mini />
       {/if}
     </div>

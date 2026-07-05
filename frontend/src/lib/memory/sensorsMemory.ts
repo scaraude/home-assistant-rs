@@ -518,6 +518,30 @@ function applySensorColor(deviceId: string, color: string): void {
   });
 }
 
+function applyAvailability(
+  deviceId: string,
+  availability: 'online' | 'offline',
+  changedAtSec: number,
+): void {
+  update((state) => {
+    const updatedDevices = state.devices.map((device) =>
+      device.device_id === deviceId
+        ? { ...device, availability, availability_changed_at: changedAtSec }
+        : device,
+    );
+    const updated = updatedDevices.find((device) => device.device_id === deviceId);
+    if (updated) {
+      void put('sensor_devices', updated).catch((error) => {
+        console.warn('Failed to persist sensor availability:', error);
+      });
+    }
+    return {
+      ...state,
+      devices: updatedDevices,
+    };
+  });
+}
+
 function getReadings(deviceId: string, startSec: number, endSec: number, bucketSeconds = RAW_BUCKET) {
   let readings: SensorReading[] = [];
   subscribe((state) => {
@@ -546,6 +570,7 @@ export const sensorsMemory = {
   mergeIncomingReading,
   applySensorName,
   applySensorColor,
+  applyAvailability,
   getReadings,
 };
 

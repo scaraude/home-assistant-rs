@@ -2,7 +2,10 @@ use crate::db::Database;
 use crate::events::bus::EventBus;
 use crate::models::DeviceMqttMessage;
 use crate::mqtt::dedup_filter::MqttDedupFilter;
-use crate::mqtt::handlers::{handle_bridge_event, handle_bridge_response, handle_device_message};
+use crate::mqtt::handlers::{
+    handle_availability_message, handle_bridge_event, handle_bridge_response,
+    handle_device_message,
+};
 use crate::mqtt::topic::ZigbeeTopic;
 use rumqttc::{AsyncClient, Event, EventLoop, Packet, QoS};
 use std::sync::Arc;
@@ -115,10 +118,10 @@ pub(super) fn spawn_event_loop(
                         }
 
                         if topic.is_availability() {
-                            debug!(
-                                topic = %p.topic,
-                                "Skipping /availability topic"
-                            );
+                            if let Some(mqtt_topic) = topic.availability_device_id() {
+                                handle_availability_message(&db, &event_bus, mqtt_topic, &p.payload)
+                                    .await;
+                            }
                             continue;
                         }
 

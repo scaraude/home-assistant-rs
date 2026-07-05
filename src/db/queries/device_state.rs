@@ -37,6 +37,48 @@ impl Database {
         Ok(())
     }
 
+    /// Get the last known availability of a device (true = online).
+    /// Returns None when no availability was ever recorded.
+    pub fn get_device_availability(&self, device_id: &str) -> Result<Option<bool>> {
+        let conn = self.conn.lock_or_recover();
+        let mut stmt = conn.prepare(
+            "SELECT availability FROM device_state WHERE device_id = ?1",
+        )?;
+
+        let mut rows = stmt.query_map(params![device_id], |row| {
+            row.get::<_, Option<String>>(0)
+        })?;
+
+        Ok(rows
+            .next()
+            .transpose()?
+            .flatten()
+            .map(|state| state == "online"))
+    }
+
+    /// Record a device availability transition without touching the other
+    /// device_state fields (battery, link quality, last_seen).
+    pub fn set_device_availability(
+        &self,
+        device_id: &str,
+        online: bool,
+        changed_at: i64,
+    ) -> Result<()> {
+        let state = if online { "online" } else { "offline" };
+        debug!(device_id = %device_id, state = %state, "Updating device availability");
+
+        self.conn.lock_or_recover().execute(
+            "INSERT INTO device_state (device_id, availability, availability_changed_at, last_seen)
+             VALUES (?1, ?2, ?3, ?3)
+             ON CONFLICT(device_id) DO UPDATE SET
+                availability = excluded.availability,
+                availability_changed_at = excluded.availability_changed_at",
+            params![device_id, state, changed_at],
+        )?;
+
+        Ok(())
+    }
+
     /// Get device state from database
     pub fn get_device_state(&self, device_id: &str) -> Result<Option<DeviceState>> {
         let conn = self.conn.lock_or_recover();

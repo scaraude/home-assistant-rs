@@ -101,6 +101,13 @@
           last_seen: event.timestamp,
         });
         break;
+      case "device_availability":
+        sensorsMemory.applyAvailability(
+          event.device_id,
+          event.online ? "online" : "offline",
+          Math.floor(event.timestamp.getTime() / 1000),
+        );
+        break;
       default:
         break;
     }

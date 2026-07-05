@@ -15,6 +15,10 @@ export interface DeviceInfo {
   capabilities: DeviceCapability[];
   available_fields: string[];
   color: string | null;
+  /** Zigbee availability reported by Zigbee2MQTT, null when never reported. */
+  availability: "online" | "offline" | null;
+  /** Unix timestamp (seconds) of the last availability transition. */
+  availability_changed_at: number | null;
 }
 
 export interface DeviceState {
